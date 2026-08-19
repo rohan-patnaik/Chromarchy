@@ -29,6 +29,7 @@ private slots:
   void newCommandDiscardsRedoBranch();
   void enforcesMemoryAndCountBounds();
   void largePixelStorageDoesNotBlockMetadataUndo();
+  void undoEvictsRedoStorageOverBudget();
 };
 
 void DocumentHistoryTest::executesUndoAndRedo() {
@@ -108,6 +109,25 @@ void DocumentHistoryTest::largePixelStorageDoesNotBlockMetadataUndo() {
   QVERIFY(history.estimatedBytes() < 64 * 1024);
   QVERIFY(history.undo(*document));
   QCOMPARE(document->layerAt(0)->name(), QStringLiteral("Layer 1"));
+}
+
+void DocumentHistoryTest::undoEvictsRedoStorageOverBudget() {
+  auto document = Document::create(QSize(512, 512));
+  QVERIFY(document);
+  constexpr quint64 budget = 128 * 1024;
+  DocumentHistory history(budget, 10);
+
+  QVERIFY(history.execute(pixelCommand(*document, QPoint(1, 1), Qt::red,
+                                       QStringLiteral("Create tile")),
+                          *document));
+  QVERIFY(history.estimatedBytes() <= budget);
+  QVERIFY(history.undo(*document));
+
+  QCOMPARE(document->layerAt(0)->pixels().pixelColor(QPoint(1, 1)),
+           QColor(Qt::transparent));
+  QVERIFY(history.estimatedBytes() <= budget);
+  QCOMPARE(history.size(), 0);
+  QVERIFY(!history.canRedo());
 }
 
 QTEST_APPLESS_MAIN(DocumentHistoryTest)

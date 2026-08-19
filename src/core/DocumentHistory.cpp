@@ -88,6 +88,7 @@ bool DocumentHistory::undo(Document& document) {
   --cursor_;
   commands_[static_cast<size_t>(cursor_)]->undo(document);
   recalculateEstimatedBytes(document);
+  trimToLimits(document);
   return true;
 }
 
@@ -98,6 +99,7 @@ bool DocumentHistory::redo(Document& document) {
   commands_[static_cast<size_t>(cursor_)]->redo(document);
   ++cursor_;
   recalculateEstimatedBytes(document);
+  trimToLimits(document);
   return true;
 }
 
@@ -163,8 +165,13 @@ void DocumentHistory::trimToLimits(const Document& document) {
   while (!commands_.empty() &&
          (static_cast<qsizetype>(commands_.size()) > commandLimit_ ||
           estimatedBytes_ > byteBudget_)) {
+    if (cursor_ == 0) {
+      commands_.clear();
+      estimatedBytes_ = 0;
+      return;
+    }
     commands_.erase(commands_.begin());
-    cursor_ = qMax<qsizetype>(0, cursor_ - 1);
+    --cursor_;
     recalculateEstimatedBytes(document);
   }
 }
