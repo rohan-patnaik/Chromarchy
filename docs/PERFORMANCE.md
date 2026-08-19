@@ -6,12 +6,18 @@ Chromarchy performance work is measured with reproducible workloads before relea
 
 `chromarchy_core_benchmarks` currently measures:
 
-- CPU compositing of a visible 1024×1024 region across eight tiled pixel layers in a sparse 20,000×20,000 document;
-- copy-on-write mutation of one pixel in a shared tile set;
-- inversion of a 512×512 sparse selection in a 300,000×300,000 document.
-- viewport-bounded painting of a sparse 300,000×300,000 document at 1% zoom.
+- CPU compositing of a 1024×1024 document across eight fully populated tiled
+  pixel layers;
+- copy-on-write mutation of one pixel in a shared 1024×1024 tiled layer;
+- inversion of a 512×512 sparse selection in a 300,000×300,000 mask.
 
-The large canvas and selection workloads intentionally verify that cost follows allocated or visible tiles rather than total canvas area.
+## Canvas benchmark workload
+
+`chromarchy_canvas_benchmarks` measures viewport-bounded painting of a sparse
+300,000×300,000 document at 1% zoom into a 640×480 widget.
+
+The large canvas and selection workloads intentionally verify that cost follows
+allocated or visible tiles rather than total canvas area.
 
 ## Run locally
 
@@ -19,6 +25,7 @@ The large canvas and selection workloads intentionally verify that cost follows 
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --parallel
 ./build/chromarchy_core_benchmarks
+QT_QPA_PLATFORM=offscreen ./build/chromarchy_canvas_benchmarks
 ```
 
 Run only benchmark-labeled CTest entries with:
