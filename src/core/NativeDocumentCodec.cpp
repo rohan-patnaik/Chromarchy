@@ -19,6 +19,10 @@ constexpr qsizetype tileByteCount =
     TiledImage::tileExtent * TiledImage::tileExtent * 4;
 constexpr quint32 maximumCompressedTileBytes =
     static_cast<quint32>(tileByteCount + 4'096);
+constexpr qsizetype selectionTileByteCount =
+    TiledImage::tileExtent * TiledImage::tileExtent;
+constexpr quint32 maximumCompressedSelectionTileBytes =
+    static_cast<quint32>(selectionTileByteCount + 4'096);
 
 void configureStream(QDataStream& stream) {
   stream.setVersion(QDataStream::Qt_6_6);
@@ -48,13 +52,14 @@ QByteArray tileBytes(const QImage& image) {
           static_cast<qsizetype>(normalized.sizeInBytes())};
 }
 
-bool isValidCompressedTile(const QByteArray& bytes) {
-  if (bytes.size() < 4 || bytes.size() > maximumCompressedTileBytes) {
+bool isValidCompressedPayload(const QByteArray& bytes, qsizetype expectedBytes,
+                              quint32 maximumBytes) {
+  if (bytes.size() < 4 || bytes.size() > maximumBytes) {
     return false;
   }
   return qFromBigEndian<quint32>(
              reinterpret_cast<const uchar*>(bytes.constData())) ==
-         tileByteCount;
+         expectedBytes;
 }
 
 QString streamError(const QString& detail) {
@@ -117,6 +122,33 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
     }
   }
 
+  stream << document.selection_.baseCoverage_;
+  QVector<TileSnapshot> selectionTiles;
+  selectionTiles.reserve(document.selection_.tiles_.size());
+  for (auto tile = document.selection_.tiles_.cbegin();
+       tile != document.selection_.tiles_.cend(); ++tile) {
+    selectionTiles.push_back(
+        {SelectionMask::tileOrigin(tile.key()), tile.value()});
+  }
+  std::ranges::sort(selectionTiles, [](const auto& left, const auto& right) {
+    return left.origin.y() < right.origin.y() ||
+           (left.origin.y() == right.origin.y() &&
+            left.origin.x() < right.origin.x());
+  });
+  stream << static_cast<quint32>(selectionTiles.size());
+  for (const auto& tile : selectionTiles) {
+    stream << tile.origin.x() << tile.origin.y();
+    const QByteArray raw(
+        reinterpret_cast<const char*>(tile.pixels.constBits()),
+        static_cast<qsizetype>(tile.pixels.sizeInBytes()));
+    const auto compressed = qCompress(raw, 6);
+    if (compressed.size() > maximumCompressedSelectionTileBytes ||
+        !writeBytes(stream, compressed)) {
+      output.cancelWriting();
+      return {.error = output.errorString()};
+    }
+  }
+
   if (stream.status() != QDataStream::Ok) {
     output.cancelWriting();
     return {.error = output.errorString()};
@@ -147,7 +179,7 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
   quint32 layerCount = 0;
   int activeLayer = -1;
   stream >> version >> width >> height >> layerCount >> activeLayer;
-  if (version != formatVersion) {
+  if (version == 0 || version > formatVersion) {
     return {.error = streamError(QStringLiteral("unsupported version %1").arg(version))};
   }
   if (layerCount == 0 || layerCount > maximumLayerCount ||
@@ -211,7 +243,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
 
       QByteArray compressed;
       if (!readBytes(stream, maximumCompressedTileBytes, compressed) ||
-          !isValidCompressedTile(compressed)) {
+          !isValidCompressedPayload(compressed, tileByteCount,
+                                    maximumCompressedTileBytes)) {
         return {.error = streamError(QStringLiteral("tile payload"))};
       }
       const auto pixels = qUncompress(compressed);
@@ -223,6 +256,47 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
                   QImage::Format_RGBA8888_Premultiplied);
       std::memcpy(tile.bits(), pixels.constData(), tileByteCount);
       layer.pixels_.tiles_.insert(index, std::move(tile));
+    }
+  }
+
+  if (version >= 2) {
+    quint8 baseCoverage = 0;
+    quint32 selectionTileCount = 0;
+    stream >> baseCoverage >> selectionTileCount;
+    if (stream.status() != QDataStream::Ok ||
+        selectionTileCount > maximumTileCount) {
+      return {.error = streamError(QStringLiteral("selection properties"))};
+    }
+    document->selection_.baseCoverage_ = baseCoverage;
+    QSet<TileIndex> seenSelectionTiles;
+    for (quint32 tileNumber = 0; tileNumber < selectionTileCount; ++tileNumber) {
+      int x = 0;
+      int y = 0;
+      stream >> x >> y;
+      const TileIndex index{x / TiledImage::tileExtent,
+                            y / TiledImage::tileExtent};
+      if (stream.status() != QDataStream::Ok || x < 0 || y < 0 ||
+          x % TiledImage::tileExtent != 0 || y % TiledImage::tileExtent != 0 ||
+          x >= width || y >= height || seenSelectionTiles.contains(index)) {
+        return {.error = streamError(QStringLiteral("selection tile location"))};
+      }
+      seenSelectionTiles.insert(index);
+
+      QByteArray compressed;
+      if (!readBytes(stream, maximumCompressedSelectionTileBytes, compressed) ||
+          !isValidCompressedPayload(compressed, selectionTileByteCount,
+                                    maximumCompressedSelectionTileBytes)) {
+        return {.error = streamError(QStringLiteral("selection tile payload"))};
+      }
+      const auto coverage = qUncompress(compressed);
+      if (coverage.size() != selectionTileByteCount) {
+        return {.error = streamError(
+                    QStringLiteral("selection tile decompression"))};
+      }
+      QImage tile(TiledImage::tileExtent, TiledImage::tileExtent,
+                  QImage::Format_Grayscale8);
+      std::memcpy(tile.bits(), coverage.constData(), selectionTileByteCount);
+      document->selection_.tiles_.insert(index, std::move(tile));
     }
   }
 

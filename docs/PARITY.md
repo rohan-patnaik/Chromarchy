@@ -29,14 +29,14 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
 | New raster document | Partial | M1 | Validated new-document dialog creates a real tiled document | Background options, presets, undo boundary |
 | Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles, file-open UI and PNG integration coverage | JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
-| Native lossless save/load | Partial | M1 | Versioned atomic `.chromarchy` container, save/open UI, layered round-trip and corrupt/truncated-input tests | Groups/selections, recovery journal, forward-migration fixtures |
+| Native lossless save/load | Partial | M1 | Atomic `.chromarchy` v2 container with v1 load compatibility, layered pixels and sparse selection persistence, save/open UI, round-trip and corrupt/truncated-input tests | Groups, recovery journal, migration fixtures from released versions |
 | Export raster image | Partial | M1 | Export UI, deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
 | Multiple document tabs | Partial | M1 | Movable document tabs, dirty markers, per-document close and application-exit save prompts | Tab lifecycle integration tests, configurable keyboard navigation |
 | Zoom, pan, rotate view | Partial | M1 | Visible-region compositing, bounded zoom, middle-button pan, canvas viewport tests | Rotation, pixel grid, gesture/tablet input, latency benchmark |
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
 | Pixel layers and groups | Partial | M1 | Sparse copy-on-write tile storage, pixel-layer ordering, visibility, opacity, locks, and `chromarchy_document`/`chromarchy_tiled_image` tests | Groups, UI workflow, merge/flatten, golden fixtures, undo/redo |
 | Duplicate, merge, and flatten layers | Partial | M1 | Undoable duplicate, tile-local merge-down and flatten UI operations with lock protection and composite-preservation tests | Group-aware behavior, golden fixtures, blend modes beyond source-over |
-| Non-destructive selection model | Partial | M1 | Sparse copy-on-write grayscale coverage tiles, canvas rectangle workflow and coverage overlay, undoable select-all/deselect/invert, dirty regions, and 300k×300k sparse behavior test | Persistence, feathering and transform integration |
+| Non-destructive selection model | Partial | M1 | Sparse copy-on-write grayscale coverage tiles, native persistence, canvas rectangle workflow and coverage overlay, undoable select-all/deselect/invert, dirty regions, and 300k×300k sparse behavior test | Feathering and transform integration |
 | Command undo/redo | Partial | M1 | Bounded snapshot commands with copy-on-write tiles, redo invalidation, layer-operation UI routing, and `chromarchy_history` tests | Paint-command coalescing, saved-state revision tracking, recovery journal |
 | Brush, pencil, and eraser | Planned | M2 | — | Tablet input, dynamics, presets, latency fixtures |
 | Geometric and freehand selections | Planned | M2 | — | Feather/grow/shrink/invert and golden masks |

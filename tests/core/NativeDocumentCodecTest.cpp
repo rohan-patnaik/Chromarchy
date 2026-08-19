@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QtEndian>
 
 using chromarchy::Document;
 using chromarchy::NativeDocumentCodec;
@@ -12,6 +13,7 @@ class NativeDocumentCodecTest final : public QObject {
 
 private slots:
   void preservesLayeredDocument();
+  void loadsVersionOneWithoutSelection();
   void rejectsCorruptAndTruncatedDocuments();
 };
 
@@ -37,6 +39,8 @@ void NativeDocumentCodecTest::preservesLayeredDocument() {
                                      QColor(200, 100, 50, 180)));
   const auto expectedInkPixel = ink->pixels().pixelColor(QPoint(257, 10));
   const auto inkId = ink->id();
+  document->selection().selectAll();
+  QVERIFY(document->selection().setCoverage(QPoint(5, 6), 32));
 
   const auto written = NativeDocumentCodec::save(*document, path);
   QVERIFY2(written, qPrintable(written.error));
@@ -56,6 +60,36 @@ void NativeDocumentCodecTest::preservesLayeredDocument() {
   QVERIFY(!loaded.document->layerAt(1)->isVisible());
   QCOMPARE(loaded.document->layerAt(1)->pixels().pixelColor(QPoint(257, 10)),
            expectedInkPixel);
+  QCOMPARE(loaded.document->selection().coverage(QPoint(5, 6)), 32);
+  QCOMPARE(loaded.document->selection().coverage(QPoint(600, 300)), 255);
+  QCOMPARE(loaded.document->selection().allocatedTileCount(), 1);
+}
+
+void NativeDocumentCodecTest::loadsVersionOneWithoutSelection() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("version-one.chromarchy"));
+  auto document = Document::create(QSize(40, 30));
+  QVERIFY(document);
+  document->layerAt(0)->setName(QStringLiteral("Legacy"));
+  QVERIFY(NativeDocumentCodec::save(*document, path));
+
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::ReadWrite));
+  auto bytes = file.readAll();
+  QVERIFY(bytes.size() > 17);
+  qToLittleEndian<quint32>(1, reinterpret_cast<uchar*>(bytes.data() + 8));
+  bytes.chop(5);  // v2 empty-selection base coverage and tile count.
+  QVERIFY(file.resize(0));
+  QVERIFY(file.seek(0));
+  QCOMPARE(file.write(bytes), bytes.size());
+  file.close();
+
+  const auto loaded = NativeDocumentCodec::load(path);
+  QVERIFY2(loaded, qPrintable(loaded.error));
+  QCOMPARE(loaded.document->size(), QSize(40, 30));
+  QCOMPARE(loaded.document->layerAt(0)->name(), QStringLiteral("Legacy"));
+  QVERIFY(loaded.document->selection().isEmpty());
 }
 
 void NativeDocumentCodecTest::rejectsCorruptAndTruncatedDocuments() {

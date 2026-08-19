@@ -28,7 +28,7 @@ struct NativeDocumentWriteResult final {
 
 class NativeDocumentCodec final {
 public:
-  static constexpr quint32 formatVersion = 1;
+  static constexpr quint32 formatVersion = 2;
   static constexpr auto extension = ".chromarchy";
 
   [[nodiscard]] static NativeDocumentWriteResult save(

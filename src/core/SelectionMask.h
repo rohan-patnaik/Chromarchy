@@ -9,6 +9,8 @@
 
 namespace chromarchy {
 
+class NativeDocumentCodec;
+
 class SelectionMask final {
 public:
   explicit SelectionMask(QSize size = {});
@@ -30,6 +32,8 @@ public:
   QRegion takeDirtyRegion();
 
 private:
+  friend class NativeDocumentCodec;
+
   [[nodiscard]] bool contains(QPoint position) const noexcept;
   [[nodiscard]] static TileIndex tileIndex(QPoint position) noexcept;
   [[nodiscard]] static QPoint tileOrigin(TileIndex index) noexcept;
