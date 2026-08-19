@@ -7,6 +7,8 @@
 
 namespace chromarchy {
 
+class NativeDocumentCodec;
+
 class Layer final {
 public:
   Layer(QString name, QSize size);
@@ -27,6 +29,8 @@ public:
   [[nodiscard]] Layer duplicate(QString name) const;
 
 private:
+  friend class NativeDocumentCodec;
+
   QUuid id_ = QUuid::createUuid();
   QString name_;
   TiledImage pixels_;

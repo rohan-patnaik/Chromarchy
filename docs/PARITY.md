@@ -29,7 +29,7 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
 | New raster document | Planned | M1 | — | Model, UI workflow, validation, undo boundary |
 | Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles; PNG integration coverage in `chromarchy_image_io` | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
-| Native lossless save/load | Planned | M1 | — | Versioned container, round-trip fixtures, corrupt-input tests |
+| Native lossless save/load | Partial | M1 | Versioned atomic `.chromarchy` container with compressed tiles, layered round-trip and corrupt/truncated-input tests | UI workflow, groups/selections, recovery journal, forward-migration fixtures |
 | Export raster image | Partial | M1 | Deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
 | Multiple document tabs | Planned | M1 | — | Lifecycle, dirty-state prompts, keyboard navigation |
 | Zoom, pan, rotate view | Planned | M1 | — | Input routing, pixel-grid behavior, latency benchmark |

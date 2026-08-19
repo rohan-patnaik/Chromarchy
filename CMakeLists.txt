@@ -17,6 +17,8 @@ qt_add_library(chromarchy_core STATIC
   src/core/ImageIO.h
   src/core/Layer.cpp
   src/core/Layer.h
+  src/core/NativeDocumentCodec.cpp
+  src/core/NativeDocumentCodec.h
   src/core/TiledImage.cpp
   src/core/TiledImage.h
 )
@@ -57,5 +59,13 @@ if(BUILD_TESTING)
   qt_add_executable(chromarchy_image_io_tests tests/core/ImageIOTest.cpp)
   target_link_libraries(chromarchy_image_io_tests PRIVATE chromarchy_core Qt6::Test)
   add_test(NAME chromarchy_image_io COMMAND chromarchy_image_io_tests)
+
+  qt_add_executable(chromarchy_native_document_tests
+    tests/core/NativeDocumentCodecTest.cpp
+  )
+  target_link_libraries(chromarchy_native_document_tests PRIVATE
+    chromarchy_core Qt6::Test
+  )
+  add_test(NAME chromarchy_native_document COMMAND chromarchy_native_document_tests)
 endif()
 

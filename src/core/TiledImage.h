@@ -10,6 +10,8 @@
 
 namespace chromarchy {
 
+class NativeDocumentCodec;
+
 struct TileIndex final {
   int column = 0;
   int row = 0;
@@ -45,6 +47,8 @@ public:
   QRegion takeDirtyRegion();
 
 private:
+  friend class NativeDocumentCodec;
+
   [[nodiscard]] bool contains(QPoint position) const noexcept;
   [[nodiscard]] static TileIndex tileIndex(QPoint position) noexcept;
   [[nodiscard]] static QPoint tileOrigin(TileIndex index) noexcept;

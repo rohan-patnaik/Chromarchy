@@ -11,6 +11,8 @@
 
 namespace chromarchy {
 
+class NativeDocumentCodec;
+
 class Document final {
 public:
   static constexpr int maximumDimension = 300'000;
@@ -33,6 +35,8 @@ public:
   [[nodiscard]] QImage composite(QRect region = {}) const;
 
 private:
+  friend class NativeDocumentCodec;
+
   explicit Document(QSize size);
   [[nodiscard]] bool containsLayer(int index) const noexcept;
 
