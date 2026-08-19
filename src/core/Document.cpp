@@ -229,11 +229,30 @@ QImage Document::composite(QRect region) const {
       continue;
     }
     painter.setOpacity(layer.opacity());
-    for (const auto& tile : layer.pixels().tileSnapshots()) {
+    for (const auto& tile : layer.pixels().tileSnapshots(region)) {
       painter.drawImage(tile.origin - region.topLeft(), tile.pixels);
     }
   }
   return output;
+}
+
+void Document::paintComposite(QPainter& painter, QRect region) const {
+  region = region.intersected(QRect(QPoint(), size_));
+  if (region.isEmpty()) {
+    return;
+  }
+
+  painter.save();
+  for (const auto& layer : layers_) {
+    if (!layer.isVisible() || layer.opacity() <= 0.0) {
+      continue;
+    }
+    painter.setOpacity(layer.opacity());
+    for (const auto& tile : layer.pixels().tileSnapshots(region)) {
+      painter.drawImage(tile.origin, tile.pixels);
+    }
+  }
+  painter.restore();
 }
 
 bool Document::containsLayer(int index) const noexcept {

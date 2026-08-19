@@ -1,6 +1,7 @@
 #include "core/ImageIO.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
 #include <QImageWriter>
@@ -20,6 +21,7 @@ private slots:
   void roundTripsSupportedFormats_data();
   void roundTripsSupportedFormats();
   void exportStripsSourceMetadataByDefault();
+  void oversizedSparseExportFailsBeforeAllocation();
 };
 
 void ImageIOTest::opensImageIntoRealPixelTiles() {
@@ -135,6 +137,20 @@ void ImageIOTest::exportStripsSourceMetadataByDefault() {
   QImageReader reader(exportPath);
   QVERIFY(reader.read().isNull() == false);
   QVERIFY(reader.textKeys().isEmpty());
+}
+
+void ImageIOTest::oversizedSparseExportFailsBeforeAllocation() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("oversized.png"));
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(10, 10), Qt::red));
+
+  const auto result = ImageIO::exportComposite(*document, path);
+  QVERIFY(!result);
+  QVERIFY(result.error.contains(QStringLiteral("bounded export limit")));
+  QVERIFY(!QFileInfo::exists(path));
 }
 
 QTEST_APPLESS_MAIN(ImageIOTest)

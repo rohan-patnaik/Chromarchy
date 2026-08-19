@@ -68,6 +68,16 @@ ImageWriteResult ImageIO::exportComposite(const Document& document,
     return {.error = QStringLiteral("The export filename needs a format extension.")};
   }
 
+  const auto pixelCount = static_cast<quint64>(document.size().width()) *
+                          static_cast<quint64>(document.size().height());
+  if (pixelCount > maximumExportPixels) {
+    return {.error = QStringLiteral(
+                "Export requires %1 megapixels, above the current %2-megapixel "
+                "bounded export limit. Resize or crop the document first.")
+                        .arg(pixelCount / 1'000'000.0, 0, 'f', 1)
+                        .arg(maximumExportPixels / 1'000'000.0, 0, 'f', 1)};
+  }
+
   auto image = document.composite();
   if (image.isNull()) {
     return {.error = QStringLiteral("The document has no exportable canvas.")};

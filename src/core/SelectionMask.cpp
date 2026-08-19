@@ -46,6 +46,33 @@ bool SelectionMask::isEmpty() const noexcept {
   return true;
 }
 
+quint8 SelectionMask::baseCoverage() const noexcept {
+  return baseCoverage_;
+}
+
+QVector<TileSnapshot> SelectionMask::tileSnapshots(QRect region) const {
+  QVector<TileSnapshot> snapshots;
+  region = region.intersected(QRect(QPoint(), size_));
+  if (region.isEmpty()) {
+    return snapshots;
+  }
+  const auto first = tileIndex(region.topLeft());
+  const auto last = tileIndex(region.bottomRight());
+  snapshots.reserve(qMin<qsizetype>(
+      tiles_.size(), static_cast<qsizetype>(last.column - first.column + 1) *
+                         (last.row - first.row + 1)));
+  for (int row = first.row; row <= last.row; ++row) {
+    for (int column = first.column; column <= last.column; ++column) {
+      const TileIndex index{column, row};
+      const auto tile = tiles_.constFind(index);
+      if (tile != tiles_.cend()) {
+        snapshots.push_back({tileOrigin(index), tile.value()});
+      }
+    }
+  }
+  return snapshots;
+}
+
 QImage SelectionMask::render(QRect region) const {
   const QRect bounds(QPoint(), size_);
   if (region.isNull()) {

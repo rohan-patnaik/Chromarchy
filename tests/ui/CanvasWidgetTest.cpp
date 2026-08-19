@@ -15,6 +15,7 @@ private slots:
   void clampsZoomAndTracksVisibleRegion();
   void visibleCompositeStaysBoundedByViewport();
   void requestsRectangleSelectionFromCanvasDrag();
+  void minimumZoomLargeSparsePaintIsViewportBounded();
 };
 
 void CanvasWidgetTest::clampsZoomAndTracksVisibleRegion() {
@@ -69,6 +70,26 @@ void CanvasWidgetTest::requestsRectangleSelectionFromCanvasDrag() {
   QCOMPARE(selection.size(), QSize(21, 21));
   QVERIFY(qAbs(selection.x() - 10) <= 1);
   QVERIFY(qAbs(selection.y() - 20) <= 1);
+}
+
+void CanvasWidgetTest::minimumZoomLargeSparsePaintIsViewportBounded() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(1000, 1000),
+                                                       Qt::red));
+  CanvasWidget canvas(&*document);
+  canvas.resize(640, 480);
+  canvas.show();
+  canvas.setZoom(0.01);
+  QTest::qWait(1);
+  QVERIFY(static_cast<quint64>(canvas.visibleDocumentRect().width()) *
+              canvas.visibleDocumentRect().height() >
+          1'000'000'000ULL);
+
+  QImage frame(canvas.size(), QImage::Format_RGBA8888_Premultiplied);
+  frame.fill(Qt::transparent);
+  canvas.render(&frame);
+  QCOMPARE(frame.size(), canvas.size());
 }
 
 QTEST_MAIN(CanvasWidgetTest)

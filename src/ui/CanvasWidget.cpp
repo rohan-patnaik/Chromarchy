@@ -12,6 +12,26 @@
 #include <cmath>
 
 namespace chromarchy {
+namespace {
+
+QImage selectionOverlay(const QImage& coverage) {
+  QImage overlay(coverage.size(), QImage::Format_RGBA8888_Premultiplied);
+  overlay.fill(Qt::transparent);
+  for (int y = 0; y < coverage.height(); ++y) {
+    const auto* maskLine = coverage.constScanLine(y);
+    auto* overlayLine = overlay.scanLine(y);
+    for (int x = 0; x < coverage.width(); ++x) {
+      const auto alpha = static_cast<quint8>(maskLine[x] * 64 / 255);
+      overlayLine[x * 4] = static_cast<quint8>(32 * alpha / 255);
+      overlayLine[x * 4 + 1] = static_cast<quint8>(160 * alpha / 255);
+      overlayLine[x * 4 + 2] = static_cast<quint8>(220 * alpha / 255);
+      overlayLine[x * 4 + 3] = alpha;
+    }
+  }
+  return overlay;
+}
+
+}  // namespace
 
 CanvasWidget::CanvasWidget(const Document* document, QWidget* parent)
     : QAbstractScrollArea(parent), document_(document) {
@@ -96,30 +116,31 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
   if (sourceRect.isEmpty()) {
     return;
   }
-  const auto image = document_->composite(sourceRect);
-  const QRectF target(origin.x() + sourceRect.x() * zoom_,
-                      origin.y() + sourceRect.y() * zoom_,
-                      sourceRect.width() * zoom_, sourceRect.height() * zoom_);
+  painter.save();
+  painter.translate(origin);
+  painter.scale(zoom_, zoom_);
+  painter.setClipRect(sourceRect);
   painter.setRenderHint(QPainter::SmoothPixmapTransform, zoom_ < 1.0);
-  painter.drawImage(target, image);
+  document_->paintComposite(painter, sourceRect);
 
-  const auto mask = document_->selection().render(sourceRect);
-  if (!mask.isNull() && !document_->selection().isEmpty()) {
-    QImage overlay(mask.size(), QImage::Format_RGBA8888_Premultiplied);
-    overlay.fill(Qt::transparent);
-    for (int y = 0; y < mask.height(); ++y) {
-      const auto* maskLine = mask.constScanLine(y);
-      auto* overlayLine = overlay.scanLine(y);
-      for (int x = 0; x < mask.width(); ++x) {
-        const auto alpha = static_cast<quint8>(maskLine[x] * 64 / 255);
-        overlayLine[x * 4] = static_cast<quint8>(32 * alpha / 255);
-        overlayLine[x * 4 + 1] = static_cast<quint8>(160 * alpha / 255);
-        overlayLine[x * 4 + 2] = static_cast<quint8>(220 * alpha / 255);
-        overlayLine[x * 4 + 3] = alpha;
-      }
-    }
-    painter.drawImage(target, overlay);
+  const auto& selection = document_->selection();
+  const auto selectionTiles = selection.tileSnapshots(sourceRect);
+  QRegion baseRegion(sourceRect);
+  for (const auto& tile : selectionTiles) {
+    baseRegion -= QRect(tile.origin, tile.pixels.size());
   }
+  if (selection.baseCoverage() > 0) {
+    const QColor baseColor(32, 160, 220,
+                           selection.baseCoverage() * 64 / 255);
+    for (const auto& rectangle : baseRegion) {
+      painter.fillRect(rectangle, baseColor);
+    }
+  }
+  for (const auto& tile : selectionTiles) {
+    painter.drawImage(tile.origin, selectionOverlay(tile.pixels));
+  }
+  painter.restore();
+
   if (selecting_) {
     const auto selection = QRect(selectionStart_, selectionEnd_).normalized();
     const QRectF preview(origin.x() + selection.x() * zoom_,

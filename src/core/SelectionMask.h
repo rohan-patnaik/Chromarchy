@@ -19,6 +19,8 @@ public:
   [[nodiscard]] quint8 coverage(QPoint position) const noexcept;
   [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
   [[nodiscard]] bool isEmpty() const noexcept;
+  [[nodiscard]] quint8 baseCoverage() const noexcept;
+  [[nodiscard]] QVector<TileSnapshot> tileSnapshots(QRect region) const;
   [[nodiscard]] QImage render(QRect region = {}) const;
 
   bool setCoverage(QPoint position, quint8 coverage);

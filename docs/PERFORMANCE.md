@@ -9,6 +9,7 @@ Chromarchy performance work is measured with reproducible workloads before relea
 - CPU compositing of a visible 1024×1024 region across eight tiled pixel layers in a sparse 20,000×20,000 document;
 - copy-on-write mutation of one pixel in a shared tile set;
 - inversion of a 512×512 sparse selection in a 300,000×300,000 document.
+- viewport-bounded painting of a sparse 300,000×300,000 document at 1% zoom.
 
 The large canvas and selection workloads intentionally verify that cost follows allocated or visible tiles rather than total canvas area.
 

@@ -15,5 +15,6 @@ Chromarchy uses the image codecs supplied by the installed Qt 6 image-format plu
 - PNG, TIFF, WebP, and OpenEXR preserve alpha when the installed codec supports it.
 - JPEG has no alpha channel; transparent areas are explicitly composited over white.
 - Metadata is stripped by default. This avoids accidentally carrying author, location, device, or workflow data into a derivative file.
+- Full-frame export is currently limited to 64 MiPixels (256 MiB of RGBA pixels before encoder overhead). Oversized documents fail before allocation with an actionable resize/crop message; tile-streaming encoders are future work.
 
 Metadata inspection and selective preservation controls are planned. Until those controls exist, users who require source metadata must retain the original file separately.

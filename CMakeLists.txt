@@ -103,5 +103,19 @@ if(BUILD_TESTING)
   )
   add_test(NAME chromarchy_core_benchmarks COMMAND chromarchy_core_benchmarks)
   set_tests_properties(chromarchy_core_benchmarks PROPERTIES LABELS benchmark)
+
+  qt_add_executable(chromarchy_canvas_benchmarks
+    benchmarks/CanvasBenchmark.cpp
+    src/ui/CanvasWidget.cpp
+    src/ui/CanvasWidget.h
+  )
+  target_link_libraries(chromarchy_canvas_benchmarks PRIVATE
+    chromarchy_core Qt6::Test Qt6::Widgets
+  )
+  add_test(NAME chromarchy_canvas_benchmarks COMMAND chromarchy_canvas_benchmarks)
+  set_tests_properties(chromarchy_canvas_benchmarks PROPERTIES
+    LABELS benchmark
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+  )
 endif()
 

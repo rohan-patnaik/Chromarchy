@@ -39,6 +39,7 @@ public:
   [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
   [[nodiscard]] QColor pixelColor(QPoint position) const;
   [[nodiscard]] QVector<TileSnapshot> tileSnapshots() const;
+  [[nodiscard]] QVector<TileSnapshot> tileSnapshots(QRect region) const;
   [[nodiscard]] QImage render(QRect region = {}) const;
 
   bool setPixelColor(QPoint position, const QColor& color);

@@ -10,6 +10,8 @@
 
 #include <optional>
 
+class QPainter;
+
 namespace chromarchy {
 
 class NativeDocumentCodec;
@@ -39,6 +41,7 @@ public:
   bool flatten();
 
   [[nodiscard]] QImage composite(QRect region = {}) const;
+  void paintComposite(QPainter& painter, QRect region) const;
 
 private:
   friend class NativeDocumentCodec;
