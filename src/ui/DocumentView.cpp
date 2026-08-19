@@ -20,6 +20,14 @@ DocumentView::DocumentView(Document document, QString displayName,
   layout->setContentsMargins(0, 0, 0, 0);
   canvas_ = new CanvasWidget(&document_, this);
   layout->addWidget(canvas_);
+  connect(canvas_, &CanvasWidget::selectionRequested, this,
+          [this](QRect rectangle) {
+            performCommand(QStringLiteral("Select rectangle"),
+                           [rectangle](Document& document) {
+                             document.selection().selectRectangle(rectangle);
+                             return true;
+                           });
+          });
 }
 
 Document& DocumentView::document() noexcept {

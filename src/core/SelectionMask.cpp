@@ -46,6 +46,27 @@ bool SelectionMask::isEmpty() const noexcept {
   return true;
 }
 
+QImage SelectionMask::render(QRect region) const {
+  const QRect bounds(QPoint(), size_);
+  if (region.isNull()) {
+    region = bounds;
+  } else {
+    region = region.intersected(bounds);
+  }
+  if (region.isEmpty()) {
+    return {};
+  }
+
+  QImage output(region.size(), QImage::Format_Grayscale8);
+  output.fill(baseCoverage_);
+  QPainter painter(&output);
+  painter.setCompositionMode(QPainter::CompositionMode_Source);
+  for (auto tile = tiles_.cbegin(); tile != tiles_.cend(); ++tile) {
+    painter.drawImage(tileOrigin(tile.key()) - region.topLeft(), tile.value());
+  }
+  return output;
+}
+
 bool SelectionMask::setCoverage(QPoint position, quint8 newCoverage) {
   if (!contains(position) || coverage(position) == newCoverage) {
     return false;

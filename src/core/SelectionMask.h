@@ -17,6 +17,7 @@ public:
   [[nodiscard]] quint8 coverage(QPoint position) const noexcept;
   [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
   [[nodiscard]] bool isEmpty() const noexcept;
+  [[nodiscard]] QImage render(QRect region = {}) const;
 
   bool setCoverage(QPoint position, quint8 coverage);
   void selectRectangle(QRect rectangle, quint8 coverage = 255,

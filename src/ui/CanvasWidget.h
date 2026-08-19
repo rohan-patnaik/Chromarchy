@@ -20,6 +20,7 @@ public:
 
 signals:
   void zoomChanged(double zoom);
+  void selectionRequested(QRect rectangle);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -31,6 +32,7 @@ protected:
 
 private:
   [[nodiscard]] QPointF canvasOrigin() const;
+  [[nodiscard]] QPoint documentPosition(QPoint viewportPosition) const;
   void updateScrollBars();
 
   const Document* document_ = nullptr;  // Non-owning; parent DocumentView owns it.
@@ -38,6 +40,9 @@ private:
   bool panning_ = false;
   QPoint panStart_;
   QPoint scrollStart_;
+  bool selecting_ = false;
+  QPoint selectionStart_;
+  QPoint selectionEnd_;
 };
 
 }  // namespace chromarchy

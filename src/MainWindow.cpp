@@ -102,6 +102,37 @@ void MainWindow::createActions() {
   redoAction_->setShortcuts({QKeySequence::Redo,
                              QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
 
+  auto* selectMenu = menuBar()->addMenu(QStringLiteral("&Select"));
+  auto* selectAll = selectMenu->addAction(QStringLiteral("Select &All"), this, [this] {
+    if (auto* view = currentDocument()) {
+      view->performCommand(QStringLiteral("Select all"), [](Document& document) {
+        document.selection().selectAll();
+        return true;
+      });
+    }
+  });
+  selectAll->setShortcut(QKeySequence::SelectAll);
+  auto* deselect = selectMenu->addAction(QStringLiteral("&Deselect"), this, [this] {
+    if (auto* view = currentDocument()) {
+      view->performCommand(QStringLiteral("Deselect"), [](Document& document) {
+        document.selection().clear();
+        return true;
+      });
+    }
+  });
+  deselect->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+  auto* invertSelection =
+      selectMenu->addAction(QStringLiteral("&Invert Selection"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->performCommand(QStringLiteral("Invert selection"),
+                               [](Document& document) {
+                                 document.selection().invert();
+                                 return true;
+                               });
+        }
+      });
+  invertSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
+
   auto* layerMenu = menuBar()->addMenu(QStringLiteral("&Layer"));
   addLayerAction_ = layerMenu->addAction(QStringLiteral("&New Pixel Layer"), this,
                                          &MainWindow::addLayer);

@@ -102,6 +102,33 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
                       sourceRect.width() * zoom_, sourceRect.height() * zoom_);
   painter.setRenderHint(QPainter::SmoothPixmapTransform, zoom_ < 1.0);
   painter.drawImage(target, image);
+
+  const auto mask = document_->selection().render(sourceRect);
+  if (!mask.isNull() && !document_->selection().isEmpty()) {
+    QImage overlay(mask.size(), QImage::Format_RGBA8888_Premultiplied);
+    overlay.fill(Qt::transparent);
+    for (int y = 0; y < mask.height(); ++y) {
+      const auto* maskLine = mask.constScanLine(y);
+      auto* overlayLine = overlay.scanLine(y);
+      for (int x = 0; x < mask.width(); ++x) {
+        const auto alpha = static_cast<quint8>(maskLine[x] * 64 / 255);
+        overlayLine[x * 4] = static_cast<quint8>(32 * alpha / 255);
+        overlayLine[x * 4 + 1] = static_cast<quint8>(160 * alpha / 255);
+        overlayLine[x * 4 + 2] = static_cast<quint8>(220 * alpha / 255);
+        overlayLine[x * 4 + 3] = alpha;
+      }
+    }
+    painter.drawImage(target, overlay);
+  }
+  if (selecting_) {
+    const auto selection = QRect(selectionStart_, selectionEnd_).normalized();
+    const QRectF preview(origin.x() + selection.x() * zoom_,
+                         origin.y() + selection.y() * zoom_,
+                         selection.width() * zoom_, selection.height() * zoom_);
+    painter.setPen(QPen(QColor(80, 200, 240), 1.0, Qt::DashLine));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(preview);
+  }
   painter.setPen(QColor(0, 0, 0, 160));
   painter.drawRect(canvasRect);
 }
@@ -129,6 +156,17 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     event->accept();
     return;
   }
+  if (event->button() == Qt::LeftButton) {
+    const auto position = documentPosition(event->position().toPoint());
+    if (QRect(QPoint(), document_->size()).contains(position)) {
+      selecting_ = true;
+      selectionStart_ = position;
+      selectionEnd_ = position;
+      viewport()->update();
+      event->accept();
+      return;
+    }
+  }
   QAbstractScrollArea::mousePressEvent(event);
 }
 
@@ -140,6 +178,15 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
     event->accept();
     return;
   }
+  if (selecting_) {
+    auto position = documentPosition(event->position().toPoint());
+    position.setX(qBound(0, position.x(), document_->size().width() - 1));
+    position.setY(qBound(0, position.y(), document_->size().height() - 1));
+    selectionEnd_ = position;
+    viewport()->update();
+    event->accept();
+    return;
+  }
   QAbstractScrollArea::mouseMoveEvent(event);
 }
 
@@ -147,6 +194,14 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
   if (panning_ && event->button() == Qt::MiddleButton) {
     panning_ = false;
     viewport()->setCursor(Qt::ArrowCursor);
+    event->accept();
+    return;
+  }
+  if (selecting_ && event->button() == Qt::LeftButton) {
+    selecting_ = false;
+    const auto rectangle = QRect(selectionStart_, selectionEnd_).normalized();
+    viewport()->update();
+    emit selectionRequested(rectangle);
     event->accept();
     return;
   }
@@ -165,6 +220,15 @@ QPointF CanvasWidget::canvasOrigin() const {
                        ? (viewport()->height() - content.height()) / 2.0
                        : -verticalScrollBar()->value();
   return {x, y};
+}
+
+QPoint CanvasWidget::documentPosition(QPoint viewportPosition) const {
+  if (!document_) {
+    return {-1, -1};
+  }
+  const auto relative = QPointF(viewportPosition) - canvasOrigin();
+  return {static_cast<int>(std::floor(relative.x() / zoom_)),
+          static_cast<int>(std::floor(relative.y() / zoom_))};
 }
 
 void CanvasWidget::updateScrollBars() {

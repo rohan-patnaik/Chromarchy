@@ -36,7 +36,7 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
 | Pixel layers and groups | Partial | M1 | Sparse copy-on-write tile storage, pixel-layer ordering, visibility, opacity, locks, and `chromarchy_document`/`chromarchy_tiled_image` tests | Groups, UI workflow, merge/flatten, golden fixtures, undo/redo |
 | Duplicate, merge, and flatten layers | Planned | M1 | — | Blend correctness, undo/redo, golden fixtures |
-| Non-destructive selection model | Partial | M1 | Sparse copy-on-write grayscale coverage tiles, rectangle/select-all/invert operations, dirty regions, and 300k×300k sparse behavior test | Canvas overlay, persistence, feathering and transform integration |
+| Non-destructive selection model | Partial | M1 | Sparse copy-on-write grayscale coverage tiles, canvas rectangle workflow and coverage overlay, undoable select-all/deselect/invert, dirty regions, and 300k×300k sparse behavior test | Persistence, feathering and transform integration |
 | Command undo/redo | Partial | M1 | Bounded snapshot commands with copy-on-write tiles, redo invalidation, layer-operation UI routing, and `chromarchy_history` tests | Paint-command coalescing, saved-state revision tracking, recovery journal |
 | Brush, pencil, and eraser | Planned | M2 | — | Tablet input, dynamics, presets, latency fixtures |
 | Geometric and freehand selections | Planned | M2 | — | Feather/grow/shrink/invert and golden masks |
