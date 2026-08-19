@@ -27,4 +27,10 @@ jobs:
         run: cmake --build build --parallel 2
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build -LE benchmark --output-on-failure
+
+      - name: Benchmark
+        run: ctest --test-dir build -L benchmark --verbose
+
+      - name: Validate Arch package recipe
+        run: bash -n packaging/arch/PKGBUILD

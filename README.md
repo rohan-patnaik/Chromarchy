@@ -23,6 +23,15 @@ ctest --test-dir build --output-on-failure
 
 Core performance workloads and their exact commands are documented in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
+## Arch package
+
+The development package recipe lives at `packaging/arch/PKGBUILD` and builds directly from `main`:
+
+```sh
+cd packaging/arch
+makepkg -si
+```
+
 ## Omarchy plugin
 
 The root `manifest.json` is the marketplace contract. Once the native binary is installed on `PATH` as `chromarchy`:

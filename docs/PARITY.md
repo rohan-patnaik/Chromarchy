@@ -53,7 +53,7 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | RAW development adapter | Planned | M5 | — | Supported-camera policy and nondestructive settings |
 | PSD/PSB compatibility adapter | Planned | M5 | — | Publicly sourced fixtures and documented round-trip limits |
 | Print and PDF proof export | Planned | M5 | — | Color-managed layout and output fixtures |
-| Recovery, fuzzing, and release packaging | Planned | M6 | — | Crash recovery, fuzz corpus, Arch/AppImage reproducibility |
+| Recovery, fuzzing, and release packaging | Partial | M6 | CI-validated Arch `makepkg` development recipe that builds, tests and installs the native binary | Crash recovery, fuzz corpus, pinned release sources, AppImage, checksums and SBOM |
 
 ## Explicit exclusions
 

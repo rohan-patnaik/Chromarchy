@@ -1,0 +1,42 @@
+pkgname=chromarchy-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Offline-first professional raster image editor for Omarchy Quattro'
+arch=('x86_64')
+url='https://github.com/rohan-patnaik/Chromarchy'
+license=('MIT')
+depends=('qt6-base')
+makedepends=('cmake' 'git' 'ninja')
+provides=('chromarchy')
+conflicts=('chromarchy')
+source=('Chromarchy::git+https://github.com/rohan-patnaik/Chromarchy.git')
+b2sums=('SKIP')
+
+pkgver() {
+  cd Chromarchy
+  printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cmake -S Chromarchy -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DBUILD_TESTING=ON
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build -LE benchmark --output-on-failure
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 Chromarchy/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 Chromarchy/README.md \
+    "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 Chromarchy/docs/PARITY.md \
+    "$pkgdir/usr/share/doc/$pkgname/PARITY.md"
+  install -Dm644 Chromarchy/docs/PERFORMANCE.md \
+    "$pkgdir/usr/share/doc/$pkgname/PERFORMANCE.md"
+}
