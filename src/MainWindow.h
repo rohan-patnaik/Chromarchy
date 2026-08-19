@@ -4,6 +4,8 @@
 
 class QAction;
 class QCloseEvent;
+class QCheckBox;
+class QDoubleSpinBox;
 class QListWidget;
 class QListWidgetItem;
 class QTabWidget;
@@ -43,6 +45,10 @@ private:
   void removeLayer();
   void mergeLayerDown();
   void flattenDocument();
+  void moveLayerUp();
+  void moveLayerDown();
+  void commitLayerOpacity();
+  void setLayerLocked(bool locked);
   void updateActions();
   void showError(const QString& title, const QString& detail);
 
@@ -59,6 +65,10 @@ private:
   QAction* removeLayerAction_ = nullptr;
   QAction* mergeDownAction_ = nullptr;
   QAction* flattenAction_ = nullptr;
+  QAction* moveLayerUpAction_ = nullptr;
+  QAction* moveLayerDownAction_ = nullptr;
+  QDoubleSpinBox* opacity_ = nullptr;  // Owned by QObject parent.
+  QCheckBox* layerLocked_ = nullptr;   // Owned by QObject parent.
   bool updatingLayers_ = false;
   int untitledCounter_ = 1;
 };

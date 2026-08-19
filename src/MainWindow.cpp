@@ -7,9 +7,11 @@
 
 #include <QAction>
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDockWidget>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -143,6 +145,14 @@ void MainWindow::createActions() {
   removeLayerAction_ = layerMenu->addAction(QStringLiteral("&Remove Layer"), this,
                                             &MainWindow::removeLayer);
   removeLayerAction_->setShortcut(QKeySequence::Delete);
+  moveLayerUpAction_ = layerMenu->addAction(QStringLiteral("Move Layer &Up"), this,
+                                            &MainWindow::moveLayerUp);
+  moveLayerUpAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketRight));
+  moveLayerDownAction_ = layerMenu->addAction(
+      QStringLiteral("Move Layer &Down"), this, &MainWindow::moveLayerDown);
+  moveLayerDownAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketLeft));
   layerMenu->addSeparator();
   mergeDownAction_ = layerMenu->addAction(QStringLiteral("Merge &Down"), this,
                                           &MainWindow::mergeLayerDown);
@@ -191,6 +201,21 @@ void MainWindow::createLayersDock() {
           &MainWindow::layerSelectionChanged);
   connect(layers_, &QListWidget::itemChanged, this,
           &MainWindow::layerItemChanged);
+
+  auto* properties = new QFormLayout;
+  opacity_ = new QDoubleSpinBox(panel);
+  opacity_->setRange(0.0, 100.0);
+  opacity_->setDecimals(1);
+  opacity_->setSuffix(QStringLiteral(" %"));
+  opacity_->setKeyboardTracking(false);
+  connect(opacity_, &QDoubleSpinBox::editingFinished, this,
+          &MainWindow::commitLayerOpacity);
+  properties->addRow(QStringLiteral("Opacity"), opacity_);
+  layerLocked_ = new QCheckBox(QStringLiteral("Lock pixels"), panel);
+  connect(layerLocked_, &QCheckBox::toggled, this,
+          &MainWindow::setLayerLocked);
+  properties->addRow(layerLocked_);
+  layout->addLayout(properties);
   dock->setWidget(panel);
   addDockWidget(Qt::RightDockWidgetArea, dock);
 }
@@ -374,14 +399,19 @@ void MainWindow::refreshLayers() {
          --index) {
       const auto* layer = document.layerAt(index);
       auto* item = new QListWidgetItem(layer->name(), layers_);
-      item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+      item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
       item->setCheckState(layer->isVisible() ? Qt::Checked : Qt::Unchecked);
       item->setData(Qt::UserRole, index);
       if (index == document.activeLayerIndex()) {
         layers_->setCurrentItem(item);
       }
     }
+    const auto* active = document.layerAt(document.activeLayerIndex());
+    opacity_->setValue(active->opacity() * 100.0);
+    layerLocked_->setChecked(active->isLocked());
   }
+  opacity_->setEnabled(view != nullptr);
+  layerLocked_->setEnabled(view != nullptr);
   updatingLayers_ = false;
 }
 
@@ -390,8 +420,14 @@ void MainWindow::layerSelectionChanged(int row) {
     return;
   }
   if (auto* view = currentDocument()) {
-    view->document().setActiveLayerIndex(
-        layers_->item(row)->data(Qt::UserRole).toInt());
+    const auto index = layers_->item(row)->data(Qt::UserRole).toInt();
+    if (view->document().setActiveLayerIndex(index)) {
+      const auto* layer = view->document().layerAt(index);
+      updatingLayers_ = true;
+      opacity_->setValue(layer->opacity() * 100.0);
+      layerLocked_->setChecked(layer->isLocked());
+      updatingLayers_ = false;
+    }
   }
   updateActions();
 }
@@ -412,6 +448,19 @@ void MainWindow::layerItemChanged(QListWidgetItem* item) {
                                return false;
                              }
                              changed->setVisible(visible);
+                             return true;
+                           });
+      return;
+    }
+    const auto name = item->text().trimmed();
+    if (layer && !name.isEmpty() && layer->name() != name) {
+      view->performCommand(QStringLiteral("Rename layer"),
+                           [index, name](Document& document) {
+                             auto* changed = document.layerAt(index);
+                             if (!changed) {
+                               return false;
+                             }
+                             changed->setName(name);
                              return true;
                            });
     }
@@ -469,6 +518,71 @@ void MainWindow::flattenDocument() {
   }
 }
 
+void MainWindow::moveLayerUp() {
+  if (auto* view = currentDocument()) {
+    const auto from = view->document().activeLayerIndex();
+    view->performCommand(QStringLiteral("Move layer up"),
+                         [from](Document& document) {
+                           return document.moveLayer(from, from + 1);
+                         });
+  }
+}
+
+void MainWindow::moveLayerDown() {
+  if (auto* view = currentDocument()) {
+    const auto from = view->document().activeLayerIndex();
+    view->performCommand(QStringLiteral("Move layer down"),
+                         [from](Document& document) {
+                           return document.moveLayer(from, from - 1);
+                         });
+  }
+}
+
+void MainWindow::commitLayerOpacity() {
+  if (updatingLayers_) {
+    return;
+  }
+  if (auto* view = currentDocument()) {
+    const auto index = view->document().activeLayerIndex();
+    const auto value = opacity_->value() / 100.0;
+    const auto* layer = view->document().layerAt(index);
+    if (!layer || qFuzzyCompare(layer->opacity(), value)) {
+      return;
+    }
+    view->performCommand(QStringLiteral("Change layer opacity"),
+                         [index, value](Document& document) {
+                           auto* changed = document.layerAt(index);
+                           if (!changed) {
+                             return false;
+                           }
+                           changed->setOpacity(value);
+                           return true;
+                         });
+  }
+}
+
+void MainWindow::setLayerLocked(bool locked) {
+  if (updatingLayers_) {
+    return;
+  }
+  if (auto* view = currentDocument()) {
+    const auto index = view->document().activeLayerIndex();
+    const auto* layer = view->document().layerAt(index);
+    if (!layer || layer->isLocked() == locked) {
+      return;
+    }
+    view->performCommand(QStringLiteral("Change layer lock"),
+                         [index, locked](Document& document) {
+                           auto* changed = document.layerAt(index);
+                           if (!changed) {
+                             return false;
+                           }
+                           changed->setLocked(locked);
+                           return true;
+                         });
+  }
+}
+
 void MainWindow::updateActions() {
   const auto* view = currentDocument();
   const bool hasDocument = view != nullptr;
@@ -492,6 +606,11 @@ void MainWindow::updateActions() {
   mergeDownAction_->setEnabled(
       hasDocument && view->document().activeLayerIndex() > 0);
   flattenAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
+  moveLayerUpAction_->setEnabled(
+      hasDocument && view->document().activeLayerIndex() <
+                         view->document().layerCount() - 1);
+  moveLayerDownAction_->setEnabled(
+      hasDocument && view->document().activeLayerIndex() > 0);
 }
 
 void MainWindow::showError(const QString& title, const QString& detail) {
