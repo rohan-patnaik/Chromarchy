@@ -34,6 +34,7 @@ jobs:
 
       - name: Build and verify Arch package
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           source_root=$(mktemp -d)
           mkdir "$source_root/Chromarchy"
