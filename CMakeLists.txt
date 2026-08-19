@@ -13,6 +13,8 @@ find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Widgets)
 qt_add_library(chromarchy_core STATIC
   src/core/Document.cpp
   src/core/Document.h
+  src/core/ImageIO.cpp
+  src/core/ImageIO.h
   src/core/Layer.cpp
   src/core/Layer.h
   src/core/TiledImage.cpp
@@ -51,5 +53,9 @@ if(BUILD_TESTING)
   qt_add_executable(chromarchy_tiled_image_tests tests/core/TiledImageTest.cpp)
   target_link_libraries(chromarchy_tiled_image_tests PRIVATE chromarchy_core Qt6::Test)
   add_test(NAME chromarchy_tiled_image COMMAND chromarchy_tiled_image_tests)
+
+  qt_add_executable(chromarchy_image_io_tests tests/core/ImageIOTest.cpp)
+  target_link_libraries(chromarchy_image_io_tests PRIVATE chromarchy_core Qt6::Test)
+  add_test(NAME chromarchy_image_io COMMAND chromarchy_image_io_tests)
 endif()
 

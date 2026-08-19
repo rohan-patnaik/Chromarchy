@@ -12,6 +12,47 @@ size_t qHash(const TileIndex& index, size_t seed) noexcept {
 
 TiledImage::TiledImage(QSize size) : size_(size) {}
 
+TiledImage TiledImage::fromImage(const QImage& image) {
+  if (image.isNull()) {
+    return {};
+  }
+
+  const auto source = image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+  TiledImage tiled(source.size());
+  const int columns = (source.width() + tileExtent - 1) / tileExtent;
+  const int rows = (source.height() + tileExtent - 1) / tileExtent;
+
+  for (int row = 0; row < rows; ++row) {
+    for (int column = 0; column < columns; ++column) {
+      const TileIndex index{column, row};
+      const QRect sourceRect(tileOrigin(index), QSize(tileExtent, tileExtent));
+      const auto clipped = sourceRect.intersected(source.rect());
+      const auto fragment = source.copy(clipped);
+
+      bool hasVisiblePixel = !fragment.hasAlphaChannel();
+      for (int y = 0; !hasVisiblePixel && y < fragment.height(); ++y) {
+        const auto* scanline = fragment.constScanLine(y);
+        for (int x = 0; x < fragment.width(); ++x) {
+          if (scanline[x * 4 + 3] != 0) {
+            hasVisiblePixel = true;
+            break;
+          }
+        }
+      }
+      if (!hasVisiblePixel) {
+        continue;
+      }
+
+      auto& tile = tiled.ensureTile(index);
+      QPainter painter(&tile);
+      painter.setCompositionMode(QPainter::CompositionMode_Source);
+      painter.drawImage(QPoint(), fragment);
+    }
+  }
+  tiled.dirtyRegion_ = QRegion(QRect(QPoint(), tiled.size_));
+  return tiled;
+}
+
 QSize TiledImage::size() const noexcept {
   return size_;
 }

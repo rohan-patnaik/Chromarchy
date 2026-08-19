@@ -29,6 +29,7 @@ public:
   static constexpr int tileExtent = 256;
 
   explicit TiledImage(QSize size = {});
+  [[nodiscard]] static TiledImage fromImage(const QImage& image);
 
   [[nodiscard]] QSize size() const noexcept;
   [[nodiscard]] bool isValid() const noexcept;

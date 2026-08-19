@@ -28,9 +28,9 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Native Wayland desktop workspace | Partial | M0 | Qt 6 Widgets application and dockable shell | Arch/Omarchy validation, settings persistence, accessibility test |
 | Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
 | New raster document | Planned | M1 | — | Model, UI workflow, validation, undo boundary |
-| Open raster image | Planned | M1 | — | PNG/JPEG/TIFF/WebP/OpenEXR adapters and fixtures |
+| Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles; PNG integration coverage in `chromarchy_image_io` | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
 | Native lossless save/load | Planned | M1 | — | Versioned container, round-trip fixtures, corrupt-input tests |
-| Export raster image | Planned | M1 | — | Deterministic CPU output, metadata policy, format fixtures |
+| Export raster image | Partial | M1 | Deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
 | Multiple document tabs | Planned | M1 | — | Lifecycle, dirty-state prompts, keyboard navigation |
 | Zoom, pan, rotate view | Planned | M1 | — | Input routing, pixel-grid behavior, latency benchmark |
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
