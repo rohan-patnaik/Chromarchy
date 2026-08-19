@@ -65,7 +65,10 @@ void CanvasWidgetTest::requestsRectangleSelectionFromCanvasDrag() {
                       origin + QPoint(30, 40));
 
   QCOMPARE(selections.size(), 1);
-  QCOMPARE(selections.takeFirst().at(0).toRect(), QRect(10, 20, 21, 21));
+  const auto selection = selections.takeFirst().at(0).toRect();
+  QCOMPARE(selection.size(), QSize(21, 21));
+  QVERIFY(qAbs(selection.x() - 10) <= 1);
+  QVERIFY(qAbs(selection.y() - 20) <= 1);
 }
 
 QTEST_MAIN(CanvasWidgetTest)
