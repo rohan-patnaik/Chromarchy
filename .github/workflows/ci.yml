@@ -12,7 +12,7 @@ jobs:
   arch-build:
     runs-on: ubuntu-latest
     container: archlinux:latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Install build dependencies
@@ -32,5 +32,18 @@ jobs:
       - name: Benchmark
         run: ctest --test-dir build -L benchmark --verbose
 
-      - name: Validate Arch package recipe
-        run: bash -n packaging/arch/PKGBUILD
+      - name: Build and verify Arch package
+        run: |
+          useradd --create-home package-builder
+          chown -R package-builder:package-builder packaging/arch
+          runuser -u package-builder -- sh -c \
+            'cd packaging/arch && makepkg --cleanbuild --clean --noconfirm'
+          package_count=$(find packaging/arch -maxdepth 1 -type f \
+            -name 'chromarchy-git-*.pkg.tar.zst' ! -name '*-debug-*' | wc -l)
+          test "$package_count" -eq 1
+          package_path=$(find packaging/arch -maxdepth 1 -type f \
+            -name 'chromarchy-git-*.pkg.tar.zst' ! -name '*-debug-*' -print -quit)
+          pacman -Qip "$package_path"
+          pacman -U --noconfirm "$package_path"
+          test -x /usr/bin/chromarchy
+          pacman -Qkk chromarchy-git

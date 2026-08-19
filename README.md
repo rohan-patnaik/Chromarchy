@@ -14,7 +14,7 @@ Foundation build. The current native shell opens a document workspace with menus
 ## Build on Arch/Omarchy
 
 ```sh
-sudo pacman -S --needed base-devel cmake ninja qt6-base
+sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-imageformats
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
