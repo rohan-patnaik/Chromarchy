@@ -46,4 +46,4 @@ jobs:
           pacman -Qip "$package_path"
           pacman -U --noconfirm "$package_path"
           test -x /usr/bin/chromarchy
-          pacman -Qkk chromarchy-git
+          pacman -Q chromarchy-git
