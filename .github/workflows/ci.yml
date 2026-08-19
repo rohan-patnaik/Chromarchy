@@ -16,9 +16,12 @@ jobs:
 
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja qt6-base qt6-imageformats
+        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja python qt6-base qt6-imageformats
 
       - uses: actions/checkout@v5
+
+      - name: Validate offline capability catalog
+        run: python scripts/generate_offline_parity.py --check
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON

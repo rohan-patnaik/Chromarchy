@@ -1,71 +1,61 @@
-# Workflow capability matrix
+# Workflow evidence policy
 
-Chromarchy tracks professional image-editing workflows by reproducible evidence, not by product-level parity claims. A capability is only marked **Complete** when its documented acceptance workflow, automated tests, and relevant visual fixture pass on the supported platform.
+Chromarchy measures local professional editing workflows, not product-name
+parity. The canonical, stable-ID source is
+[`offline-capabilities.json`](offline-capabilities.json); its generated review
+view is [`OFFLINE_PARITY.md`](OFFLINE_PARITY.md). Never edit the generated file.
 
-Status meanings:
+The catalog currently covers all planned local surfaces:
 
-- **Complete** — acceptance workflow and automated evidence are present.
-- **Partial** — a usable vertical slice exists, but listed gaps remain.
-- **Planned** — included in the roadmap but not implemented.
-- **Excluded** — intentionally outside the product boundary.
+- foundation, Omarchy integration, packaging, settings, workspaces, shortcuts,
+  offline operation, accessibility, HiDPI, themes, and localization;
+- typed pixels, alpha/channels, tiles, caches, scratch, jobs, render DAG,
+  deterministic CPU rendering, history, persistence, recovery, failure and
+  cancellation behavior;
+- document lifecycle, tabs, recents, image/canvas sizing, image/view rotation,
+  rulers, guides, grids, snapping, zoom, pan, navigator, menus, and panels;
+- flat and nested layers, groups, multi-layer operations, masks, channels,
+  blending, adjustments, effects, filters, and linked/embedded local sources;
+- paint/input/presets, selections, local non-generative subject/background
+  removal, transforms, crop, clone/heal/patch, and tonal/blur tools;
+- paths, shapes, SVG interchange, OpenType, RTL, vertical/variable/path text;
+- native, PNG, JPEG, TIFF, WebP, OpenEXR, HEIF/AVIF, PSD/PSB, RAW, metadata,
+  professional color, print, and PDF proof workflows;
+- actions, batch/CLI, scripting, plugins, frame animation, GIF/APNG, and video;
+- corrupt-input, low-disk, release packaging, SBOM, license, and security work;
+- explicit exclusions for generative/cloud/vendor-proprietary workflows and
+  unsubstantiated product-level compatibility claims.
 
-## Evidence rules
+## Evidence and status rules
 
-Each completed row must link to:
+Every catalog row has a permanent ID, acceptance recipe, test/fixture owner,
+dependency list, measurable budget, status, evidence list, and explicit limits.
+IDs are never reused. A row is **Complete** only when all evidence applicable to
+that row exists: automated coverage, visual goldens for pixel output,
+undo/redo for mutations, persistence for document state, and budget/large-data
+coverage. A usable but incomplete slice is **Partial**. **Planned** records
+scope without implying implementation. **Blocked** names a real unresolved
+decision or prerequisite. **Excluded** records an intentional product boundary.
 
-1. the implementation milestone and user-facing workflow;
-2. automated unit or integration coverage;
-3. a golden fixture when pixels or layout are affected;
-4. undo/redo coverage for mutating editor operations;
-5. large-document or performance evidence where relevant.
+CI validates the JSON schema and evidence paths and regenerates the Markdown in
+memory. Any status/evidence change without the matching generated document makes
+CI fail. Run:
 
-Until all applicable evidence exists, the row stays Partial or Planned.
+```sh
+python scripts/generate_offline_parity.py
+python scripts/generate_offline_parity.py --check
+```
 
-## Core workflows
+## Dependency decisions
 
-| Workflow | Status | Milestone | Current evidence | Remaining evidence or gaps |
-| --- | --- | --- | --- | --- |
-| Native Wayland desktop workspace | Partial | M0 | Qt 6 Widgets application and dockable shell | Arch/Omarchy validation, settings persistence, accessibility test |
-| Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
-| New raster document | Partial | M1 | Validated new-document dialog creates a real tiled document | Background options, presets, undo boundary |
-| Open raster image | Partial | M1 | Qt decoder adapter into sparse real pixel tiles, file-open UI, metadata policy test, and data-driven PNG/JPEG/TIFF/WebP/OpenEXR codec round trips | Golden fixture corpus and metadata inspection controls |
-| Native lossless save/load | Partial | M1 | Atomic `.chromarchy` v2 container with v1 load compatibility, layered pixels and sparse selection persistence, save/open UI, round-trip and corrupt/truncated-input tests | Groups, recovery journal, migration fixtures from released versions |
-| Export raster image | Partial | M1 | Export UI, deterministic CPU composite, atomic writes, explicit JPEG alpha flattening, metadata stripping test, and data-driven PNG/JPEG/TIFF/WebP/OpenEXR round trips | Golden fixture corpus and selective metadata controls |
-| Multiple document tabs | Partial | M1 | Movable document tabs, dirty markers, per-document close and application-exit save prompts | Tab lifecycle integration tests, configurable keyboard navigation |
-| Zoom, pan, rotate view | Partial | M1 | Visible-region compositing, bounded zoom, middle-button pan, canvas viewport tests | Rotation, pixel grid, gesture/tablet input, latency benchmark |
-| Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
-| Pixel layers and groups | Partial | M1 | Sparse copy-on-write tile storage; undoable UI for add/remove/duplicate/reorder/rename/visibility/opacity/locks; merge/flatten; and core tests | Layer groups and golden fixtures |
-| Duplicate, merge, and flatten layers | Partial | M1 | Undoable duplicate, tile-local merge-down and flatten UI operations with lock protection and composite-preservation tests | Group-aware behavior, golden fixtures, blend modes beyond source-over |
-| Non-destructive selection model | Partial | M1 | Sparse copy-on-write grayscale coverage tiles, native persistence, canvas rectangle workflow and coverage overlay, undoable select-all/deselect/invert, dirty regions, and 300k×300k sparse behavior test | Feathering and transform integration |
-| Command undo/redo | Partial | M1 | Bounded snapshot commands with copy-on-write tiles, redo invalidation, layer-operation UI routing, and `chromarchy_history` tests | Paint-command coalescing, saved-state revision tracking, recovery journal |
-| Brush, pencil, and eraser | Planned | M2 | — | Tablet input, dynamics, presets, latency fixtures |
-| Geometric and freehand selections | Planned | M2 | — | Feather/grow/shrink/invert and golden masks |
-| Move, crop, and transforms | Planned | M2 | — | Resampling policy, undo/redo, golden fixtures |
-| Retouch and tonal tools | Planned | M2 | — | Clone/heal/dodge/burn/blur/sharpen/smudge workflows |
-| Blend modes, masks, and channels | Planned | M3 | — | Documented blend set and conformance fixtures |
-| Adjustment layers | Planned | M3 | — | CPU reference implementations, UI, golden fixtures |
-| Layer effects and filter graph | Planned | M3 | — | Nondestructive graph, cache bounds, serialization |
-| Linked and embedded source layers | Planned | M3 | — | Relinking, missing-source behavior, portability |
-| Paths and vector shapes | Planned | M4 | — | Boolean geometry, SVG interchange, render fixtures |
-| Professional text layout | Planned | M4 | — | OpenType, RTL, vertical text, text-on-path fixtures |
-| Actions, batch, and CLI automation | Planned | M4 | — | Stable command schema, failure policy, integration tests |
-| Color-managed proof workflows | Planned | M5 | — | Profile fixtures, CMYK/Lab/spot validation |
-| RAW development adapter | Planned | M5 | — | Supported-camera policy and nondestructive settings |
-| PSD/PSB compatibility adapter | Planned | M5 | — | Publicly sourced fixtures and documented round-trip limits |
-| Print and PDF proof export | Planned | M5 | — | Color-managed layout and output fixtures |
-| Recovery, fuzzing, and release packaging | Partial | M6 | CI-validated Arch `makepkg` development recipe that builds, tests and installs the native binary | Crash recovery, fuzz corpus, pinned release sources, AppImage, checksums and SBOM |
+lcms2, OpenColorIO, LibRaw, Exiv2, direct OpenEXR, libheif, FFmpeg, ONNX,
+Poppler, scripting runtimes, and similarly consequential dependencies or models
+require a clean decision packet and explicit user approval before adoption.
+Catalog rows remain Planned while dependency-free prerequisite work proceeds.
 
-## Explicit exclusions
+## Claim boundary
 
-| Workflow or service | Status | Reason |
-| --- | --- | --- |
-| Generative fill or expand | Excluded | Product boundary; no generative image editing |
-| Text-to-image or partner image models | Excluded | Product boundary; offline professional raster workflows first |
-| Adobe Firefly, Stock, Express, or Boards | Excluded | Vendor cloud services and proprietary integrations |
-| Adobe account and Creative Cloud collaboration | Excluded | Offline-first design; no mandatory account or cloud |
-| Adobe proprietary extensions or private APIs | Excluded | Legal and architectural boundary |
-| Adobe UI, icons, strings, layouts, or sample assets | Excluded | Chromarchy uses original terminology and visuals |
-
-## Maintenance
-
-Update this matrix in the same focused commit that changes a capability's status. Evidence links must point to files in this repository or stable CI artifacts. Marketing and release notes must not claim Photoshop parity; they may name specific completed workflows from this matrix.
+Documentation may cite individual Complete stable IDs. It must not claim broad
+Photoshop parity, proprietary behavior, or compatibility not demonstrated by
+public fixtures and the catalog. Adobe code, APIs, UI, icons, strings, layouts,
+models, and sample assets are not inputs to Chromarchy.

@@ -1,71 +1,119 @@
-# Chromarchy product and implementation plan
+# Chromarchy offline implementation roadmap
 
 ## Product boundary
 
-The goal is a fast, local professional image editor with broad non-generative Photoshop workflow coverage. Literal full parity with current Photoshop is not a credible near-term claim: Photoshop represents decades of proprietary behavior, format edge cases, print/video/3D integrations, extensions, and platform services. Progress is measured by a public capability matrix and reproducible workflows, not by marketing language.
+Chromarchy is a fast, local-first professional image editor for current Arch
+Linux, Wayland, and Omarchy Quattro. Progress is reported by stable capability
+IDs in `docs/offline-capabilities.json`, never by broad Photoshop-parity claims.
+Generative image editing, mandatory cloud services, vendor accounts/private
+APIs, and copied proprietary expressive material are excluded.
 
-Excluded by request: generative fill, generative expand, text-to-image, partner AI models, and cloud-only Adobe services. Also excluded unless independently re-scoped: Adobe account, Stock, Express, Firefly Boards, and Creative Cloud collaboration.
+## Architectural invariants
 
-## Architecture
+- C++23 and Qt 6; RAII, value types, explicit ownership, no raw owning pointers.
+- Preserve and evolve the sparse tiled copy-on-write engine; do not replace it
+  with a disposable full-frame architecture.
+- All caches, scratch, history, queues, and background work are bounded and
+  cancelable. CPU reference rendering remains deterministic.
+- Offline operation is the default; no telemetry or mandatory network service.
+- Every pixel mutation needs goldens, undo/redo, persistence, corrupt-input and
+  budget evidence where applicable.
+- Consequential dependencies or models require a decision packet and explicit
+  user approval before adoption. Dependency-free prerequisite work continues.
 
-- C++23 with Qt 6 Widgets for mature docking, input, accessibility, printing, Wayland, and low runtime overhead.
-- RAII, QObject parent ownership, smart pointers, spans, and value types; no raw owning pointers.
-- Tile-based document engine with copy-on-write pixel tiles, dirty-region tracking, mip previews, background jobs, and bounded caches.
-- GPU compositing through Qt RHI, with deterministic CPU fallbacks for export and tests.
-- LittleCMS/OpenColorIO-based color pipeline; 8/16-bit integer and 16/32-bit float channels.
-- Versioned native document container; PSD/PSB import/export treated as compatibility adapters with fixture tests.
-- Command journal for undo/redo and crash recovery; autosave never overwrites the source document.
-- Native plugin API is deferred until the core data model is stable.
+## Phase gates
 
-## Milestones
+### Phase 0 — evidence baseline
 
-### M0 — foundation
+- Maintain the complete stable-ID machine catalog and generated
+  `docs/OFFLINE_PARITY.md` covering formats, menus, tools, panels, local
+  non-generative selection/removal, media, automation/plugins, print/PDF,
+  accessibility/localization, professional color, release work, and exclusions.
+- Record acceptance, owner, dependencies, budgets, status, evidence, and limits
+  on every row. CI rejects schema, evidence-path, and generated-output drift.
+- Stop for independent high review before changing engine contracts.
 
-- Native window, dockable workspace, keyboard routing, theme bridge, logging, settings, CI, packaging skeleton.
-- Omarchy manifest/launcher, install diagnostics, safe failure when the app is missing.
-- Test harness and benchmark fixtures.
+### Phase 1 — internal engine contracts
 
-### M1 — document core
+1. Typed/checked pixel storage: explicit depth, channel layout, color meaning,
+   premultiplication and conversion boundaries.
+2. Shared bounded tile/cache/scratch/job services with cancellation, priorities,
+   low-memory/low-disk behavior, and deterministic test scheduling.
+3. Partial render DAG with dirty-tile propagation and deterministic CPU
+   reference nodes; GPU acceleration stays an optional equivalent path.
+4. Reversible delta commands and stroke coalescing with strict byte/count limits
+   after every cursor transition.
+5. Chunked/versioned native persistence, migration fixtures, bounded reads,
+   streaming writes, corrupt/truncated coverage, crash journal, and recovery.
 
-- New/open/save/export, zoom/pan/rotate canvas, multiple tabs, rulers/guides/grid.
-- Pixel layers, groups, visibility, opacity, locks, reorder, duplicate, merge, flatten.
-- Non-destructive selection model and command-based undo/redo.
-- PNG/JPEG/TIFF/WebP/OpenEXR import/export with metadata policy.
+Stop for independent high review and remediate findings before M1 closure.
 
-### M2 — paint, selection, transform
+### Phase 2 — close M0/M1 local workflows
 
-- Brush/pencil/eraser engine with pressure, tilt, spacing, smoothing, symmetry, presets.
-- Rect/ellipse/lasso/polygon/magic-wand/quick selection; feather, grow, shrink, invert.
-- Move, crop, free transform, perspective, warp, content-aware scale only if independently implemented.
-- Gradient, fill, color picker, clone stamp, healing, patch, dodge, burn, sponge, blur, sharpen, smudge.
+- Workspace/settings/workspace presets, shortcut editor, accessible names/focus,
+  keyboard navigation, localization readiness, HiDPI and theme behavior.
+- Document lifecycle, recents, recovery, single-instance activation, multi-tab
+  prompt/revision semantics, cancellation and low-disk handling.
+- Image/canvas size, image/view rotate/flip, rulers, guides, units, grid, pixel
+  grid, snapping, navigator, zoom/pan/gesture behavior.
+- Nested groups, multi-layer selection/operations, layer tree persistence,
+  merge/flatten goldens, masks/channels prerequisites.
+- Safe streaming import/export beyond the current 64-MiPixel full-frame guard
+  where supported without a new dependency; metadata inspection/control and
+  public golden corpora.
+- Complete every applicable File/Edit/Image/Layer/Select/View/Window/Help menu
+  and tool/panel acceptance row rather than treating presence as completion.
 
-### M3 — compositing and nondestructive editing
+Stop for independent high review and remediate findings before tool work.
 
-- Complete documented blend-mode set, clipping masks, layer/vector masks, channels.
-- Adjustment layers: levels, curves, exposure, vibrance, hue/saturation, color balance, B&W, LUT.
-- Layer styles and smart-filter graph.
-- Smart-object equivalent with linked/embedded assets using original terminology.
+### Phase 3 — paint, input, presets, selections, transforms, retouch
 
-### M4 — vector, text, automation
+- Brush/pencil/eraser, pressure/tilt/rotation, smoothing, spacing, symmetry,
+  presets and tool-options panels with latency and stroke goldens.
+- Rectangle/ellipse/lasso/polygon/color-range selections, combine modes,
+  feather/grow/shrink/border/invert, masks, and traditional local selection.
+- Local non-generative background removal and deterministic patch-based removal;
+  no generative fill/expand.
+- Move, crop, free/perspective/warp transforms, gradient/fill/picker,
+  clone/heal/patch, dodge/burn/saturation, blur/sharpen/smudge.
 
-- Paths, pen, shapes, boolean operations, stroke/fill, SVG interchange.
-- Horizontal/vertical text, OpenType shaping, RTL, text-on-path, variable fonts.
-- Actions/macros, batch processing, droplets/CLI, configurable shortcuts, workspace presets.
+### Phase 4 — compositing and nondestructive graph
 
-### M5 — professional color and format parity
+- Public-formula blend modes, clipping/raster/vector masks, alpha channels.
+- Adjustment nodes and properties, layer effects, deterministic filters,
+  nondestructive filter graph, linked/embedded local sources.
+- History/properties/channels/histogram/info panels with bounded refresh.
 
-- Soft proof, gamut warnings, profile conversion/assignment, CMYK/Lab/spot workflows.
-- RAW development adapter, Camera-Raw-style nondestructive settings with original UI.
-- High-quality PSD/PSB round trips, large documents, print setup, PDF proof export.
-- Performance budgets for startup, brush latency, zoom, memory, save, and export.
+### Phase 5 — vector, type, automation
 
-### M6 — release quality
+- Paths/pen, shapes, boolean geometry, strokes/fills, documented SVG subset.
+- Editable OpenType text, fallback, RTL, vertical/variable/path text using
+  original UI language and public fixtures.
+- Stable command schema, actions/macros, batch/headless CLI. Scripting runtime
+  and native plugin ABI proceed only after separate security/dependency review.
 
-- Accessibility, localization, tablet matrix, crash recovery, corrupt-input fuzzing.
-- Reproducible Arch package/AppImage, signed checksums, SBOM, security policy.
-- Omarchy validation on a real Quattro machine and marketplace screenshots/submission.
+### Phase 6 — color, formats, print
 
-## Definition of done per feature
+- Typed 8/16-bit integer and 16/32-bit float paths before color adapters.
+- ICC display/assign/convert, CMYK/Lab/spot, proof/gamut workflows only after an
+  approved lcms2/OpenColorIO decision packet.
+- PSD/PSB documented public-fixture adapter; RAW, HEIF/AVIF, direct OpenEXR and
+  metadata dependencies only after their individual approvals.
+- Local print setup and PDF proof export with explicit backend/color decisions.
 
-Each capability requires unit/integration tests, at least one golden fixture where visual output matters, undo/redo coverage, large-document behavior, keyboard/accessibility handling, documentation, and a focused commit pushed after CI passes.
+### Phase 7 — media, plugins, and release quality
 
+- Frame timeline and GIF/APNG. Video waits for an approved FFmpeg packet.
+- Permission/version policy for scripts/plugins; no implicit network access.
+- Accessibility and localization matrices, tablet hardware matrix, fuzz corpus,
+  recovery/ENOSPC/cancel tests, reproducible packages/AppImage, signed checksums,
+  SBOM, license inventory, security policy, and final real-Omarchy evidence.
+
+## Definition of done
+
+A capability changes to Complete only in the same focused commit that supplies
+its acceptance evidence and regenerates the catalog view. Required evidence is
+feature-specific but includes automated tests, original/public fixtures,
+goldens for pixel/layout output, undo/redo and persistence for mutations,
+bounded large-data behavior, keyboard/accessibility handling, documentation,
+green exact-SHA Arch CI, and an independent gate review at phase boundaries.

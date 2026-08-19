@@ -9,7 +9,10 @@ The repository contains two products that ship together:
 
 ## Status
 
-Foundation build. The current native shell opens a document workspace with menus, tools, a canvas placeholder, and a dockable Layers panel. See [ROADMAP.md](ROADMAP.md) for the staged implementation plan and [docs/PARITY.md](docs/PARITY.md) for the evidence-backed workflow matrix and explicit exclusions.
+Foundation and document-core build. The stable-ID offline evidence backlog is
+generated at [docs/OFFLINE_PARITY.md](docs/OFFLINE_PARITY.md); status policy and
+claim limits are in [docs/PARITY.md](docs/PARITY.md), and dependency-ordered
+implementation gates are in [ROADMAP.md](ROADMAP.md).
 
 ## Build on Arch/Omarchy
 
