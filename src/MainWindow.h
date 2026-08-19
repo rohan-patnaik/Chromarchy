@@ -41,6 +41,8 @@ private:
   void addLayer();
   void duplicateLayer();
   void removeLayer();
+  void mergeLayerDown();
+  void flattenDocument();
   void updateActions();
   void showError(const QString& title, const QString& detail);
 
@@ -55,6 +57,8 @@ private:
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* removeLayerAction_ = nullptr;
+  QAction* mergeDownAction_ = nullptr;
+  QAction* flattenAction_ = nullptr;
   bool updatingLayers_ = false;
   int untitledCounter_ = 1;
 };

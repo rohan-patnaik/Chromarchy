@@ -35,6 +35,8 @@ public:
   bool duplicateLayer(int index);
   bool removeLayer(int index);
   bool moveLayer(int from, int to);
+  bool mergeLayerDown(int index);
+  bool flatten();
 
   [[nodiscard]] QImage composite(QRect region = {}) const;
 

@@ -1,6 +1,7 @@
 #include "core/Document.h"
 
 #include <QPainter>
+#include <QSet>
 
 #include <utility>
 
@@ -110,6 +111,102 @@ bool Document::moveLayer(int from, int to) {
   } else if (to <= activeLayerIndex_ && activeLayerIndex_ < from) {
     ++activeLayerIndex_;
   }
+  return true;
+}
+
+bool Document::mergeLayerDown(int index) {
+  if (!containsLayer(index) || index == 0 || layers_[index].isLocked() ||
+      layers_[index - 1].isLocked()) {
+    return false;
+  }
+
+  const auto& lower = layers_[index - 1];
+  const auto& upper = layers_[index];
+  Layer merged(upper.name(), size_);
+  merged.setVisible(lower.isVisible() || upper.isVisible());
+
+  QSet<TileIndex> tileIndices;
+  if (lower.isVisible()) {
+    for (auto tile = lower.pixels().tiles_.cbegin();
+         tile != lower.pixels().tiles_.cend(); ++tile) {
+      tileIndices.insert(tile.key());
+    }
+  }
+  if (upper.isVisible()) {
+    for (auto tile = upper.pixels().tiles_.cbegin();
+         tile != upper.pixels().tiles_.cend(); ++tile) {
+      tileIndices.insert(tile.key());
+    }
+  }
+
+  for (const auto tileIndex : tileIndices) {
+    QImage output(TiledImage::tileExtent, TiledImage::tileExtent,
+                  QImage::Format_RGBA8888_Premultiplied);
+    output.fill(Qt::transparent);
+    QPainter painter(&output);
+    const auto lowerTile = lower.pixels().tiles_.constFind(tileIndex);
+    if (lower.isVisible() && lowerTile != lower.pixels().tiles_.cend()) {
+      painter.setOpacity(lower.opacity());
+      painter.drawImage(QPoint(), lowerTile.value());
+    }
+    const auto upperTile = upper.pixels().tiles_.constFind(tileIndex);
+    if (upper.isVisible() && upperTile != upper.pixels().tiles_.cend()) {
+      painter.setOpacity(upper.opacity());
+      painter.drawImage(QPoint(), upperTile.value());
+    }
+    merged.pixels().tiles_.insert(tileIndex, std::move(output));
+  }
+
+  layers_[index - 1] = std::move(merged);
+  layers_.removeAt(index);
+  activeLayerIndex_ = index - 1;
+  return true;
+}
+
+bool Document::flatten() {
+  if (layers_.size() < 2) {
+    return false;
+  }
+  for (const auto& layer : layers_) {
+    if (layer.isLocked()) {
+      return false;
+    }
+  }
+
+  QSet<TileIndex> tileIndices;
+  for (const auto& layer : layers_) {
+    if (!layer.isVisible()) {
+      continue;
+    }
+    for (auto tile = layer.pixels().tiles_.cbegin();
+         tile != layer.pixels().tiles_.cend(); ++tile) {
+      tileIndices.insert(tile.key());
+    }
+  }
+
+  Layer flattened(QStringLiteral("Flattened"), size_);
+  for (const auto tileIndex : tileIndices) {
+    QImage output(TiledImage::tileExtent, TiledImage::tileExtent,
+                  QImage::Format_RGBA8888_Premultiplied);
+    output.fill(Qt::transparent);
+    QPainter painter(&output);
+    for (const auto& layer : layers_) {
+      if (!layer.isVisible()) {
+        continue;
+      }
+      const auto tile = layer.pixels().tiles_.constFind(tileIndex);
+      if (tile == layer.pixels().tiles_.cend()) {
+        continue;
+      }
+      painter.setOpacity(layer.opacity());
+      painter.drawImage(QPoint(), tile.value());
+    }
+    flattened.pixels().tiles_.insert(tileIndex, std::move(output));
+  }
+
+  layers_.clear();
+  layers_.push_back(std::move(flattened));
+  activeLayerIndex_ = 0;
   return true;
 }
 

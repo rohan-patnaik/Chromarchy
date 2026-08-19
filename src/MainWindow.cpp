@@ -143,6 +143,12 @@ void MainWindow::createActions() {
   removeLayerAction_ = layerMenu->addAction(QStringLiteral("&Remove Layer"), this,
                                             &MainWindow::removeLayer);
   removeLayerAction_->setShortcut(QKeySequence::Delete);
+  layerMenu->addSeparator();
+  mergeDownAction_ = layerMenu->addAction(QStringLiteral("Merge &Down"), this,
+                                          &MainWindow::mergeLayerDown);
+  mergeDownAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
+  flattenAction_ = layerMenu->addAction(QStringLiteral("&Flatten Document"), this,
+                                        &MainWindow::flattenDocument);
 
   auto* viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
   auto zoomAction = [this, viewMenu](const QString& text,
@@ -444,6 +450,25 @@ void MainWindow::removeLayer() {
   }
 }
 
+void MainWindow::mergeLayerDown() {
+  if (auto* view = currentDocument()) {
+    const auto index = view->document().activeLayerIndex();
+    view->performCommand(QStringLiteral("Merge layer down"),
+                         [index](Document& document) {
+                           return document.mergeLayerDown(index);
+                         });
+  }
+}
+
+void MainWindow::flattenDocument() {
+  if (auto* view = currentDocument()) {
+    view->performCommand(QStringLiteral("Flatten document"),
+                         [](Document& document) {
+                           return document.flatten();
+                         });
+  }
+}
+
 void MainWindow::updateActions() {
   const auto* view = currentDocument();
   const bool hasDocument = view != nullptr;
@@ -464,6 +489,9 @@ void MainWindow::updateActions() {
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   removeLayerAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
+  mergeDownAction_->setEnabled(
+      hasDocument && view->document().activeLayerIndex() > 0);
+  flattenAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
 }
 
 void MainWindow::showError(const QString& title, const QString& detail) {
