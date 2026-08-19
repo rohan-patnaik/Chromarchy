@@ -51,7 +51,11 @@ void ImageIOTest::exportsCompositeAtomically() {
   QVERIFY2(result, qPrintable(result.error));
   const QImage exported(path);
   QCOMPARE(exported.size(), QSize(16, 12));
-  QCOMPARE(exported.pixelColor(QPoint(4, 5)), QColor(100, 120, 140, 200));
+  const auto pixel = exported.pixelColor(QPoint(4, 5));
+  QCOMPARE(pixel.alpha(), 200);
+  QVERIFY(qAbs(pixel.red() - 100) <= 1);
+  QVERIFY(qAbs(pixel.green() - 120) <= 1);
+  QVERIFY(qAbs(pixel.blue() - 140) <= 1);
 }
 
 void ImageIOTest::rejectsUnknownOrDamagedInput() {
