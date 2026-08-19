@@ -22,6 +22,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 Core performance workloads and their exact commands are documented in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+Raster codec behavior and the default metadata policy are documented in [docs/FORMATS.md](docs/FORMATS.md).
 
 ## Arch package
 

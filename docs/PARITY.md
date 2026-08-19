@@ -28,9 +28,9 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Native Wayland desktop workspace | Partial | M0 | Qt 6 Widgets application and dockable shell | Arch/Omarchy validation, settings persistence, accessibility test |
 | Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
 | New raster document | Partial | M1 | Validated new-document dialog creates a real tiled document | Background options, presets, undo boundary |
-| Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles, file-open UI and PNG integration coverage | JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
+| Open raster image | Partial | M1 | Qt decoder adapter into sparse real pixel tiles, file-open UI, metadata policy test, and data-driven PNG/JPEG/TIFF/WebP/OpenEXR codec round trips | Golden fixture corpus and metadata inspection controls |
 | Native lossless save/load | Partial | M1 | Atomic `.chromarchy` v2 container with v1 load compatibility, layered pixels and sparse selection persistence, save/open UI, round-trip and corrupt/truncated-input tests | Groups, recovery journal, migration fixtures from released versions |
-| Export raster image | Partial | M1 | Export UI, deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
+| Export raster image | Partial | M1 | Export UI, deterministic CPU composite, atomic writes, explicit JPEG alpha flattening, metadata stripping test, and data-driven PNG/JPEG/TIFF/WebP/OpenEXR round trips | Golden fixture corpus and selective metadata controls |
 | Multiple document tabs | Partial | M1 | Movable document tabs, dirty markers, per-document close and application-exit save prompts | Tab lifecycle integration tests, configurable keyboard navigation |
 | Zoom, pan, rotate view | Partial | M1 | Visible-region compositing, bounded zoom, middle-button pan, canvas viewport tests | Rotation, pixel grid, gesture/tablet input, latency benchmark |
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |

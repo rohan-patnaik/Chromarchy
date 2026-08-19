@@ -5,7 +5,7 @@ pkgdesc='Offline-first professional raster image editor for Omarchy Quattro'
 arch=('x86_64')
 url='https://github.com/rohan-patnaik/Chromarchy'
 license=('MIT')
-depends=('qt6-base')
+depends=('qt6-base' 'qt6-imageformats')
 makedepends=('cmake' 'git' 'ninja')
 provides=('chromarchy')
 conflicts=('chromarchy')
@@ -39,4 +39,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/PARITY.md"
   install -Dm644 Chromarchy/docs/PERFORMANCE.md \
     "$pkgdir/usr/share/doc/$pkgname/PERFORMANCE.md"
+  install -Dm644 Chromarchy/docs/FORMATS.md \
+    "$pkgdir/usr/share/doc/$pkgname/FORMATS.md"
 }

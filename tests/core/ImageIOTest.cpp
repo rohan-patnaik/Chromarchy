@@ -2,6 +2,8 @@
 
 #include <QFile>
 #include <QImage>
+#include <QImageReader>
+#include <QImageWriter>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -15,6 +17,9 @@ private slots:
   void opensImageIntoRealPixelTiles();
   void exportsCompositeAtomically();
   void rejectsUnknownOrDamagedInput();
+  void roundTripsSupportedFormats_data();
+  void roundTripsSupportedFormats();
+  void exportStripsSourceMetadataByDefault();
 };
 
 void ImageIOTest::opensImageIntoRealPixelTiles() {
@@ -70,6 +75,66 @@ void ImageIOTest::rejectsUnknownOrDamagedInput() {
   const auto result = ImageIO::open(path);
   QVERIFY(!result);
   QVERIFY(!result.error.isEmpty());
+}
+
+void ImageIOTest::roundTripsSupportedFormats_data() {
+  QTest::addColumn<QByteArray>("format");
+  QTest::addColumn<QString>("suffix");
+  QTest::addColumn<int>("maximumChannelError");
+  QTest::newRow("png") << QByteArray("png") << QStringLiteral("png") << 1;
+  QTest::newRow("jpeg") << QByteArray("jpeg") << QStringLiteral("jpg") << 4;
+  QTest::newRow("tiff") << QByteArray("tiff") << QStringLiteral("tiff") << 1;
+  QTest::newRow("webp") << QByteArray("webp") << QStringLiteral("webp") << 2;
+  QTest::newRow("openexr") << QByteArray("exr") << QStringLiteral("exr") << 2;
+}
+
+void ImageIOTest::roundTripsSupportedFormats() {
+  QFETCH(QByteArray, format);
+  QFETCH(QString, suffix);
+  QFETCH(int, maximumChannelError);
+  if (!QImageReader::supportedImageFormats().contains(format) ||
+      !QImageWriter::supportedImageFormats().contains(format)) {
+    QSKIP(qPrintable(QStringLiteral("Qt codec '%1' is unavailable")
+                         .arg(QString::fromLatin1(format))));
+  }
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("roundtrip.%1").arg(suffix));
+  auto document = Document::create(QSize(64, 64));
+  QVERIFY(document);
+  QImage source(64, 64, QImage::Format_RGBA8888_Premultiplied);
+  source.fill(QColor(80, 120, 160, 255));
+  document->layerAt(0)->pixels() = chromarchy::TiledImage::fromImage(source);
+
+  const auto exported = ImageIO::exportComposite(*document, path, 100);
+  QVERIFY2(exported, qPrintable(exported.error));
+  const auto opened = ImageIO::open(path);
+  QVERIFY2(opened, qPrintable(opened.error));
+  const auto pixel = opened.document->composite().pixelColor(QPoint(32, 32));
+  QVERIFY(qAbs(pixel.red() - 80) <= maximumChannelError);
+  QVERIFY(qAbs(pixel.green() - 120) <= maximumChannelError);
+  QVERIFY(qAbs(pixel.blue() - 160) <= maximumChannelError);
+  QCOMPARE(pixel.alpha(), 255);
+}
+
+void ImageIOTest::exportStripsSourceMetadataByDefault() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto sourcePath = directory.filePath(QStringLiteral("metadata-source.png"));
+  QImage source(8, 8, QImage::Format_RGBA8888);
+  source.fill(Qt::red);
+  source.setText(QStringLiteral("Author"), QStringLiteral("Private Name"));
+  QVERIFY(source.save(sourcePath));
+
+  const auto opened = ImageIO::open(sourcePath);
+  QVERIFY2(opened, qPrintable(opened.error));
+  const auto exportPath = directory.filePath(QStringLiteral("metadata-export.png"));
+  const auto exported = ImageIO::exportComposite(*opened.document, exportPath);
+  QVERIFY2(exported, qPrintable(exported.error));
+  QImageReader reader(exportPath);
+  QVERIFY(reader.read().isNull() == false);
+  QVERIFY(reader.textKeys().isEmpty());
 }
 
 QTEST_APPLESS_MAIN(ImageIOTest)

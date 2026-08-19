@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja qt6-base
+        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja qt6-base qt6-imageformats
 
       - uses: actions/checkout@v5
 
