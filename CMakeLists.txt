@@ -29,6 +29,10 @@ qt_add_executable(chromarchy
   src/main.cpp
   src/MainWindow.cpp
   src/MainWindow.h
+  src/ui/CanvasWidget.cpp
+  src/ui/CanvasWidget.h
+  src/ui/DocumentView.cpp
+  src/ui/DocumentView.h
 )
 
 target_link_libraries(chromarchy PRIVATE chromarchy_core Qt6::Widgets)
@@ -67,5 +71,18 @@ if(BUILD_TESTING)
     chromarchy_core Qt6::Test
   )
   add_test(NAME chromarchy_native_document COMMAND chromarchy_native_document_tests)
+
+  qt_add_executable(chromarchy_canvas_tests
+    tests/ui/CanvasWidgetTest.cpp
+    src/ui/CanvasWidget.cpp
+    src/ui/CanvasWidget.h
+  )
+  target_link_libraries(chromarchy_canvas_tests PRIVATE
+    chromarchy_core Qt6::Test Qt6::Widgets
+  )
+  add_test(NAME chromarchy_canvas COMMAND chromarchy_canvas_tests)
+  set_tests_properties(chromarchy_canvas PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+  )
 endif()
 

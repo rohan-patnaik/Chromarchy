@@ -1,40 +1,418 @@
 #include "MainWindow.h"
 
+#include "core/ImageIO.h"
+#include "core/NativeDocumentCodec.h"
+#include "ui/CanvasWidget.h"
+#include "ui/DocumentView.h"
+
+#include <QAction>
+#include <QCloseEvent>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
-#include <QLabel>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFormLayout>
 #include <QListWidget>
 #include <QMenuBar>
+#include <QMessageBox>
+#include <QSettings>
+#include <QSpinBox>
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QToolBar>
+#include <QVBoxLayout>
+
+#include <utility>
+
+using chromarchy::Document;
+using chromarchy::DocumentView;
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-  setWindowTitle("Chromarchy — local image studio");
+  setWindowTitle(QStringLiteral("Chromarchy — local image studio"));
   resize(1280, 800);
+  setDockOptions(AnimatedDocks | AllowNestedDocks | AllowTabbedDocks);
 
-  auto* canvas = new QLabel("Open an image or create a document", this);
-  canvas->setAlignment(Qt::AlignCenter);
-  canvas->setObjectName("canvasPlaceholder");
-  setCentralWidget(canvas);
+  tabs_ = new QTabWidget(this);
+  tabs_->setDocumentMode(true);
+  tabs_->setMovable(true);
+  tabs_->setTabsClosable(true);
+  tabs_->setUsesScrollButtons(true);
+  setCentralWidget(tabs_);
+  connect(tabs_, &QTabWidget::currentChanged, this, [this] {
+    refreshLayers();
+    updateActions();
+  });
+  connect(tabs_, &QTabWidget::tabCloseRequested, this,
+          &MainWindow::closeDocumentTab);
 
-  auto* fileMenu = menuBar()->addMenu("&File");
-  fileMenu->addAction("&New");
-  fileMenu->addAction("&Open…");
-  fileMenu->addSeparator();
-  fileMenu->addAction("E&xit", this, &QWidget::close);
+  createActions();
+  createLayersDock();
+  statusBar()->showMessage(QStringLiteral("Ready"));
 
-  auto* tools = addToolBar("Tools");
-  tools->setMovable(true);
-  tools->addAction("Move");
-  tools->addAction("Select");
-  tools->addAction("Brush");
-  tools->addAction("Erase");
-
-  auto* layersDock = new QDockWidget("Layers", this);
-  auto* layers = new QListWidget(layersDock);
-  layers->addItem("Background");
-  layersDock->setWidget(layers);
-  addDockWidget(Qt::RightDockWidgetArea, layersDock);
-
-  statusBar()->showMessage("Chromarchy foundation build");
+  QSettings settings;
+  restoreGeometry(settings.value(QStringLiteral("window/geometry")).toByteArray());
+  restoreState(settings.value(QStringLiteral("window/state")).toByteArray());
+  updateActions();
 }
 
+MainWindow::~MainWindow() = default;
+
+void MainWindow::createActions() {
+  auto* fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
+  auto* newAction = fileMenu->addAction(QStringLiteral("&New…"), this,
+                                        &MainWindow::newDocument);
+  newAction->setShortcut(QKeySequence::New);
+  auto* openAction = fileMenu->addAction(QStringLiteral("&Open…"), this,
+                                         &MainWindow::chooseAndOpenFile);
+  openAction->setShortcut(QKeySequence::Open);
+  fileMenu->addSeparator();
+  saveAction_ = fileMenu->addAction(QStringLiteral("&Save"), this, [this] {
+    saveDocument(currentDocument(), false);
+  });
+  saveAction_->setShortcut(QKeySequence::Save);
+  saveAsAction_ = fileMenu->addAction(QStringLiteral("Save &As…"), this, [this] {
+    saveDocument(currentDocument(), true);
+  });
+  saveAsAction_->setShortcut(QKeySequence::SaveAs);
+  exportAction_ = fileMenu->addAction(QStringLiteral("&Export Image…"), this,
+                                      &MainWindow::exportDocument);
+  exportAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
+  fileMenu->addSeparator();
+  closeAction_ = fileMenu->addAction(QStringLiteral("&Close Document"), this, [this] {
+    closeDocumentTab(tabs_->currentIndex());
+  });
+  closeAction_->setShortcut(QKeySequence::Close);
+  fileMenu->addSeparator();
+  fileMenu->addAction(QStringLiteral("E&xit"), this, &QWidget::close,
+                      QKeySequence::Quit);
+
+  auto* layerMenu = menuBar()->addMenu(QStringLiteral("&Layer"));
+  addLayerAction_ = layerMenu->addAction(QStringLiteral("&New Pixel Layer"), this,
+                                         &MainWindow::addLayer);
+  addLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
+  duplicateLayerAction_ = layerMenu->addAction(QStringLiteral("&Duplicate Layer"), this,
+                                               &MainWindow::duplicateLayer);
+  duplicateLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
+  removeLayerAction_ = layerMenu->addAction(QStringLiteral("&Remove Layer"), this,
+                                            &MainWindow::removeLayer);
+  removeLayerAction_->setShortcut(QKeySequence::Delete);
+
+  auto* viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
+  auto zoomAction = [this, viewMenu](const QString& text,
+                                     const QKeySequence& shortcut,
+                                     double factor) {
+    auto* action = viewMenu->addAction(text, this, [this, factor] {
+      if (auto* view = currentDocument()) {
+        view->canvas()->setZoom(view->canvas()->zoom() * factor);
+      }
+    });
+    action->setShortcut(shortcut);
+  };
+  zoomAction(QStringLiteral("Zoom &In"), QKeySequence::ZoomIn, 1.25);
+  zoomAction(QStringLiteral("Zoom &Out"), QKeySequence::ZoomOut, 0.8);
+  auto* actualPixels = viewMenu->addAction(QStringLiteral("&Actual Pixels"), this, [this] {
+    if (auto* view = currentDocument()) {
+      view->canvas()->setZoom(1.0);
+    }
+  });
+  actualPixels->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+}
+
+void MainWindow::createLayersDock() {
+  auto* dock = new QDockWidget(QStringLiteral("Layers"), this);
+  dock->setObjectName(QStringLiteral("layersDock"));
+  auto* panel = new QWidget(dock);
+  auto* layout = new QVBoxLayout(panel);
+  layout->setContentsMargins(4, 4, 4, 4);
+  auto* toolbar = new QToolBar(panel);
+  toolbar->setIconSize(QSize(16, 16));
+  toolbar->addAction(addLayerAction_);
+  toolbar->addAction(duplicateLayerAction_);
+  toolbar->addAction(removeLayerAction_);
+  layout->addWidget(toolbar);
+
+  layers_ = new QListWidget(panel);
+  layers_->setSelectionMode(QAbstractItemView::SingleSelection);
+  layout->addWidget(layers_);
+  connect(layers_, &QListWidget::currentRowChanged, this,
+          &MainWindow::layerSelectionChanged);
+  connect(layers_, &QListWidget::itemChanged, this,
+          &MainWindow::layerItemChanged);
+  dock->setWidget(panel);
+  addDockWidget(Qt::RightDockWidgetArea, dock);
+}
+
+void MainWindow::newDocument() {
+  QDialog dialog(this);
+  dialog.setWindowTitle(QStringLiteral("New Document"));
+  auto* layout = new QFormLayout(&dialog);
+  auto* width = new QSpinBox(&dialog);
+  width->setRange(1, Document::maximumDimension);
+  width->setValue(1600);
+  width->setSuffix(QStringLiteral(" px"));
+  auto* height = new QSpinBox(&dialog);
+  height->setRange(1, Document::maximumDimension);
+  height->setValue(1200);
+  height->setSuffix(QStringLiteral(" px"));
+  layout->addRow(QStringLiteral("Width"), width);
+  layout->addRow(QStringLiteral("Height"), height);
+  auto* buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  layout->addRow(buttons);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  auto document = Document::create(QSize(width->value(), height->value()));
+  if (!document) {
+    showError(QStringLiteral("New Document"),
+              QStringLiteral("Those canvas dimensions are not supported."));
+    return;
+  }
+  addDocumentTab(new DocumentView(
+      std::move(*document), QStringLiteral("Untitled %1").arg(untitledCounter_++),
+      {}, true, tabs_));
+}
+
+void MainWindow::chooseAndOpenFile() {
+  const auto path = QFileDialog::getOpenFileName(
+      this, QStringLiteral("Open Image"), {},
+      QStringLiteral("Images (*.chromarchy *.png *.jpg *.jpeg *.tif *.tiff *.webp *.exr);;"
+                     "Chromarchy Documents (*.chromarchy);;All Files (*)"));
+  if (!path.isEmpty()) {
+    openFile(path);
+  }
+}
+
+bool MainWindow::openFile(const QString& filePath) {
+  const QFileInfo info(filePath);
+  if (info.suffix().compare(QStringLiteral("chromarchy"), Qt::CaseInsensitive) == 0) {
+    auto result = chromarchy::NativeDocumentCodec::load(filePath);
+    if (!result) {
+      showError(QStringLiteral("Could Not Open Document"), result.error);
+      return false;
+    }
+    addDocumentTab(new DocumentView(std::move(*result.document), info.fileName(),
+                                    info.absoluteFilePath(), false, tabs_));
+    return true;
+  }
+
+  auto result = chromarchy::ImageIO::open(filePath);
+  if (!result) {
+    showError(QStringLiteral("Could Not Open Image"), result.error);
+    return false;
+  }
+  addDocumentTab(new DocumentView(std::move(*result.document), info.fileName(), {},
+                                  true, tabs_));
+  return true;
+}
+
+bool MainWindow::saveDocument(DocumentView* view, bool choosePath) {
+  if (!view) {
+    return false;
+  }
+  auto path = view->filePath();
+  if (choosePath || path.isEmpty()) {
+    path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Save Chromarchy Document"), path,
+        QStringLiteral("Chromarchy Documents (*.chromarchy)"));
+    if (path.isEmpty()) {
+      return false;
+    }
+    if (!path.endsWith(QStringLiteral(".chromarchy"), Qt::CaseInsensitive)) {
+      path += QStringLiteral(".chromarchy");
+    }
+  }
+
+  const auto result = view->save(path);
+  if (!result) {
+    showError(QStringLiteral("Could Not Save Document"), result.error);
+    return false;
+  }
+  statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()),
+                           3000);
+  return true;
+}
+
+void MainWindow::exportDocument() {
+  auto* view = currentDocument();
+  if (!view) {
+    return;
+  }
+  const auto path = QFileDialog::getSaveFileName(
+      this, QStringLiteral("Export Image"), {},
+      QStringLiteral("PNG (*.png);;JPEG (*.jpg *.jpeg);;TIFF (*.tif *.tiff);;"
+                     "WebP (*.webp);;OpenEXR (*.exr)"));
+  if (path.isEmpty()) {
+    return;
+  }
+  const auto result = chromarchy::ImageIO::exportComposite(view->document(), path);
+  if (!result) {
+    showError(QStringLiteral("Could Not Export Image"), result.error);
+    return;
+  }
+  statusBar()->showMessage(
+      QStringLiteral("Exported %1").arg(QFileInfo(path).fileName()), 3000);
+}
+
+void MainWindow::addDocumentTab(DocumentView* view) {
+  const auto index = tabs_->addTab(view, view->tabTitle());
+  tabs_->setCurrentIndex(index);
+  connect(view, &DocumentView::titleChanged, this,
+          [this, view](const QString& title) {
+            const auto tab = tabs_->indexOf(view);
+            if (tab >= 0) {
+              tabs_->setTabText(tab, title);
+            }
+          });
+  connect(view->canvas(), &chromarchy::CanvasWidget::zoomChanged, this,
+          [this](double zoom) {
+            statusBar()->showMessage(
+                QStringLiteral("Zoom %1%").arg(qRound(zoom * 100.0)));
+          });
+  refreshLayers();
+  updateActions();
+}
+
+void MainWindow::closeDocumentTab(int index) {
+  if (index < 0) {
+    return;
+  }
+  auto* view = qobject_cast<DocumentView*>(tabs_->widget(index));
+  if (!view || !canClose(view)) {
+    return;
+  }
+  tabs_->removeTab(index);
+  view->deleteLater();
+}
+
+bool MainWindow::canClose(DocumentView* view) {
+  if (!view->isModified()) {
+    return true;
+  }
+  const auto choice = QMessageBox::warning(
+      this, QStringLiteral("Unsaved Changes"),
+      QStringLiteral("Save changes to %1?").arg(view->displayName()),
+      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+      QMessageBox::Save);
+  if (choice == QMessageBox::Cancel) {
+    return false;
+  }
+  return choice == QMessageBox::Discard || saveDocument(view, false);
+}
+
+DocumentView* MainWindow::currentDocument() const {
+  return qobject_cast<DocumentView*>(tabs_->currentWidget());
+}
+
+void MainWindow::refreshLayers() {
+  updatingLayers_ = true;
+  layers_->clear();
+  auto* view = currentDocument();
+  if (view) {
+    const auto& document = view->document();
+    for (int index = static_cast<int>(document.layerCount()) - 1; index >= 0;
+         --index) {
+      const auto* layer = document.layerAt(index);
+      auto* item = new QListWidgetItem(layer->name(), layers_);
+      item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+      item->setCheckState(layer->isVisible() ? Qt::Checked : Qt::Unchecked);
+      item->setData(Qt::UserRole, index);
+      if (index == document.activeLayerIndex()) {
+        layers_->setCurrentItem(item);
+      }
+    }
+  }
+  updatingLayers_ = false;
+}
+
+void MainWindow::layerSelectionChanged(int row) {
+  if (updatingLayers_ || row < 0) {
+    return;
+  }
+  if (auto* view = currentDocument()) {
+    view->document().setActiveLayerIndex(
+        layers_->item(row)->data(Qt::UserRole).toInt());
+  }
+  updateActions();
+}
+
+void MainWindow::layerItemChanged(QListWidgetItem* item) {
+  if (updatingLayers_ || !item) {
+    return;
+  }
+  if (auto* view = currentDocument()) {
+    auto* layer = view->document().layerAt(item->data(Qt::UserRole).toInt());
+    const bool visible = item->checkState() == Qt::Checked;
+    if (layer && layer->isVisible() != visible) {
+      layer->setVisible(visible);
+      view->setModified(true);
+      view->canvas()->documentChanged();
+    }
+  }
+}
+
+void MainWindow::addLayer() {
+  if (auto* view = currentDocument()) {
+    view->document().addLayer(
+        QStringLiteral("Layer %1").arg(view->document().layerCount() + 1));
+    view->setModified(true);
+    view->canvas()->documentChanged();
+    refreshLayers();
+  }
+}
+
+void MainWindow::duplicateLayer() {
+  if (auto* view = currentDocument()) {
+    if (view->document().duplicateLayer(view->document().activeLayerIndex())) {
+      view->setModified(true);
+      view->canvas()->documentChanged();
+      refreshLayers();
+    }
+  }
+}
+
+void MainWindow::removeLayer() {
+  if (auto* view = currentDocument()) {
+    if (view->document().removeLayer(view->document().activeLayerIndex())) {
+      view->setModified(true);
+      view->canvas()->documentChanged();
+      refreshLayers();
+    }
+  }
+}
+
+void MainWindow::updateActions() {
+  const auto* view = currentDocument();
+  const bool hasDocument = view != nullptr;
+  saveAction_->setEnabled(hasDocument);
+  saveAsAction_->setEnabled(hasDocument);
+  exportAction_->setEnabled(hasDocument);
+  closeAction_->setEnabled(hasDocument);
+  addLayerAction_->setEnabled(hasDocument);
+  duplicateLayerAction_->setEnabled(hasDocument);
+  removeLayerAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
+}
+
+void MainWindow::showError(const QString& title, const QString& detail) {
+  QMessageBox::critical(this, title,
+                        detail.isEmpty() ? QStringLiteral("An unknown error occurred.")
+                                         : detail);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+  for (int index = 0; index < tabs_->count(); ++index) {
+    auto* view = qobject_cast<DocumentView*>(tabs_->widget(index));
+    if (view && !canClose(view)) {
+      event->ignore();
+      return;
+    }
+  }
+  QSettings settings;
+  settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+  settings.setValue(QStringLiteral("window/state"), saveState());
+  event->accept();
+}

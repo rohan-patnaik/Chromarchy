@@ -27,12 +27,12 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | --- | --- | --- | --- | --- |
 | Native Wayland desktop workspace | Partial | M0 | Qt 6 Widgets application and dockable shell | Arch/Omarchy validation, settings persistence, accessibility test |
 | Omarchy menu launch | Partial | M0 | Root manifest and Quickshell entry point | Missing-binary diagnostic and real Quattro validation |
-| New raster document | Planned | M1 | — | Model, UI workflow, validation, undo boundary |
-| Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles; PNG integration coverage in `chromarchy_image_io` | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
-| Native lossless save/load | Partial | M1 | Versioned atomic `.chromarchy` container with compressed tiles, layered round-trip and corrupt/truncated-input tests | UI workflow, groups/selections, recovery journal, forward-migration fixtures |
-| Export raster image | Partial | M1 | Deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | UI workflow, JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
-| Multiple document tabs | Planned | M1 | — | Lifecycle, dirty-state prompts, keyboard navigation |
-| Zoom, pan, rotate view | Planned | M1 | — | Input routing, pixel-grid behavior, latency benchmark |
+| New raster document | Partial | M1 | Validated new-document dialog creates a real tiled document | Background options, presets, undo boundary |
+| Open raster image | Partial | M1 | Qt image decoder adapter into sparse real pixel tiles, file-open UI and PNG integration coverage | JPEG/TIFF/WebP/OpenEXR fixtures, metadata policy validation |
+| Native lossless save/load | Partial | M1 | Versioned atomic `.chromarchy` container, save/open UI, layered round-trip and corrupt/truncated-input tests | Groups/selections, recovery journal, forward-migration fixtures |
+| Export raster image | Partial | M1 | Export UI, deterministic CPU composite, atomic image write, explicit JPEG alpha flattening, PNG round-trip test | JPEG/TIFF/WebP/OpenEXR fixtures, metadata controls |
+| Multiple document tabs | Partial | M1 | Movable document tabs, dirty markers, per-document close and application-exit save prompts | Tab lifecycle integration tests, configurable keyboard navigation |
+| Zoom, pan, rotate view | Partial | M1 | Visible-region compositing, bounded zoom, middle-button pan, canvas viewport tests | Rotation, pixel grid, gesture/tablet input, latency benchmark |
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
 | Pixel layers and groups | Partial | M1 | Sparse copy-on-write tile storage, pixel-layer ordering, visibility, opacity, locks, and `chromarchy_document`/`chromarchy_tiled_image` tests | Groups, UI workflow, merge/flatten, golden fixtures, undo/redo |
 | Duplicate, merge, and flatten layers | Planned | M1 | — | Blend correctness, undo/redo, golden fixtures |
