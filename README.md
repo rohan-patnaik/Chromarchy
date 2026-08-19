@@ -9,7 +9,7 @@ The repository contains two products that ship together:
 
 ## Status
 
-Foundation build. The current native shell opens a document workspace with menus, tools, a canvas placeholder, and a dockable Layers panel. See [ROADMAP.md](ROADMAP.md) for the staged parity plan and explicit non-goals.
+Foundation build. The current native shell opens a document workspace with menus, tools, a canvas placeholder, and a dockable Layers panel. See [ROADMAP.md](ROADMAP.md) for the staged implementation plan and [docs/PARITY.md](docs/PARITY.md) for the evidence-backed workflow matrix and explicit exclusions.
 
 ## Build on Arch/Omarchy
 
