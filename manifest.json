@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.rohan-patnaik.chromarchy",
+  "name": "Chromarchy",
+  "version": "0.1.0",
+  "author": "Rohan Patnaik",
+  "license": "MIT",
+  "description": "Launch a local-first professional image editor from Omarchy Quattro.",
+  "kinds": ["menu"],
+  "entryPoints": {
+    "menu": "Plugin.qml"
+  }
+}
+
