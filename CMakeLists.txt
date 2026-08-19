@@ -8,7 +8,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Widgets)
+
+qt_add_library(chromarchy_core STATIC
+  src/core/Document.cpp
+  src/core/Document.h
+  src/core/Layer.cpp
+  src/core/Layer.h
+  src/core/TiledImage.cpp
+  src/core/TiledImage.h
+)
+target_link_libraries(chromarchy_core PUBLIC Qt6::Gui)
+target_include_directories(chromarchy_core PUBLIC src)
 
 qt_add_executable(chromarchy
   src/main.cpp
@@ -16,7 +27,7 @@ qt_add_executable(chromarchy
   src/MainWindow.h
 )
 
-target_link_libraries(chromarchy PRIVATE Qt6::Widgets)
+target_link_libraries(chromarchy PRIVATE chromarchy_core Qt6::Widgets)
 
 install(TARGETS chromarchy RUNTIME DESTINATION bin)
 
@@ -32,5 +43,13 @@ if(BUILD_TESTING)
   )
 
   add_test(NAME chromarchy_metadata COMMAND chromarchy_metadata_tests)
+
+  qt_add_executable(chromarchy_document_tests tests/core/DocumentTest.cpp)
+  target_link_libraries(chromarchy_document_tests PRIVATE chromarchy_core Qt6::Test)
+  add_test(NAME chromarchy_document COMMAND chromarchy_document_tests)
+
+  qt_add_executable(chromarchy_tiled_image_tests tests/core/TiledImageTest.cpp)
+  target_link_libraries(chromarchy_tiled_image_tests PRIVATE chromarchy_core Qt6::Test)
+  add_test(NAME chromarchy_tiled_image COMMAND chromarchy_tiled_image_tests)
 endif()
 

@@ -34,7 +34,7 @@ Until all applicable evidence exists, the row stays Partial or Planned.
 | Multiple document tabs | Planned | M1 | — | Lifecycle, dirty-state prompts, keyboard navigation |
 | Zoom, pan, rotate view | Planned | M1 | — | Input routing, pixel-grid behavior, latency benchmark |
 | Rulers, guides, and grid | Planned | M1 | — | Unit handling, snapping, persistence |
-| Pixel layers and groups | Planned | M1 | — | Tile storage, ordering, visibility, opacity, locks, fixtures |
+| Pixel layers and groups | Partial | M1 | Sparse copy-on-write tile storage, pixel-layer ordering, visibility, opacity, locks, and `chromarchy_document`/`chromarchy_tiled_image` tests | Groups, UI workflow, merge/flatten, golden fixtures, undo/redo |
 | Duplicate, merge, and flatten layers | Planned | M1 | — | Blend correctness, undo/redo, golden fixtures |
 | Non-destructive selection model | Planned | M1 | — | Tile mask, transforms, persistence, large-document behavior |
 | Command undo/redo | Planned | M1 | — | Memory budget, redo invalidation, recovery journal |
