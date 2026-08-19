@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 
 Item {
   id: root
@@ -11,15 +10,7 @@ Item {
   property var pluginRegistry
 
   function open(payloadJson) {
-    if (!launcher.running)
-      launcher.running = true
-  }
-
-  function close() {}
-
-  Process {
-    id: launcher
-    command: [
+    Quickshell.execDetached([
       "sh",
       "-c",
       "if command -v chromarchy >/dev/null 2>&1; then exec chromarchy; fi; "
@@ -28,7 +19,9 @@ Item {
         + "if command -v notify-send >/dev/null 2>&1; then "
         + "notify-send --app-name=Chromarchy 'Chromarchy is not installed' \"$message\"; fi; "
         + "exit 127"
-    ]
+    ])
   }
+
+  function close() {}
 }
 

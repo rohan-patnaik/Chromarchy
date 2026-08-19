@@ -22,6 +22,7 @@ class MetadataTest final : public QObject {
 private slots:
   void manifestDescribesMenuPlugin();
   void launcherReportsMissingBinary();
+  void launcherIsDetachedFromShellLifecycle();
 };
 
 void MetadataTest::manifestDescribesMenuPlugin() {
@@ -53,6 +54,15 @@ void MetadataTest::launcherReportsMissingBinary() {
   QVERIFY(contents.contains("Chromarchy is not installed"));
   QVERIFY(contents.contains("notify-send"));
   QVERIFY(contents.contains("exit 127"));
+}
+
+void MetadataTest::launcherIsDetachedFromShellLifecycle() {
+  const auto contents = readRepositoryFile(QStringLiteral("Plugin.qml"));
+  QVERIFY2(!contents.isEmpty(), "Plugin.qml must be readable");
+  QVERIFY(contents.contains("Quickshell.execDetached(["));
+  QVERIFY2(!contents.contains("Process {"),
+           "A tracked Process is killed when the Quickshell plugin reloads");
+  QVERIFY(!contents.contains(".running"));
 }
 
 QTEST_APPLESS_MAIN(MetadataTest)
