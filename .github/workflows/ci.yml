@@ -18,7 +18,7 @@ jobs:
       - name: Install build dependencies
         run: pacman -Syu --noconfirm --needed git base-devel cmake ninja qt6-base
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON

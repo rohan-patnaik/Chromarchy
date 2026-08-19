@@ -96,5 +96,12 @@ if(BUILD_TESTING)
   set_tests_properties(chromarchy_canvas PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
   )
+
+  qt_add_executable(chromarchy_core_benchmarks benchmarks/CoreBenchmark.cpp)
+  target_link_libraries(chromarchy_core_benchmarks PRIVATE
+    chromarchy_core Qt6::Test
+  )
+  add_test(NAME chromarchy_core_benchmarks COMMAND chromarchy_core_benchmarks)
+  set_tests_properties(chromarchy_core_benchmarks PROPERTIES LABELS benchmark)
 endif()
 

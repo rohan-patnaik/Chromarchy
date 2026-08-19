@@ -17,8 +17,11 @@ Foundation build. The current native shell opens a document workspace with menus
 sudo pacman -S --needed base-devel cmake ninja qt6-base
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+ctest --test-dir build --output-on-failure
 ./build/chromarchy
 ```
+
+Core performance workloads and their exact commands are documented in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Omarchy plugin
 
