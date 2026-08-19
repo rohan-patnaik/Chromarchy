@@ -9,13 +9,33 @@ depends=('qt6-base' 'qt6-imageformats')
 makedepends=('cmake' 'git' 'ninja')
 provides=('chromarchy')
 conflicts=('chromarchy')
-source=('Chromarchy::git+https://github.com/rohan-patnaik/Chromarchy.git')
+if [[ -n ${CHROMARCHY_SOURCE_ARCHIVE:-} ]]; then
+  source=("$CHROMARCHY_SOURCE_ARCHIVE")
+else
+  source=('Chromarchy::git+https://github.com/rohan-patnaik/Chromarchy.git')
+fi
 b2sums=('SKIP')
 
 pkgver() {
   cd Chromarchy
+  if [[ -f .chromarchy-source-revision ]]; then
+    local revision
+    revision=$(<.chromarchy-source-revision)
+    [[ $revision =~ ^[0-9a-f]{40}$ ]] || return 1
+    printf '0.1.0.r0.g%s' "${revision:0:7}"
+    return
+  fi
   printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  if [[ -n ${CHROMARCHY_EXPECTED_REVISION:-} ]]; then
+    [[ -f Chromarchy/.chromarchy-source-revision ]]
+    local revision
+    revision=$(<Chromarchy/.chromarchy-source-revision)
+    [[ $revision == "$CHROMARCHY_EXPECTED_REVISION" ]]
+  fi
 }
 
 build() {
