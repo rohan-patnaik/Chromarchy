@@ -166,7 +166,7 @@ bool Document::mergeLayerDown(int index) {
       painter.setOpacity(upper.opacity());
       painter.drawImage(QPoint(), upperTile.value());
     }
-    merged.pixels().tiles_.insert(tileIndex, std::move(output));
+    merged.pixels_.tiles_.insert(tileIndex, std::move(output));
   }
 
   layers_[index - 1] = std::move(merged);
@@ -213,7 +213,7 @@ bool Document::flatten() {
       painter.setOpacity(layer.opacity());
       painter.drawImage(QPoint(), tile.value());
     }
-    flattened.pixels().tiles_.insert(tileIndex, std::move(output));
+    flattened.pixels_.tiles_.insert(tileIndex, std::move(output));
   }
 
   layers_.clear();

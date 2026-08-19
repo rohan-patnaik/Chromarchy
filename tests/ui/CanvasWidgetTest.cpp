@@ -75,8 +75,8 @@ void CanvasWidgetTest::requestsRectangleSelectionFromCanvasDrag() {
 void CanvasWidgetTest::minimumZoomLargeSparsePaintIsViewportBounded() {
   auto document = Document::create(QSize(300'000, 300'000));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(1000, 1000),
-                                                       Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(1000, 1000),
+                                               Qt::red));
   CanvasWidget canvas(&*document);
   canvas.resize(640, 480);
   canvas.show();

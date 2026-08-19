@@ -2,6 +2,8 @@
 
 #include <QTest>
 
+#include <limits>
+
 using chromarchy::Document;
 
 namespace {
@@ -25,6 +27,7 @@ private slots:
   void compositesVisibilityAndOpacity();
   void mergeAndFlattenPreserveComposite();
   void locksPreventDestructiveLayerOperations();
+  void rejectsInvalidLayerState();
 };
 
 void DocumentTest::validatesCanvasSize() {
@@ -55,7 +58,7 @@ void DocumentTest::managesLayerOwnershipAndOrder() {
 void DocumentTest::duplicateUsesCopyOnWritePixels() {
   auto document = Document::create(QSize(64, 64));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(2, 3), Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(2, 3), Qt::red));
   const auto originalId = document->layerAt(0)->id();
 
   QVERIFY(document->duplicateLayer(0));
@@ -63,7 +66,7 @@ void DocumentTest::duplicateUsesCopyOnWritePixels() {
   QVERIFY(document->layerAt(1)->id() != originalId);
   QCOMPARE(document->layerAt(1)->pixels().pixelColor(QPoint(2, 3)),
            QColor(Qt::red));
-  QVERIFY(document->layerAt(1)->pixels().setPixelColor(QPoint(2, 3), Qt::blue));
+  QVERIFY(document->layerAt(1)->setPixelColor(QPoint(2, 3), Qt::blue));
   QCOMPARE(document->layerAt(0)->pixels().pixelColor(QPoint(2, 3)),
            QColor(Qt::red));
 }
@@ -71,9 +74,9 @@ void DocumentTest::duplicateUsesCopyOnWritePixels() {
 void DocumentTest::compositesVisibilityAndOpacity() {
   auto document = Document::create(QSize(8, 8));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(1, 1), Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(1, 1), Qt::red));
   const auto top = document->addLayer(QStringLiteral("Top"));
-  QVERIFY(document->layerAt(top)->pixels().setPixelColor(QPoint(1, 1), Qt::blue));
+  QVERIFY(document->layerAt(top)->setPixelColor(QPoint(1, 1), Qt::blue));
 
   QCOMPARE(document->composite().pixelColor(QPoint(1, 1)), QColor(Qt::blue));
   document->layerAt(top)->setVisible(false);
@@ -88,15 +91,15 @@ void DocumentTest::compositesVisibilityAndOpacity() {
 void DocumentTest::mergeAndFlattenPreserveComposite() {
   auto document = Document::create(QSize(512, 512));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(300, 300),
-                                                       Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(300, 300),
+                                               Qt::red));
   const auto middle = document->addLayer(QStringLiteral("Middle"));
-  QVERIFY(document->layerAt(middle)->pixels().setPixelColor(QPoint(300, 300),
-                                                            Qt::green));
+  QVERIFY(document->layerAt(middle)->setPixelColor(QPoint(300, 300),
+                                                    Qt::green));
   document->layerAt(middle)->setOpacity(0.4);
   const auto top = document->addLayer(QStringLiteral("Top"));
-  QVERIFY(document->layerAt(top)->pixels().setPixelColor(QPoint(300, 300),
-                                                         Qt::blue));
+  QVERIFY(document->layerAt(top)->setPixelColor(QPoint(300, 300),
+                                                 Qt::blue));
   document->layerAt(top)->setOpacity(0.25);
   const auto beforeMerge = document->composite().pixelColor(QPoint(300, 300));
 
@@ -120,6 +123,20 @@ void DocumentTest::locksPreventDestructiveLayerOperations() {
   QVERIFY(!document->mergeLayerDown(1));
   QVERIFY(!document->flatten());
   QCOMPARE(document->layerCount(), 2);
+}
+
+void DocumentTest::rejectsInvalidLayerState() {
+  auto document = Document::create(QSize(64, 64));
+  QVERIFY(document);
+  auto* layer = document->layerAt(0);
+  QVERIFY(layer->setOpacity(0.5));
+  QVERIFY(!layer->setOpacity(std::numeric_limits<double>::quiet_NaN()));
+  QVERIFY(!layer->setOpacity(std::numeric_limits<double>::infinity()));
+  QCOMPARE(layer->opacity(), 0.5);
+
+  QVERIFY(!layer->replacePixels(chromarchy::TiledImage(QSize(32, 32))));
+  QCOMPARE(layer->pixels().size(), QSize(64, 64));
+  QVERIFY(layer->replacePixels(chromarchy::TiledImage(QSize(64, 64))));
 }
 
 QTEST_APPLESS_MAIN(DocumentTest)

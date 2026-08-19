@@ -1,6 +1,7 @@
 #include "core/Layer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace chromarchy {
@@ -32,8 +33,16 @@ double Layer::opacity() const noexcept {
   return opacity_;
 }
 
-void Layer::setOpacity(double opacity) noexcept {
-  opacity_ = std::clamp(opacity, 0.0, 1.0);
+bool Layer::setOpacity(double opacity) noexcept {
+  if (!std::isfinite(opacity)) {
+    return false;
+  }
+  const auto clamped = std::clamp(opacity, 0.0, 1.0);
+  if (qFuzzyCompare(opacity_, clamped)) {
+    return false;
+  }
+  opacity_ = clamped;
+  return true;
 }
 
 bool Layer::isLocked() const noexcept {
@@ -48,8 +57,17 @@ const TiledImage& Layer::pixels() const noexcept {
   return pixels_;
 }
 
-TiledImage& Layer::pixels() noexcept {
-  return pixels_;
+bool Layer::setPixelColor(QPoint position, const QColor& color) {
+  return !locked_ && pixels_.setPixelColor(position, color);
+}
+
+bool Layer::replacePixels(TiledImage pixels) {
+  if (locked_ || !pixels.isValid() || pixels.size() != pixels_.size()) {
+    return false;
+  }
+  pixels.takeDirtyRegion();
+  pixels_ = std::move(pixels);
+  return true;
 }
 
 Layer Layer::duplicate(QString name) const {

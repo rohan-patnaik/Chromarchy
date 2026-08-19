@@ -8,6 +8,7 @@
 namespace chromarchy {
 
 class NativeDocumentCodec;
+class Document;
 
 class Layer final {
 public:
@@ -20,15 +21,17 @@ public:
   [[nodiscard]] bool isVisible() const noexcept;
   void setVisible(bool visible) noexcept;
   [[nodiscard]] double opacity() const noexcept;
-  void setOpacity(double opacity) noexcept;
+  bool setOpacity(double opacity) noexcept;
   [[nodiscard]] bool isLocked() const noexcept;
   void setLocked(bool locked) noexcept;
 
   [[nodiscard]] const TiledImage& pixels() const noexcept;
-  [[nodiscard]] TiledImage& pixels() noexcept;
+  bool setPixelColor(QPoint position, const QColor& color);
+  bool replacePixels(TiledImage pixels);
   [[nodiscard]] Layer duplicate(QString name) const;
 
 private:
+  friend class Document;
   friend class NativeDocumentCodec;
 
   QUuid id_ = QUuid::createUuid();

@@ -35,7 +35,8 @@ void CoreBenchmark::initTestCase() {
                            ? 0
                            : document_->addLayer(
                                  QStringLiteral("Benchmark %1").arg(layerIndex));
-    document_->layerAt(index)->pixels() = TiledImage::fromImage(pixels);
+    QVERIFY(document_->layerAt(index)->replacePixels(
+        TiledImage::fromImage(pixels)));
   }
 }
 

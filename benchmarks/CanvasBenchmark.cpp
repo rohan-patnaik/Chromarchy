@@ -17,9 +17,9 @@ private slots:
 void CanvasBenchmark::paintSparseDocumentAtMinimumZoom() {
   auto document = Document::create(QSize(300'000, 300'000));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(1000, 1000),
-                                                       Qt::red));
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(1000, 1000),
+                                               Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(
       QPoint(299'000, 299'000), Qt::blue));
   CanvasWidget canvas(&*document);
   canvas.resize(640, 480);

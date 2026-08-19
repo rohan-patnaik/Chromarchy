@@ -55,8 +55,10 @@ DocumentLoadResult ImageIO::open(const QString& filePath) {
   }
   auto* layer = document->layerAt(0);
   layer->setName(QFileInfo(filePath).completeBaseName());
-  layer->pixels() = TiledImage::fromImage(image);
-  layer->pixels().takeDirtyRegion();
+  if (!layer->replacePixels(TiledImage::fromImage(image))) {
+    return {.error = QStringLiteral(
+                "Decoded pixels do not match the document canvas.")};
+  }
   return {.document = std::move(document)};
 }
 

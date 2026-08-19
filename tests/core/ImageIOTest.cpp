@@ -51,7 +51,7 @@ void ImageIOTest::exportsCompositeAtomically() {
 
   auto document = Document::create(QSize(16, 12));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(
+  QVERIFY(document->layerAt(0)->setPixelColor(
       QPoint(4, 5), QColor(100, 120, 140, 200)));
 
   const auto result = ImageIO::exportComposite(*document, path);
@@ -107,7 +107,8 @@ void ImageIOTest::roundTripsSupportedFormats() {
   QVERIFY(document);
   QImage source(64, 64, QImage::Format_RGBA8888_Premultiplied);
   source.fill(QColor(80, 120, 160, 255));
-  document->layerAt(0)->pixels() = chromarchy::TiledImage::fromImage(source);
+  QVERIFY(document->layerAt(0)->replacePixels(
+      chromarchy::TiledImage::fromImage(source)));
 
   const auto exported = ImageIO::exportComposite(*document, path, 100);
   QVERIFY2(exported, qPrintable(exported.error));
@@ -145,7 +146,7 @@ void ImageIOTest::oversizedSparseExportFailsBeforeAllocation() {
   const auto path = directory.filePath(QStringLiteral("oversized.png"));
   auto document = Document::create(QSize(300'000, 300'000));
   QVERIFY(document);
-  QVERIFY(document->layerAt(0)->pixels().setPixelColor(QPoint(10, 10), Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(10, 10), Qt::red));
 
   const auto result = ImageIO::exportComposite(*document, path);
   QVERIFY(!result);

@@ -557,8 +557,7 @@ void MainWindow::commitLayerOpacity() {
                            if (!changed) {
                              return false;
                            }
-                           changed->setOpacity(value);
-                           return true;
+                           return changed->setOpacity(value);
                          });
   }
 }

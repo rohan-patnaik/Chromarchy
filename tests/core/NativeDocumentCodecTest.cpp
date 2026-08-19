@@ -1,9 +1,12 @@
 #include "core/NativeDocumentCodec.h"
 
+#include <QDataStream>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QtEndian>
+
+#include <limits>
 
 using chromarchy::Document;
 using chromarchy::NativeDocumentCodec;
@@ -15,6 +18,7 @@ private slots:
   void preservesLayeredDocument();
   void loadsVersionOneWithoutSelection();
   void rejectsCorruptAndTruncatedDocuments();
+  void rejectsNonFiniteLayerOpacity();
 };
 
 void NativeDocumentCodecTest::preservesLayeredDocument() {
@@ -26,17 +30,17 @@ void NativeDocumentCodecTest::preservesLayeredDocument() {
   QVERIFY(document);
   auto* base = document->layerAt(0);
   base->setName(QStringLiteral("Base / colour"));
+  QVERIFY(base->setPixelColor(QPoint(699, 399),
+                              QColor(20, 40, 60, 255)));
   base->setLocked(true);
-  QVERIFY(base->pixels().setPixelColor(QPoint(699, 399),
-                                      QColor(20, 40, 60, 255)));
   const auto baseId = base->id();
 
   const auto inkIndex = document->addLayer(QStringLiteral("Ink"));
   auto* ink = document->layerAt(inkIndex);
   ink->setOpacity(0.625);
   ink->setVisible(false);
-  QVERIFY(ink->pixels().setPixelColor(QPoint(257, 10),
-                                     QColor(200, 100, 50, 180)));
+  QVERIFY(ink->setPixelColor(QPoint(257, 10),
+                             QColor(200, 100, 50, 180)));
   const auto expectedInkPixel = ink->pixels().pixelColor(QPoint(257, 10));
   const auto inkId = ink->id();
   document->selection().selectAll();
@@ -112,6 +116,51 @@ void NativeDocumentCodecTest::rejectsCorruptAndTruncatedDocuments() {
   QVERIFY(truncated.resize(truncated.size() - 1));
   truncated.close();
   QVERIFY(!NativeDocumentCodec::load(truncatedPath));
+}
+
+void NativeDocumentCodecTest::rejectsNonFiniteLayerOpacity() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("non-finite.chromarchy"));
+  auto document = Document::create(QSize(10, 10));
+  QVERIFY(document);
+  QVERIFY(NativeDocumentCodec::save(*document, path));
+
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::ReadWrite));
+  QDataStream stream(&file);
+  stream.setVersion(QDataStream::Qt_6_6);
+  stream.setByteOrder(QDataStream::LittleEndian);
+  char magic[8]{};
+  QCOMPARE(stream.readRawData(magic, sizeof(magic)), sizeof(magic));
+  quint32 version = 0;
+  int width = 0;
+  int height = 0;
+  quint32 layerCount = 0;
+  int activeLayer = -1;
+  stream >> version >> width >> height >> layerCount >> activeLayer;
+  quint32 idSize = 0;
+  stream >> idSize;
+  QCOMPARE(stream.skipRawData(idSize), static_cast<int>(idSize));
+  quint32 nameSize = 0;
+  stream >> nameSize;
+  QCOMPARE(stream.skipRawData(nameSize), static_cast<int>(nameSize));
+  quint8 visible = 0;
+  quint8 locked = 0;
+  stream >> visible >> locked;
+  const auto opacityOffset = file.pos();
+  QVERIFY(opacityOffset > 0);
+  QVERIFY(file.seek(opacityOffset));
+  QDataStream writer(&file);
+  writer.setVersion(QDataStream::Qt_6_6);
+  writer.setByteOrder(QDataStream::LittleEndian);
+  writer << std::numeric_limits<double>::quiet_NaN();
+  QCOMPARE(writer.status(), QDataStream::Ok);
+  file.close();
+
+  const auto loaded = NativeDocumentCodec::load(path);
+  QVERIFY(!loaded);
+  QVERIFY(loaded.error.contains(QStringLiteral("layer properties")));
 }
 
 QTEST_APPLESS_MAIN(NativeDocumentCodecTest)

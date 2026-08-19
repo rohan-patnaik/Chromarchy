@@ -7,6 +7,7 @@
 #include <QtEndian>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace chromarchy {
@@ -91,6 +92,12 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
          << document.activeLayerIndex_;
 
   for (const auto& layer : document.layers_) {
+    if (!std::isfinite(layer.opacity_) || layer.opacity_ < 0.0 ||
+        layer.opacity_ > 1.0 || layer.pixels_.size() != document.size_) {
+      output.cancelWriting();
+      return {.error = QStringLiteral(
+                  "A layer has invalid opacity or pixel dimensions.")};
+    }
     const auto id = layer.id_.toRfc4122();
     const auto name = layer.name_.toUtf8();
     if (name.size() > maximumNameBytes) {
@@ -216,7 +223,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     quint32 tileCount = 0;
     stream >> visible >> locked >> opacity >> tileCount;
     if (stream.status() != QDataStream::Ok || visible > 1 || locked > 1 ||
-        opacity < 0.0 || opacity > 1.0 || tileCount > maximumTileCount) {
+        !std::isfinite(opacity) || opacity < 0.0 || opacity > 1.0 ||
+        tileCount > maximumTileCount) {
       return {.error = streamError(QStringLiteral("layer properties"))};
     }
 

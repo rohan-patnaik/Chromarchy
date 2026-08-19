@@ -14,7 +14,7 @@ std::unique_ptr<SnapshotCommand> pixelCommand(const Document& document,
                                               QPoint position, QColor color,
                                               QString description) {
   auto after = document;
-  after.layerAt(0)->pixels().setPixelColor(position, color);
+  after.layerAt(0)->setPixelColor(position, color);
   return std::make_unique<SnapshotCommand>(std::move(description), document,
                                            std::move(after));
 }
@@ -91,7 +91,7 @@ void DocumentHistoryTest::largePixelStorageDoesNotBlockMetadataUndo() {
   QVERIFY(document);
   for (int row = 0; row < 4; ++row) {
     for (int column = 0; column < 4; ++column) {
-      QVERIFY(document->layerAt(0)->pixels().setPixelColor(
+      QVERIFY(document->layerAt(0)->setPixelColor(
           QPoint(column * 256, row * 256), Qt::red));
     }
   }
