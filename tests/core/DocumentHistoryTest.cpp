@@ -28,6 +28,7 @@ private slots:
   void executesUndoAndRedo();
   void newCommandDiscardsRedoBranch();
   void enforcesMemoryAndCountBounds();
+  void largePixelStorageDoesNotBlockMetadataUndo();
 };
 
 void DocumentHistoryTest::executesUndoAndRedo() {
@@ -69,7 +70,7 @@ void DocumentHistoryTest::newCommandDiscardsRedoBranch() {
 void DocumentHistoryTest::enforcesMemoryAndCountBounds() {
   auto document = Document::create(QSize(32, 32));
   QVERIFY(document);
-  DocumentHistory tooSmall(1024, 10);
+  DocumentHistory tooSmall(1, 10);
   QVERIFY(!tooSmall.execute(pixelCommand(*document, QPoint(1, 1), Qt::red,
                                          QStringLiteral("Too large")),
                             *document));
@@ -83,6 +84,30 @@ void DocumentHistoryTest::enforcesMemoryAndCountBounds() {
   }
   QCOMPARE(bounded.size(), 2);
   QVERIFY(bounded.estimatedBytes() <= DocumentHistory::defaultByteBudget);
+}
+
+void DocumentHistoryTest::largePixelStorageDoesNotBlockMetadataUndo() {
+  auto document = Document::create(QSize(20'000, 20'000));
+  QVERIFY(document);
+  for (int row = 0; row < 4; ++row) {
+    for (int column = 0; column < 4; ++column) {
+      QVERIFY(document->layerAt(0)->pixels().setPixelColor(
+          QPoint(column * 256, row * 256), Qt::red));
+    }
+  }
+  QVERIFY(document->estimatedStorageBytes() > 4ULL * 1024ULL * 1024ULL);
+
+  auto renamed = *document;
+  renamed.layerAt(0)->setName(QStringLiteral("Metadata edit"));
+  DocumentHistory history(64 * 1024, 10);
+  QVERIFY(history.execute(std::make_unique<SnapshotCommand>(
+                              QStringLiteral("Rename layer"), *document,
+                              std::move(renamed)),
+                          *document));
+  QCOMPARE(document->layerAt(0)->name(), QStringLiteral("Metadata edit"));
+  QVERIFY(history.estimatedBytes() < 64 * 1024);
+  QVERIFY(history.undo(*document));
+  QCOMPARE(document->layerAt(0)->name(), QStringLiteral("Layer 1"));
 }
 
 QTEST_APPLESS_MAIN(DocumentHistoryTest)

@@ -21,13 +21,14 @@ public:
   [[nodiscard]] bool isEmpty() const noexcept;
   [[nodiscard]] quint8 baseCoverage() const noexcept;
   [[nodiscard]] QVector<TileSnapshot> tileSnapshots(QRect region) const;
+  [[nodiscard]] QVector<StorageBlock> storageBlocks() const;
   [[nodiscard]] QImage render(QRect region = {}) const;
 
   bool setCoverage(QPoint position, quint8 coverage);
   void selectRectangle(QRect rectangle, quint8 coverage = 255,
                        bool replace = true);
-  void clear();
-  void selectAll();
+  bool clear();
+  bool selectAll();
   void invert();
 
   [[nodiscard]] QRegion dirtyRegion() const;

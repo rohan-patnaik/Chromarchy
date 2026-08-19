@@ -15,7 +15,8 @@ public:
 
   virtual void redo(Document& document) = 0;
   virtual void undo(Document& document) = 0;
-  [[nodiscard]] virtual quint64 estimatedBytes() const noexcept = 0;
+  [[nodiscard]] virtual quint64 metadataBytes() const noexcept = 0;
+  [[nodiscard]] virtual const QVector<StorageBlock>& storageBlocks() const noexcept = 0;
   [[nodiscard]] virtual const QString& description() const noexcept = 0;
 };
 
@@ -25,14 +26,16 @@ public:
 
   void redo(Document& document) override;
   void undo(Document& document) override;
-  [[nodiscard]] quint64 estimatedBytes() const noexcept override;
+  [[nodiscard]] quint64 metadataBytes() const noexcept override;
+  [[nodiscard]] const QVector<StorageBlock>& storageBlocks() const noexcept override;
   [[nodiscard]] const QString& description() const noexcept override;
 
 private:
   QString description_;
   Document before_;
   Document after_;
-  quint64 estimatedBytes_ = 0;
+  quint64 metadataBytes_ = 0;
+  QVector<StorageBlock> storageBlocks_;
 };
 
 class DocumentHistory final {
@@ -57,7 +60,8 @@ public:
 
 private:
   void discardRedo();
-  void trimToLimits();
+  void recalculateEstimatedBytes(const Document& document);
+  void trimToLimits(const Document& document);
 
   std::vector<std::unique_ptr<DocumentCommand>> commands_;
   qsizetype cursor_ = 0;

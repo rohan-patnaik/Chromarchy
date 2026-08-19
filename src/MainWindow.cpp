@@ -108,8 +108,7 @@ void MainWindow::createActions() {
   auto* selectAll = selectMenu->addAction(QStringLiteral("Select &All"), this, [this] {
     if (auto* view = currentDocument()) {
       view->performCommand(QStringLiteral("Select all"), [](Document& document) {
-        document.selection().selectAll();
-        return true;
+        return document.selection().selectAll();
       });
     }
   });
@@ -117,8 +116,7 @@ void MainWindow::createActions() {
   auto* deselect = selectMenu->addAction(QStringLiteral("&Deselect"), this, [this] {
     if (auto* view = currentDocument()) {
       view->performCommand(QStringLiteral("Deselect"), [](Document& document) {
-        document.selection().clear();
-        return true;
+        return document.selection().clear();
       });
     }
   });
@@ -354,6 +352,10 @@ void MainWindow::addDocumentTab(DocumentView* view) {
     refreshLayers();
     updateActions();
   });
+  connect(view, &DocumentView::commandFailed, this,
+          [this](const QString& detail) {
+            showError(QStringLiteral("Could Not Record Edit"), detail);
+          });
   refreshLayers();
   updateActions();
 }

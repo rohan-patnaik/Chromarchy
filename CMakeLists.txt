@@ -23,6 +23,7 @@ qt_add_library(chromarchy_core STATIC
   src/core/NativeDocumentCodec.h
   src/core/SelectionMask.cpp
   src/core/SelectionMask.h
+  src/core/StorageBlock.h
   src/core/TiledImage.cpp
   src/core/TiledImage.h
 )
@@ -94,6 +95,21 @@ if(BUILD_TESTING)
   )
   add_test(NAME chromarchy_canvas COMMAND chromarchy_canvas_tests)
   set_tests_properties(chromarchy_canvas PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+  )
+
+  qt_add_executable(chromarchy_document_view_tests
+    tests/ui/DocumentViewTest.cpp
+    src/ui/CanvasWidget.cpp
+    src/ui/CanvasWidget.h
+    src/ui/DocumentView.cpp
+    src/ui/DocumentView.h
+  )
+  target_link_libraries(chromarchy_document_view_tests PRIVATE
+    chromarchy_core Qt6::Test Qt6::Widgets
+  )
+  add_test(NAME chromarchy_document_view COMMAND chromarchy_document_view_tests)
+  set_tests_properties(chromarchy_document_view PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
   )
 

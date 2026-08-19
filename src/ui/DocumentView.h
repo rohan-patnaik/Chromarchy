@@ -37,6 +37,7 @@ public:
 signals:
   void titleChanged(const QString& title);
   void historyChanged();
+  void commandFailed(const QString& detail);
 
 private:
   Document document_;

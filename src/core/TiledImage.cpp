@@ -111,6 +111,16 @@ QVector<TileSnapshot> TiledImage::tileSnapshots(QRect region) const {
   return snapshots;
 }
 
+QVector<StorageBlock> TiledImage::storageBlocks() const {
+  QVector<StorageBlock> blocks;
+  blocks.reserve(tiles_.size());
+  for (const auto& tile : tiles_) {
+    blocks.push_back({static_cast<quint64>(tile.cacheKey()),
+                      static_cast<quint64>(tile.sizeInBytes())});
+  }
+  return blocks;
+}
+
 QImage TiledImage::render(QRect region) const {
   if (!isValid()) {
     return {};

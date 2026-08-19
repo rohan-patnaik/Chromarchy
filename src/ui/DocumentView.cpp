@@ -72,6 +72,10 @@ bool DocumentView::performCommand(
   auto command = std::make_unique<SnapshotCommand>(description, document_,
                                                     std::move(after));
   if (!history_.execute(std::move(command), document_)) {
+    emit commandFailed(
+        QStringLiteral("%1 exceeded the bounded undo-history budget; no changes "
+                       "were applied.")
+            .arg(description));
     return false;
   }
   setModified(true);

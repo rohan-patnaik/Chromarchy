@@ -28,17 +28,29 @@ qsizetype Document::layerCount() const noexcept {
 }
 
 quint64 Document::estimatedStorageBytes() const noexcept {
-  constexpr quint64 tileBytes =
-      TiledImage::tileExtent * TiledImage::tileExtent * 4ULL;
+  quint64 bytes = estimatedMetadataBytes();
+  for (const auto& block : storageBlocks()) {
+    bytes += block.bytes;
+  }
+  return bytes;
+}
+
+quint64 Document::estimatedMetadataBytes() const noexcept {
   quint64 bytes = sizeof(Document);
   for (const auto& layer : layers_) {
     bytes += sizeof(Layer) +
-             static_cast<quint64>(layer.name().size()) * sizeof(QChar) +
-             static_cast<quint64>(layer.pixels().allocatedTileCount()) * tileBytes;
+             static_cast<quint64>(layer.name().size()) * sizeof(QChar);
   }
-  bytes += static_cast<quint64>(selection_.allocatedTileCount()) *
-           TiledImage::tileExtent * TiledImage::tileExtent;
   return bytes;
+}
+
+QVector<StorageBlock> Document::storageBlocks() const {
+  QVector<StorageBlock> blocks;
+  for (const auto& layer : layers_) {
+    blocks += layer.pixels().storageBlocks();
+  }
+  blocks += selection_.storageBlocks();
+  return blocks;
 }
 
 int Document::activeLayerIndex() const noexcept {

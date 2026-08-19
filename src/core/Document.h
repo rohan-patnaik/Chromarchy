@@ -25,6 +25,8 @@ public:
   [[nodiscard]] QSize size() const noexcept;
   [[nodiscard]] qsizetype layerCount() const noexcept;
   [[nodiscard]] quint64 estimatedStorageBytes() const noexcept;
+  [[nodiscard]] quint64 estimatedMetadataBytes() const noexcept;
+  [[nodiscard]] QVector<StorageBlock> storageBlocks() const;
   [[nodiscard]] int activeLayerIndex() const noexcept;
   [[nodiscard]] const SelectionMask& selection() const noexcept;
   [[nodiscard]] SelectionMask& selection() noexcept;

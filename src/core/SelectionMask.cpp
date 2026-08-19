@@ -73,6 +73,16 @@ QVector<TileSnapshot> SelectionMask::tileSnapshots(QRect region) const {
   return snapshots;
 }
 
+QVector<StorageBlock> SelectionMask::storageBlocks() const {
+  QVector<StorageBlock> blocks;
+  blocks.reserve(tiles_.size());
+  for (const auto& tile : tiles_) {
+    blocks.push_back({static_cast<quint64>(tile.cacheKey()),
+                      static_cast<quint64>(tile.sizeInBytes())});
+  }
+  return blocks;
+}
+
 QImage SelectionMask::render(QRect region) const {
   const QRect bounds(QPoint(), size_);
   if (region.isNull()) {
@@ -137,22 +147,24 @@ void SelectionMask::selectRectangle(QRect rectangle, quint8 newCoverage,
   dirtyRegion_ += rectangle;
 }
 
-void SelectionMask::clear() {
+bool SelectionMask::clear() {
   if (isEmpty()) {
-    return;
+    return false;
   }
   baseCoverage_ = 0;
   tiles_.clear();
   dirtyRegion_ += QRect(QPoint(), size_);
+  return true;
 }
 
-void SelectionMask::selectAll() {
+bool SelectionMask::selectAll() {
   if (baseCoverage_ == 255 && tiles_.isEmpty()) {
-    return;
+    return false;
   }
   baseCoverage_ = 255;
   tiles_.clear();
   dirtyRegion_ += QRect(QPoint(), size_);
+  return true;
 }
 
 void SelectionMask::invert() {
