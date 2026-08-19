@@ -24,8 +24,8 @@ DocumentView::DocumentView(Document document, QString displayName,
           [this](QRect rectangle) {
             performCommand(QStringLiteral("Select rectangle"),
                            [rectangle](Document& document) {
-                             document.selection().selectRectangle(rectangle);
-                             return true;
+                             return document.selection().selectRectangle(
+                                 rectangle);
                            });
           });
 }

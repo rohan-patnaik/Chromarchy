@@ -9,18 +9,29 @@ class SelectionMaskTest final : public QObject {
 
 private slots:
   void rectangleCrossesSparseTileBoundaries();
+  void identicalRectangleReportsNoChange();
   void selectAllAndInvertRemainSparse();
   void copiesDetachOnMutation();
 };
 
 void SelectionMaskTest::rectangleCrossesSparseTileBoundaries() {
   SelectionMask selection(QSize(1000, 800));
-  selection.selectRectangle(QRect(250, 250, 20, 20));
+  QVERIFY(selection.selectRectangle(QRect(250, 250, 20, 20)));
   QCOMPARE(selection.allocatedTileCount(), 4);
   QCOMPARE(selection.coverage(QPoint(250, 250)), 255);
   QCOMPARE(selection.coverage(QPoint(269, 269)), 255);
   QCOMPARE(selection.coverage(QPoint(249, 249)), 0);
   QVERIFY(selection.dirtyRegion().contains(QPoint(250, 250)));
+}
+
+void SelectionMaskTest::identicalRectangleReportsNoChange() {
+  SelectionMask selection(QSize(512, 512));
+  const QRect rectangle(100, 110, 200, 210);
+  QVERIFY(selection.selectRectangle(rectangle));
+  selection.takeDirtyRegion();
+
+  QVERIFY(!selection.selectRectangle(rectangle));
+  QVERIFY(selection.dirtyRegion().isEmpty());
 }
 
 void SelectionMaskTest::selectAllAndInvertRemainSparse() {

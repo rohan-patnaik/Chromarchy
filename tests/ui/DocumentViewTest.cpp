@@ -1,4 +1,5 @@
 #include "core/Document.h"
+#include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
 
 #include <QTemporaryDir>
@@ -46,6 +47,16 @@ void DocumentViewTest::noOpSelectionsPreserveSavedState() {
     return changed.selection().clear();
   }));
   QVERIFY(!view.isModified());
+
+  const QRect rectangle(10, 12, 30, 32);
+  view.canvas()->selectionRequested(rectangle);
+  QVERIFY(view.isModified());
+  QVERIFY(view.save(path));
+  const auto rectangleHistorySize = view.history().size();
+
+  view.canvas()->selectionRequested(rectangle);
+  QVERIFY(!view.isModified());
+  QCOMPARE(view.history().size(), rectangleHistorySize);
 }
 
 QTEST_MAIN(DocumentViewTest)

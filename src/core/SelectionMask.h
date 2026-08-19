@@ -25,7 +25,7 @@ public:
   [[nodiscard]] QImage render(QRect region = {}) const;
 
   bool setCoverage(QPoint position, quint8 coverage);
-  void selectRectangle(QRect rectangle, quint8 coverage = 255,
+  bool selectRectangle(QRect rectangle, quint8 coverage = 255,
                        bool replace = true);
   bool clear();
   bool selectAll();

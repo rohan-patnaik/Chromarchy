@@ -119,32 +119,50 @@ bool SelectionMask::setCoverage(QPoint position, quint8 newCoverage) {
   return true;
 }
 
-void SelectionMask::selectRectangle(QRect rectangle, quint8 newCoverage,
+bool SelectionMask::selectRectangle(QRect rectangle, quint8 newCoverage,
                                     bool replace) {
   const QRect bounds(QPoint(), size_);
   rectangle = rectangle.normalized().intersected(bounds);
   if (replace) {
-    baseCoverage_ = 0;
-    tiles_.clear();
+    SelectionMask replacement(size_);
+    replacement.selectRectangle(rectangle, newCoverage, false);
+    if (baseCoverage_ == replacement.baseCoverage_ &&
+        tiles_ == replacement.tiles_) {
+      return false;
+    }
+    baseCoverage_ = replacement.baseCoverage_;
+    tiles_ = std::move(replacement.tiles_);
     dirtyRegion_ += bounds;
+    return true;
   }
-  if (rectangle.isEmpty() || newCoverage == baseCoverage_) {
-    return;
+  if (rectangle.isEmpty()) {
+    return false;
   }
 
+  bool changed = false;
   const auto first = tileIndex(rectangle.topLeft());
   const auto last = tileIndex(rectangle.bottomRight());
   for (int row = first.row; row <= last.row; ++row) {
     for (int column = first.column; column <= last.column; ++column) {
       const TileIndex index{column, row};
+      if (!tiles_.contains(index) && newCoverage == baseCoverage_) {
+        continue;
+      }
       auto& tile = ensureTile(index);
+      const auto before = tile;
       const auto local = rectangle.translated(-tileOrigin(index));
-      QPainter painter(&tile);
-      painter.setCompositionMode(QPainter::CompositionMode_Source);
-      painter.fillRect(local, QColor(newCoverage, newCoverage, newCoverage));
+      {
+        QPainter painter(&tile);
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(local, QColor(newCoverage, newCoverage, newCoverage));
+      }
+      changed = changed || tile != before;
     }
   }
-  dirtyRegion_ += rectangle;
+  if (changed) {
+    dirtyRegion_ += rectangle;
+  }
+  return changed;
 }
 
 bool SelectionMask::clear() {
