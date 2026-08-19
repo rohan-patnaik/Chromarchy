@@ -19,7 +19,16 @@ Item {
 
   Process {
     id: launcher
-    command: ["chromarchy"]
+    command: [
+      "sh",
+      "-c",
+      "if command -v chromarchy >/dev/null 2>&1; then exec chromarchy; fi; "
+        + "message='Install the native chromarchy binary on PATH, then try again.'; "
+        + "printf 'Chromarchy: %s\\n' \"$message\" >&2; "
+        + "if command -v notify-send >/dev/null 2>&1; then "
+        + "notify-send --app-name=Chromarchy 'Chromarchy is not installed' \"$message\"; fi; "
+        + "exit 127"
+    ]
   }
 }
 

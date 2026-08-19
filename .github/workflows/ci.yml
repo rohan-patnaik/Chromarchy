@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  arch-build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja qt6-base
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
