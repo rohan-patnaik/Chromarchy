@@ -87,6 +87,21 @@ void MainWindow::createActions() {
   fileMenu->addAction(QStringLiteral("E&xit"), this, &QWidget::close,
                       QKeySequence::Quit);
 
+  auto* editMenu = menuBar()->addMenu(QStringLiteral("&Edit"));
+  undoAction_ = editMenu->addAction(QStringLiteral("&Undo"), this, [this] {
+    if (auto* view = currentDocument()) {
+      view->undo();
+    }
+  });
+  undoAction_->setShortcut(QKeySequence::Undo);
+  redoAction_ = editMenu->addAction(QStringLiteral("&Redo"), this, [this] {
+    if (auto* view = currentDocument()) {
+      view->redo();
+    }
+  });
+  redoAction_->setShortcuts({QKeySequence::Redo,
+                             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
+
   auto* layerMenu = menuBar()->addMenu(QStringLiteral("&Layer"));
   addLayerAction_ = layerMenu->addAction(QStringLiteral("&New Pixel Layer"), this,
                                          &MainWindow::addLayer);
@@ -273,6 +288,10 @@ void MainWindow::addDocumentTab(DocumentView* view) {
             statusBar()->showMessage(
                 QStringLiteral("Zoom %1%").arg(qRound(zoom * 100.0)));
           });
+  connect(view, &DocumentView::historyChanged, this, [this] {
+    refreshLayers();
+    updateActions();
+  });
   refreshLayers();
   updateActions();
 }
@@ -345,43 +364,52 @@ void MainWindow::layerItemChanged(QListWidgetItem* item) {
     return;
   }
   if (auto* view = currentDocument()) {
-    auto* layer = view->document().layerAt(item->data(Qt::UserRole).toInt());
+    const auto index = item->data(Qt::UserRole).toInt();
+    const auto* layer = view->document().layerAt(index);
     const bool visible = item->checkState() == Qt::Checked;
     if (layer && layer->isVisible() != visible) {
-      layer->setVisible(visible);
-      view->setModified(true);
-      view->canvas()->documentChanged();
+      view->performCommand(QStringLiteral("Change layer visibility"),
+                           [index, visible](Document& document) {
+                             auto* changed = document.layerAt(index);
+                             if (!changed) {
+                               return false;
+                             }
+                             changed->setVisible(visible);
+                             return true;
+                           });
     }
   }
 }
 
 void MainWindow::addLayer() {
   if (auto* view = currentDocument()) {
-    view->document().addLayer(
-        QStringLiteral("Layer %1").arg(view->document().layerCount() + 1));
-    view->setModified(true);
-    view->canvas()->documentChanged();
-    refreshLayers();
+    const auto name =
+        QStringLiteral("Layer %1").arg(view->document().layerCount() + 1);
+    view->performCommand(QStringLiteral("Add layer"),
+                         [name](Document& document) {
+                           document.addLayer(name);
+                           return true;
+                         });
   }
 }
 
 void MainWindow::duplicateLayer() {
   if (auto* view = currentDocument()) {
-    if (view->document().duplicateLayer(view->document().activeLayerIndex())) {
-      view->setModified(true);
-      view->canvas()->documentChanged();
-      refreshLayers();
-    }
+    const auto index = view->document().activeLayerIndex();
+    view->performCommand(QStringLiteral("Duplicate layer"),
+                         [index](Document& document) {
+                           return document.duplicateLayer(index);
+                         });
   }
 }
 
 void MainWindow::removeLayer() {
   if (auto* view = currentDocument()) {
-    if (view->document().removeLayer(view->document().activeLayerIndex())) {
-      view->setModified(true);
-      view->canvas()->documentChanged();
-      refreshLayers();
-    }
+    const auto index = view->document().activeLayerIndex();
+    view->performCommand(QStringLiteral("Remove layer"),
+                         [index](Document& document) {
+                           return document.removeLayer(index);
+                         });
   }
 }
 
@@ -392,6 +420,16 @@ void MainWindow::updateActions() {
   saveAsAction_->setEnabled(hasDocument);
   exportAction_->setEnabled(hasDocument);
   closeAction_->setEnabled(hasDocument);
+  undoAction_->setEnabled(hasDocument && view->history().canUndo());
+  redoAction_->setEnabled(hasDocument && view->history().canRedo());
+  undoAction_->setText(hasDocument && view->history().canUndo()
+                           ? QStringLiteral("&Undo %1").arg(
+                                 view->history().undoDescription())
+                           : QStringLiteral("&Undo"));
+  redoAction_->setText(hasDocument && view->history().canRedo()
+                           ? QStringLiteral("&Redo %1").arg(
+                                 view->history().redoDescription())
+                           : QStringLiteral("&Redo"));
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   removeLayerAction_->setEnabled(hasDocument && view->document().layerCount() > 1);

@@ -54,6 +54,48 @@ void DocumentView::setModified(bool modified) {
   emit titleChanged(tabTitle());
 }
 
+bool DocumentView::performCommand(
+    const QString& description,
+    const std::function<bool(Document&)>& mutation) {
+  auto after = document_;
+  if (!mutation(after)) {
+    return false;
+  }
+  auto command = std::make_unique<SnapshotCommand>(description, document_,
+                                                    std::move(after));
+  if (!history_.execute(std::move(command), document_)) {
+    return false;
+  }
+  setModified(true);
+  canvas_->documentChanged();
+  emit historyChanged();
+  return true;
+}
+
+bool DocumentView::undo() {
+  if (!history_.undo(document_)) {
+    return false;
+  }
+  setModified(true);
+  canvas_->documentChanged();
+  emit historyChanged();
+  return true;
+}
+
+bool DocumentView::redo() {
+  if (!history_.redo(document_)) {
+    return false;
+  }
+  setModified(true);
+  canvas_->documentChanged();
+  emit historyChanged();
+  return true;
+}
+
+const DocumentHistory& DocumentView::history() const noexcept {
+  return history_;
+}
+
 QString DocumentView::tabTitle() const {
   return modified_ ? displayName_ + QStringLiteral(" •") : displayName_;
 }

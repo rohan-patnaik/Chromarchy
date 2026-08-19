@@ -21,6 +21,7 @@ public:
 
   [[nodiscard]] QSize size() const noexcept;
   [[nodiscard]] qsizetype layerCount() const noexcept;
+  [[nodiscard]] quint64 estimatedStorageBytes() const noexcept;
   [[nodiscard]] int activeLayerIndex() const noexcept;
   bool setActiveLayerIndex(int index) noexcept;
 

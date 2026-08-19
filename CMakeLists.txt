@@ -13,6 +13,8 @@ find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Widgets)
 qt_add_library(chromarchy_core STATIC
   src/core/Document.cpp
   src/core/Document.h
+  src/core/DocumentHistory.cpp
+  src/core/DocumentHistory.h
   src/core/ImageIO.cpp
   src/core/ImageIO.h
   src/core/Layer.cpp
@@ -71,6 +73,10 @@ if(BUILD_TESTING)
     chromarchy_core Qt6::Test
   )
   add_test(NAME chromarchy_native_document COMMAND chromarchy_native_document_tests)
+
+  qt_add_executable(chromarchy_history_tests tests/core/DocumentHistoryTest.cpp)
+  target_link_libraries(chromarchy_history_tests PRIVATE chromarchy_core Qt6::Test)
+  add_test(NAME chromarchy_history COMMAND chromarchy_history_tests)
 
   qt_add_executable(chromarchy_canvas_tests
     tests/ui/CanvasWidgetTest.cpp

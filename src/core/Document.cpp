@@ -26,6 +26,18 @@ qsizetype Document::layerCount() const noexcept {
   return layers_.size();
 }
 
+quint64 Document::estimatedStorageBytes() const noexcept {
+  constexpr quint64 tileBytes =
+      TiledImage::tileExtent * TiledImage::tileExtent * 4ULL;
+  quint64 bytes = sizeof(Document);
+  for (const auto& layer : layers_) {
+    bytes += sizeof(Layer) +
+             static_cast<quint64>(layer.name().size()) * sizeof(QChar) +
+             static_cast<quint64>(layer.pixels().allocatedTileCount()) * tileBytes;
+  }
+  return bytes;
+}
+
 int Document::activeLayerIndex() const noexcept {
   return activeLayerIndex_;
 }
