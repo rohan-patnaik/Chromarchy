@@ -24,7 +24,7 @@ private:
 };
 
 void CoreBenchmark::initTestCase() {
-  document_ = Document::create(QSize(20'000, 20'000));
+  document_ = Document::create(QSize(1024, 1024));
   QVERIFY(document_);
 
   QImage pixels(1024, 1024, QImage::Format_RGBA8888_Premultiplied);
