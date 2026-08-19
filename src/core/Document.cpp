@@ -14,7 +14,7 @@ std::optional<Document> Document::create(QSize size) {
   return Document(size);
 }
 
-Document::Document(QSize size) : size_(size) {
+Document::Document(QSize size) : size_(size), selection_(size) {
   addLayer(QStringLiteral("Layer 1"));
 }
 
@@ -35,11 +35,21 @@ quint64 Document::estimatedStorageBytes() const noexcept {
              static_cast<quint64>(layer.name().size()) * sizeof(QChar) +
              static_cast<quint64>(layer.pixels().allocatedTileCount()) * tileBytes;
   }
+  bytes += static_cast<quint64>(selection_.allocatedTileCount()) *
+           TiledImage::tileExtent * TiledImage::tileExtent;
   return bytes;
 }
 
 int Document::activeLayerIndex() const noexcept {
   return activeLayerIndex_;
+}
+
+const SelectionMask& Document::selection() const noexcept {
+  return selection_;
+}
+
+SelectionMask& Document::selection() noexcept {
+  return selection_;
 }
 
 bool Document::setActiveLayerIndex(int index) noexcept {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Layer.h"
+#include "core/SelectionMask.h"
 
 #include <QImage>
 #include <QSize>
@@ -23,6 +24,8 @@ public:
   [[nodiscard]] qsizetype layerCount() const noexcept;
   [[nodiscard]] quint64 estimatedStorageBytes() const noexcept;
   [[nodiscard]] int activeLayerIndex() const noexcept;
+  [[nodiscard]] const SelectionMask& selection() const noexcept;
+  [[nodiscard]] SelectionMask& selection() noexcept;
   bool setActiveLayerIndex(int index) noexcept;
 
   [[nodiscard]] const Layer* layerAt(int index) const noexcept;
@@ -42,6 +45,7 @@ private:
   [[nodiscard]] bool containsLayer(int index) const noexcept;
 
   QSize size_;
+  SelectionMask selection_;
   QVector<Layer> layers_;
   int activeLayerIndex_ = -1;
 };

@@ -21,6 +21,8 @@ qt_add_library(chromarchy_core STATIC
   src/core/Layer.h
   src/core/NativeDocumentCodec.cpp
   src/core/NativeDocumentCodec.h
+  src/core/SelectionMask.cpp
+  src/core/SelectionMask.h
   src/core/TiledImage.cpp
   src/core/TiledImage.h
 )
@@ -77,6 +79,10 @@ if(BUILD_TESTING)
   qt_add_executable(chromarchy_history_tests tests/core/DocumentHistoryTest.cpp)
   target_link_libraries(chromarchy_history_tests PRIVATE chromarchy_core Qt6::Test)
   add_test(NAME chromarchy_history COMMAND chromarchy_history_tests)
+
+  qt_add_executable(chromarchy_selection_tests tests/core/SelectionMaskTest.cpp)
+  target_link_libraries(chromarchy_selection_tests PRIVATE chromarchy_core Qt6::Test)
+  add_test(NAME chromarchy_selection COMMAND chromarchy_selection_tests)
 
   qt_add_executable(chromarchy_canvas_tests
     tests/ui/CanvasWidgetTest.cpp
