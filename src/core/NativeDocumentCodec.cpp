@@ -16,6 +16,10 @@ namespace {
 constexpr char magic[] = {'C', 'H', 'R', 'M', 'D', 'C', '0', '1'};
 constexpr quint32 maximumLayerCount = 10'000;
 constexpr quint32 maximumNameBytes = 4'096;
+constexpr quint64 maximumNativeFileBytes = 1024ULL * 1024ULL * 1024ULL;
+constexpr quint64 maximumCompressedStorageBytes = 512ULL * 1024ULL * 1024ULL;
+constexpr quint64 maximumDecodedStorageBytes = 512ULL * 1024ULL * 1024ULL;
+constexpr quint64 maximumStoredTileCount = 2'048;
 constexpr qsizetype tileByteCount =
     TiledImage::tileExtent * TiledImage::tileExtent * 4;
 constexpr quint32 maximumCompressedTileBytes =
@@ -171,6 +175,10 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
   if (!input.open(QIODevice::ReadOnly)) {
     return {.error = input.errorString()};
   }
+  if (input.size() < static_cast<qint64>(sizeof(magic)) ||
+      static_cast<quint64>(input.size()) > maximumNativeFileBytes) {
+    return {.error = streamError(QStringLiteral("file size limit"))};
+  }
 
   QDataStream stream(&input);
   configureStream(stream);
@@ -208,6 +216,9 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
       (static_cast<quint64>(height) + TiledImage::tileExtent - 1) /
       TiledImage::tileExtent;
   const quint64 maximumTileCount = columns * rows;
+  quint64 aggregateTileCount = 0;
+  quint64 aggregateCompressedBytes = 0;
+  quint64 aggregateDecodedBytes = 0;
 
   for (quint32 layerIndex = 0; layerIndex < layerCount; ++layerIndex) {
     QByteArray idBytes;
@@ -227,6 +238,14 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
         tileCount > maximumTileCount) {
       return {.error = streamError(QStringLiteral("layer properties"))};
     }
+    aggregateTileCount += tileCount;
+    const auto layerDecodedBytes = static_cast<quint64>(tileCount) *
+                                   static_cast<quint64>(tileByteCount);
+    if (aggregateTileCount > maximumStoredTileCount ||
+        aggregateDecodedBytes > maximumDecodedStorageBytes - layerDecodedBytes) {
+      return {.error = streamError(QStringLiteral("aggregate tile storage limit"))};
+    }
+    aggregateDecodedBytes += layerDecodedBytes;
 
     document->layers_.emplaceBack(QString::fromUtf8(nameBytes), document->size_);
     auto& layer = document->layers_.back();
@@ -255,6 +274,11 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
                                     maximumCompressedTileBytes)) {
         return {.error = streamError(QStringLiteral("tile payload"))};
       }
+      if (aggregateCompressedBytes >
+          maximumCompressedStorageBytes - static_cast<quint64>(compressed.size())) {
+        return {.error = streamError(QStringLiteral("compressed storage limit"))};
+      }
+      aggregateCompressedBytes += static_cast<quint64>(compressed.size());
       const auto pixels = qUncompress(compressed);
       if (pixels.size() != tileByteCount) {
         return {.error = streamError(QStringLiteral("tile decompression"))};
@@ -275,6 +299,16 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
         selectionTileCount > maximumTileCount) {
       return {.error = streamError(QStringLiteral("selection properties"))};
     }
+    aggregateTileCount += selectionTileCount;
+    const auto selectionDecodedBytes =
+        static_cast<quint64>(selectionTileCount) *
+        static_cast<quint64>(selectionTileByteCount);
+    if (aggregateTileCount > maximumStoredTileCount ||
+        aggregateDecodedBytes >
+            maximumDecodedStorageBytes - selectionDecodedBytes) {
+      return {.error = streamError(QStringLiteral("aggregate selection storage limit"))};
+    }
+    aggregateDecodedBytes += selectionDecodedBytes;
     document->selection_.baseCoverage_ = baseCoverage;
     QSet<TileIndex> seenSelectionTiles;
     for (quint32 tileNumber = 0; tileNumber < selectionTileCount; ++tileNumber) {
@@ -296,6 +330,11 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
                                     maximumCompressedSelectionTileBytes)) {
         return {.error = streamError(QStringLiteral("selection tile payload"))};
       }
+      if (aggregateCompressedBytes >
+          maximumCompressedStorageBytes - static_cast<quint64>(compressed.size())) {
+        return {.error = streamError(QStringLiteral("compressed storage limit"))};
+      }
+      aggregateCompressedBytes += static_cast<quint64>(compressed.size());
       const auto coverage = qUncompress(compressed);
       if (coverage.size() != selectionTileByteCount) {
         return {.error = streamError(

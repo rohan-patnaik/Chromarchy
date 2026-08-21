@@ -7,6 +7,7 @@
 #include <QImageWriter>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QtEndian>
 
 using chromarchy::Document;
 using chromarchy::ImageIO;
@@ -22,6 +23,8 @@ private slots:
   void roundTripsSupportedFormats();
   void exportStripsSourceMetadataByDefault();
   void oversizedSparseExportFailsBeforeAllocation();
+  void oversizedDeclaredImportFailsBeforeDecode();
+  void oversizedSparseInputFileFailsBeforeDecode();
 };
 
 void ImageIOTest::opensImageIntoRealPixelTiles() {
@@ -152,6 +155,44 @@ void ImageIOTest::oversizedSparseExportFailsBeforeAllocation() {
   QVERIFY(!result);
   QVERIFY(result.error.contains(QStringLiteral("bounded export limit")));
   QVERIFY(!QFileInfo::exists(path));
+}
+
+void ImageIOTest::oversizedDeclaredImportFailsBeforeDecode() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("oversized.bmp"));
+  QByteArray header(54, '\0');
+  header[0] = 'B';
+  header[1] = 'M';
+  qToLittleEndian<quint32>(54, reinterpret_cast<uchar*>(header.data() + 2));
+  qToLittleEndian<quint32>(54, reinterpret_cast<uchar*>(header.data() + 10));
+  qToLittleEndian<quint32>(40, reinterpret_cast<uchar*>(header.data() + 14));
+  qToLittleEndian<quint32>(100'000, reinterpret_cast<uchar*>(header.data() + 18));
+  qToLittleEndian<quint32>(100'000, reinterpret_cast<uchar*>(header.data() + 22));
+  qToLittleEndian<quint16>(1, reinterpret_cast<uchar*>(header.data() + 26));
+  qToLittleEndian<quint16>(24, reinterpret_cast<uchar*>(header.data() + 28));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  QCOMPARE(file.write(header), header.size());
+  file.close();
+
+  const auto result = ImageIO::open(path);
+  QVERIFY(!result);
+  QVERIFY(result.error.contains(QStringLiteral("bounded import limit")));
+}
+
+void ImageIOTest::oversizedSparseInputFileFailsBeforeDecode() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("oversized.png"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  QVERIFY(file.resize(512LL * 1024LL * 1024LL + 1));
+  file.close();
+
+  const auto result = ImageIO::open(path);
+  QVERIFY(!result);
+  QVERIFY(result.error.contains(QStringLiteral("bounded input size limit")));
 }
 
 QTEST_APPLESS_MAIN(ImageIOTest)

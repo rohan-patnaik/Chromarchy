@@ -30,6 +30,12 @@ QImage flattenForJpeg(const QImage& source) {
 }  // namespace
 
 DocumentLoadResult ImageIO::open(const QString& filePath) {
+  const QFileInfo inputInfo(filePath);
+  if (!inputInfo.isFile() || inputInfo.size() < 0 ||
+      static_cast<quint64>(inputInfo.size()) > maximumImportFileBytes) {
+    return {.error = QStringLiteral(
+                "Image file is missing or exceeds the bounded input size limit.")};
+  }
   QImageReader reader(filePath);
   reader.setAutoTransform(true);
   if (!reader.canRead()) {
@@ -42,6 +48,14 @@ DocumentLoadResult ImageIO::open(const QString& filePath) {
       declaredSize.height() > Document::maximumDimension) {
     return {.error = QStringLiteral("Image dimensions are invalid or exceed %1 pixels.")
                          .arg(Document::maximumDimension)};
+  }
+  const auto pixelCount = static_cast<quint64>(declaredSize.width()) *
+                          static_cast<quint64>(declaredSize.height());
+  if (pixelCount > maximumImportPixels ||
+      pixelCount > maximumImportDecodedBytes / 4) {
+    return {.error = QStringLiteral(
+                "Image decode requires %1 megapixels, above the bounded import limit.")
+                        .arg(pixelCount / 1'000'000.0, 0, 'f', 1)};
   }
 
   const auto image = reader.read();

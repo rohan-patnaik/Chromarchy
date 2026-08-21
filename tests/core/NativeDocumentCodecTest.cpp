@@ -19,6 +19,8 @@ private slots:
   void loadsVersionOneWithoutSelection();
   void rejectsCorruptAndTruncatedDocuments();
   void rejectsNonFiniteLayerOpacity();
+  void rejectsOversizedSparseFileBeforeParsing();
+  void rejectsAggregateTileStorageBeforePayloadDecode();
 };
 
 void NativeDocumentCodecTest::preservesLayeredDocument() {
@@ -161,6 +163,42 @@ void NativeDocumentCodecTest::rejectsNonFiniteLayerOpacity() {
   const auto loaded = NativeDocumentCodec::load(path);
   QVERIFY(!loaded);
   QVERIFY(loaded.error.contains(QStringLiteral("layer properties")));
+}
+
+void NativeDocumentCodecTest::rejectsOversizedSparseFileBeforeParsing() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("oversized.chromarchy"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  QVERIFY(file.resize(1024LL * 1024LL * 1024LL + 1));
+  file.close();
+
+  const auto loaded = NativeDocumentCodec::load(path);
+  QVERIFY(!loaded);
+  QVERIFY(loaded.error.contains(QStringLiteral("file size limit")));
+}
+
+void NativeDocumentCodecTest::rejectsAggregateTileStorageBeforePayloadDecode() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("tile-budget.chromarchy"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  QDataStream stream(&file);
+  stream.setVersion(QDataStream::Qt_6_6);
+  stream.setByteOrder(QDataStream::LittleEndian);
+  QCOMPARE(stream.writeRawData("CHRMDC01", 8), 8);
+  stream << quint32(2) << 300'000 << 300'000 << quint32(1) << 0;
+  const auto id = QUuid::createUuid().toRfc4122();
+  stream << quint32(id.size());
+  QCOMPARE(stream.writeRawData(id.constData(), id.size()), id.size());
+  stream << quint32(0) << quint8(1) << quint8(0) << 1.0 << quint32(2'049);
+  file.close();
+
+  const auto loaded = NativeDocumentCodec::load(path);
+  QVERIFY(!loaded);
+  QVERIFY(loaded.error.contains(QStringLiteral("aggregate tile storage limit")));
 }
 
 QTEST_APPLESS_MAIN(NativeDocumentCodecTest)

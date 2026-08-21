@@ -29,6 +29,9 @@ struct ImageWriteResult final {
 class ImageIO final {
 public:
   static constexpr quint64 maximumExportPixels = 64ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumImportPixels = 64ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumImportDecodedBytes = 256ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumImportFileBytes = 512ULL * 1024ULL * 1024ULL;
 
   [[nodiscard]] static DocumentLoadResult open(const QString& filePath);
   [[nodiscard]] static ImageWriteResult exportComposite(
