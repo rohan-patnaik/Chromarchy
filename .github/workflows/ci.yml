@@ -24,6 +24,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Trust exact checked-out workspace
+        timeout-minutes: 1
+        run: |
+          test -n "$GITHUB_WORKSPACE"
+          case "$GITHUB_WORKSPACE" in
+            /*) ;;
+            *) echo 'GITHUB_WORKSPACE must be absolute' >&2; exit 1 ;;
+          esac
+          test -e "$GITHUB_WORKSPACE/.git"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel)" = \
+            "$GITHUB_WORKSPACE"
+
       - name: Validate offline capability catalog
         timeout-minutes: 2
         env:
@@ -49,7 +62,6 @@ jobs:
       - name: Build and verify Arch package
         timeout-minutes: 25
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           source_root=$(mktemp -d)
           mkdir "$source_root/Chromarchy"

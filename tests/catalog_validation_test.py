@@ -103,6 +103,15 @@ class CatalogValidationTest(unittest.TestCase):
                 previous_history=previous,
             )
 
+    def test_git_failure_diagnostic_is_bounded_and_redacted(self) -> None:
+        diagnostic = MODULE.bounded_git_error(
+            f"fatal:\n dubious ownership in {MODULE.ROOT}\t" + "x" * 400
+        )
+        self.assertLessEqual(len(diagnostic), 240)
+        self.assertNotIn(str(MODULE.ROOT), diagnostic)
+        self.assertIn("<workspace>", diagnostic)
+        self.assertNotIn("\n", diagnostic)
+
 
 if __name__ == "__main__":
     unittest.main()

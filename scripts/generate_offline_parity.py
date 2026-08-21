@@ -62,6 +62,12 @@ def load_history() -> dict:
         fail(f"cannot read capability ID history: {error}")
 
 
+def bounded_git_error(stderr: str) -> str:
+    diagnostic = re.sub(r"[\x00-\x1f\x7f]+", " ", stderr).strip()
+    diagnostic = diagnostic.replace(str(ROOT), "<workspace>")
+    return (diagnostic or "no diagnostic from git")[:240]
+
+
 def load_previous_history() -> dict | None:
     revision = os.environ.get("CHROMARCHY_ID_BASE_REVISION", "").strip()
     if not revision or revision == "0" * 40:
@@ -75,7 +81,10 @@ def load_previous_history() -> dict | None:
         timeout=10,
     )
     if result.returncode != 0:
-        fail(f"cannot read capability ID history at base revision {revision}")
+        fail(
+            f"cannot read capability ID history at base revision {revision}; "
+            f"git show: {bounded_git_error(result.stderr)}"
+        )
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as error:
