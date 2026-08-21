@@ -2,6 +2,7 @@
 
 #include <QDataStream>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QtEndian>
@@ -21,6 +22,8 @@ private slots:
   void rejectsNonFiniteLayerOpacity();
   void rejectsOversizedSparseFileBeforeParsing();
   void rejectsAggregateTileStorageBeforePayloadDecode();
+  void exactAggregateTileLimitRoundTripsWithinFileBound();
+  void overLimitSavePreservesExistingDestination();
 };
 
 void NativeDocumentCodecTest::preservesLayeredDocument() {
@@ -171,7 +174,8 @@ void NativeDocumentCodecTest::rejectsOversizedSparseFileBeforeParsing() {
   const auto path = directory.filePath(QStringLiteral("oversized.chromarchy"));
   QFile file(path);
   QVERIFY(file.open(QIODevice::WriteOnly));
-  QVERIFY(file.resize(1024LL * 1024LL * 1024LL + 1));
+  QVERIFY(file.resize(
+      static_cast<qint64>(NativeDocumentCodec::maximumNativeFileBytes + 1)));
   file.close();
 
   const auto loaded = NativeDocumentCodec::load(path);
@@ -193,12 +197,65 @@ void NativeDocumentCodecTest::rejectsAggregateTileStorageBeforePayloadDecode() {
   const auto id = QUuid::createUuid().toRfc4122();
   stream << quint32(id.size());
   QCOMPARE(stream.writeRawData(id.constData(), id.size()), id.size());
-  stream << quint32(0) << quint8(1) << quint8(0) << 1.0 << quint32(2'049);
+  stream << quint32(0) << quint8(1) << quint8(0) << 1.0
+         << quint32(NativeDocumentCodec::maximumStoredTileCount + 1);
   file.close();
 
   const auto loaded = NativeDocumentCodec::load(path);
   QVERIFY(!loaded);
   QVERIFY(loaded.error.contains(QStringLiteral("aggregate tile storage limit")));
+}
+
+void NativeDocumentCodecTest::exactAggregateTileLimitRoundTripsWithinFileBound() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("exact-limit.chromarchy"));
+  auto document = Document::create(QSize(2048, 2048));
+  QVERIFY(document);
+  for (quint64 index = 0;
+       index < NativeDocumentCodec::maximumStoredTileCount; ++index) {
+    const QPoint position(static_cast<int>(index % 8) * 256,
+                          static_cast<int>(index / 8) * 256);
+    QVERIFY(document->layerAt(0)->setPixelColor(position, QColor(1, 2, 3, 255)));
+  }
+
+  const auto saved = NativeDocumentCodec::save(*document, path);
+  QVERIFY2(saved, qPrintable(saved.error));
+  const QFileInfo output(path);
+  QVERIFY(output.size() > 0);
+  QVERIFY(static_cast<quint64>(output.size()) <=
+          NativeDocumentCodec::maximumNativeFileBytes);
+  const auto loaded = NativeDocumentCodec::load(path);
+  QVERIFY2(loaded, qPrintable(loaded.error));
+  QCOMPARE(loaded.document->layerAt(0)->pixels().allocatedTileCount(),
+           static_cast<qsizetype>(NativeDocumentCodec::maximumStoredTileCount));
+}
+
+void NativeDocumentCodecTest::overLimitSavePreservesExistingDestination() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("preserved.chromarchy"));
+  const QByteArray original("existing destination bytes");
+  QFile destination(path);
+  QVERIFY(destination.open(QIODevice::WriteOnly));
+  QCOMPARE(destination.write(original), original.size());
+  destination.close();
+
+  auto document = Document::create(QSize(2304, 2048));
+  QVERIFY(document);
+  for (quint64 index = 0;
+       index <= NativeDocumentCodec::maximumStoredTileCount; ++index) {
+    const QPoint position(static_cast<int>(index % 9) * 256,
+                          static_cast<int>(index / 9) * 256);
+    QVERIFY(document->layerAt(0)->setPixelColor(position, Qt::red));
+  }
+
+  const auto saved = NativeDocumentCodec::save(*document, path);
+  QVERIFY(!saved);
+  QVERIFY(saved.error.contains(QStringLiteral("64-tile limit")));
+  QVERIFY(saved.error.contains(QStringLiteral("destination was preserved")));
+  QVERIFY(destination.open(QIODevice::ReadOnly));
+  QCOMPARE(destination.readAll(), original);
 }
 
 QTEST_APPLESS_MAIN(NativeDocumentCodecTest)

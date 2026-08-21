@@ -30,6 +30,13 @@ class NativeDocumentCodec final {
 public:
   static constexpr quint32 formatVersion = 2;
   static constexpr auto extension = ".chromarchy";
+  static constexpr quint32 maximumLayerCount = 10'000;
+  static constexpr quint64 maximumNativeFileBytes = 64ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumCompressedStorageBytes =
+      32ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumDecodedStorageBytes =
+      16ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 maximumStoredTileCount = 64;
 
   [[nodiscard]] static NativeDocumentWriteResult save(
       const Document& document, const QString& filePath);

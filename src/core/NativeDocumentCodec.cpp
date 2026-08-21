@@ -14,12 +14,7 @@ namespace chromarchy {
 namespace {
 
 constexpr char magic[] = {'C', 'H', 'R', 'M', 'D', 'C', '0', '1'};
-constexpr quint32 maximumLayerCount = 10'000;
 constexpr quint32 maximumNameBytes = 4'096;
-constexpr quint64 maximumNativeFileBytes = 1024ULL * 1024ULL * 1024ULL;
-constexpr quint64 maximumCompressedStorageBytes = 512ULL * 1024ULL * 1024ULL;
-constexpr quint64 maximumDecodedStorageBytes = 512ULL * 1024ULL * 1024ULL;
-constexpr quint64 maximumStoredTileCount = 2'048;
 constexpr qsizetype tileByteCount =
     TiledImage::tileExtent * TiledImage::tileExtent * 4;
 constexpr quint32 maximumCompressedTileBytes =
@@ -71,13 +66,57 @@ QString streamError(const QString& detail) {
   return QStringLiteral("Invalid Chromarchy document: %1").arg(detail);
 }
 
+QString saveLimitError(const QString& detail) {
+  return QStringLiteral("Chromarchy document was not saved: %1. The existing "
+                        "destination was preserved.")
+      .arg(detail);
+}
+
+bool exceedsWrittenFileLimit(const QSaveFile& output) {
+  return output.pos() < 0 ||
+         static_cast<quint64>(output.pos()) >
+             NativeDocumentCodec::maximumNativeFileBytes;
+}
+
 }  // namespace
 
 NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
                                                      const QString& filePath) {
   if (document.layers_.isEmpty() ||
-      document.layers_.size() > maximumLayerCount) {
+      document.layers_.size() > NativeDocumentCodec::maximumLayerCount) {
     return {.error = QStringLiteral("The document layer count cannot be saved.")};
+  }
+
+  quint64 aggregateTileCount = document.selection_.tiles_.size();
+  quint64 aggregateDecodedBytes =
+      aggregateTileCount * static_cast<quint64>(selectionTileByteCount);
+  for (const auto& layer : document.layers_) {
+    const auto layerTileCount =
+        static_cast<quint64>(layer.pixels_.allocatedTileCount());
+    if (layerTileCount > NativeDocumentCodec::maximumStoredTileCount ||
+        aggregateTileCount >
+        NativeDocumentCodec::maximumStoredTileCount - layerTileCount) {
+      return {.error = saveLimitError(QStringLiteral(
+                  "stored tile count exceeds the %1-tile limit")
+                  .arg(NativeDocumentCodec::maximumStoredTileCount))};
+    }
+    aggregateTileCount += layerTileCount;
+    const auto layerDecodedBytes =
+        layerTileCount * static_cast<quint64>(tileByteCount);
+    if (layerDecodedBytes >
+            NativeDocumentCodec::maximumDecodedStorageBytes ||
+        aggregateDecodedBytes >
+        NativeDocumentCodec::maximumDecodedStorageBytes - layerDecodedBytes) {
+      return {.error = saveLimitError(QStringLiteral(
+                  "decoded tile storage exceeds the %1-byte limit")
+                  .arg(NativeDocumentCodec::maximumDecodedStorageBytes))};
+    }
+    aggregateDecodedBytes += layerDecodedBytes;
+  }
+  if (aggregateTileCount > NativeDocumentCodec::maximumStoredTileCount ||
+      aggregateDecodedBytes >
+          NativeDocumentCodec::maximumDecodedStorageBytes) {
+    return {.error = saveLimitError(QStringLiteral("aggregate tile storage limit"))};
   }
 
   QSaveFile output(filePath);
@@ -94,6 +133,7 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
   stream << formatVersion << document.size_.width() << document.size_.height()
          << static_cast<quint32>(document.layers_.size())
          << document.activeLayerIndex_;
+  quint64 aggregateCompressedBytes = 0;
 
   for (const auto& layer : document.layers_) {
     if (!std::isfinite(layer.opacity_) || layer.opacity_ < 0.0 ||
@@ -126,9 +166,21 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
       stream << tile.origin.x() << tile.origin.y();
       const auto compressed = qCompress(tileBytes(tile.pixels), 6);
       if (compressed.size() > maximumCompressedTileBytes ||
+          aggregateCompressedBytes >
+              NativeDocumentCodec::maximumCompressedStorageBytes -
+                  static_cast<quint64>(compressed.size()) ||
           !writeBytes(stream, compressed)) {
         output.cancelWriting();
-        return {.error = output.errorString()};
+        return {.error = saveLimitError(QStringLiteral(
+                    "compressed tile storage exceeds the %1-byte limit")
+                    .arg(NativeDocumentCodec::maximumCompressedStorageBytes))};
+      }
+      aggregateCompressedBytes += static_cast<quint64>(compressed.size());
+      if (exceedsWrittenFileLimit(output)) {
+        output.cancelWriting();
+        return {.error = saveLimitError(QStringLiteral(
+                    "written output exceeds the %1-byte file limit")
+                    .arg(NativeDocumentCodec::maximumNativeFileBytes))};
       }
     }
   }
@@ -154,9 +206,21 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
         static_cast<qsizetype>(tile.pixels.sizeInBytes()));
     const auto compressed = qCompress(raw, 6);
     if (compressed.size() > maximumCompressedSelectionTileBytes ||
+        aggregateCompressedBytes >
+            NativeDocumentCodec::maximumCompressedStorageBytes -
+                static_cast<quint64>(compressed.size()) ||
         !writeBytes(stream, compressed)) {
       output.cancelWriting();
-      return {.error = output.errorString()};
+      return {.error = saveLimitError(QStringLiteral(
+                  "compressed tile storage exceeds the %1-byte limit")
+                  .arg(NativeDocumentCodec::maximumCompressedStorageBytes))};
+    }
+    aggregateCompressedBytes += static_cast<quint64>(compressed.size());
+    if (exceedsWrittenFileLimit(output)) {
+      output.cancelWriting();
+      return {.error = saveLimitError(QStringLiteral(
+                  "written output exceeds the %1-byte file limit")
+                  .arg(NativeDocumentCodec::maximumNativeFileBytes))};
     }
   }
 
@@ -176,7 +240,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     return {.error = input.errorString()};
   }
   if (input.size() < static_cast<qint64>(sizeof(magic)) ||
-      static_cast<quint64>(input.size()) > maximumNativeFileBytes) {
+      static_cast<quint64>(input.size()) >
+          NativeDocumentCodec::maximumNativeFileBytes) {
     return {.error = streamError(QStringLiteral("file size limit"))};
   }
 
@@ -197,7 +262,7 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
   if (version == 0 || version > formatVersion) {
     return {.error = streamError(QStringLiteral("unsupported version %1").arg(version))};
   }
-  if (layerCount == 0 || layerCount > maximumLayerCount ||
+  if (layerCount == 0 || layerCount > NativeDocumentCodec::maximumLayerCount ||
       activeLayer < 0 || activeLayer >= static_cast<int>(layerCount)) {
     return {.error = streamError(QStringLiteral("layer table"))};
   }
@@ -241,8 +306,9 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     aggregateTileCount += tileCount;
     const auto layerDecodedBytes = static_cast<quint64>(tileCount) *
                                    static_cast<quint64>(tileByteCount);
-    if (aggregateTileCount > maximumStoredTileCount ||
-        aggregateDecodedBytes > maximumDecodedStorageBytes - layerDecodedBytes) {
+    if (aggregateTileCount > NativeDocumentCodec::maximumStoredTileCount ||
+        aggregateDecodedBytes >
+            NativeDocumentCodec::maximumDecodedStorageBytes - layerDecodedBytes) {
       return {.error = streamError(QStringLiteral("aggregate tile storage limit"))};
     }
     aggregateDecodedBytes += layerDecodedBytes;
@@ -275,7 +341,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
         return {.error = streamError(QStringLiteral("tile payload"))};
       }
       if (aggregateCompressedBytes >
-          maximumCompressedStorageBytes - static_cast<quint64>(compressed.size())) {
+          NativeDocumentCodec::maximumCompressedStorageBytes -
+              static_cast<quint64>(compressed.size())) {
         return {.error = streamError(QStringLiteral("compressed storage limit"))};
       }
       aggregateCompressedBytes += static_cast<quint64>(compressed.size());
@@ -303,9 +370,10 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     const auto selectionDecodedBytes =
         static_cast<quint64>(selectionTileCount) *
         static_cast<quint64>(selectionTileByteCount);
-    if (aggregateTileCount > maximumStoredTileCount ||
+    if (aggregateTileCount > NativeDocumentCodec::maximumStoredTileCount ||
         aggregateDecodedBytes >
-            maximumDecodedStorageBytes - selectionDecodedBytes) {
+            NativeDocumentCodec::maximumDecodedStorageBytes -
+                selectionDecodedBytes) {
       return {.error = streamError(QStringLiteral("aggregate selection storage limit"))};
     }
     aggregateDecodedBytes += selectionDecodedBytes;
@@ -331,7 +399,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
         return {.error = streamError(QStringLiteral("selection tile payload"))};
       }
       if (aggregateCompressedBytes >
-          maximumCompressedStorageBytes - static_cast<quint64>(compressed.size())) {
+          NativeDocumentCodec::maximumCompressedStorageBytes -
+              static_cast<quint64>(compressed.size())) {
         return {.error = streamError(QStringLiteral("compressed storage limit"))};
       }
       aggregateCompressedBytes += static_cast<quint64>(compressed.size());

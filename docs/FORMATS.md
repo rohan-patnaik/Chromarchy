@@ -28,9 +28,11 @@ Metadata inspection and selective preservation controls are planned. Until those
 
 ## Native document bounds
 
-Native loads reject files above 1 GiB, more than 2,048 combined pixel/selection
-tiles, more than 512 MiB of aggregate compressed tile payload, or more than 512
-MiB of aggregate decoded tile payload. Per-tile compressed and decompressed
+Native loads and saves reject files above 64 MiB, more than 64 combined
+pixel/selection tiles, more than 32 MiB of aggregate compressed tile payload,
+or more than 16 MiB of aggregate decoded tile payload. Save checks are applied
+before atomic publication, and any failure preserves an existing destination.
+Per-tile compressed and decompressed
 sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and
 in-process, so cancellation, wall-time enforcement, and helper isolation remain
