@@ -38,10 +38,6 @@ DocumentLoadResult ImageIO::open(const QString& filePath) {
   }
   QImageReader reader(filePath);
   reader.setAutoTransform(true);
-  if (!reader.canRead()) {
-    return {.error = reader.errorString()};
-  }
-
   const auto declaredSize = reader.size();
   if (declaredSize.width() <= 0 || declaredSize.height() <= 0 ||
       declaredSize.width() > Document::maximumDimension ||
@@ -56,6 +52,9 @@ DocumentLoadResult ImageIO::open(const QString& filePath) {
     return {.error = QStringLiteral(
                 "Image decode requires %1 megapixels, above the bounded import limit.")
                         .arg(pixelCount / 1'000'000.0, 0, 'f', 1)};
+  }
+  if (!reader.canRead()) {
+    return {.error = reader.errorString()};
   }
 
   const auto image = reader.read();

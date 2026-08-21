@@ -7,7 +7,6 @@
 #include <QImageWriter>
 #include <QTemporaryDir>
 #include <QTest>
-#include <QtEndian>
 
 using chromarchy::Document;
 using chromarchy::ImageIO;
@@ -160,17 +159,14 @@ void ImageIOTest::oversizedSparseExportFailsBeforeAllocation() {
 void ImageIOTest::oversizedDeclaredImportFailsBeforeDecode() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
-  const auto path = directory.filePath(QStringLiteral("oversized.bmp"));
-  QByteArray header(54, '\0');
-  header[0] = 'B';
-  header[1] = 'M';
-  qToLittleEndian<quint32>(54, reinterpret_cast<uchar*>(header.data() + 2));
-  qToLittleEndian<quint32>(54, reinterpret_cast<uchar*>(header.data() + 10));
-  qToLittleEndian<quint32>(40, reinterpret_cast<uchar*>(header.data() + 14));
-  qToLittleEndian<quint32>(100'000, reinterpret_cast<uchar*>(header.data() + 18));
-  qToLittleEndian<quint32>(100'000, reinterpret_cast<uchar*>(header.data() + 22));
-  qToLittleEndian<quint16>(1, reinterpret_cast<uchar*>(header.data() + 26));
-  qToLittleEndian<quint16>(24, reinterpret_cast<uchar*>(header.data() + 28));
+  const auto path = directory.filePath(QStringLiteral("oversized.png"));
+  // Original minimal PNG header declaring 100,000 x 100,000 RGBA8 pixels.
+  // The IHDR CRC is valid; no image payload is needed because the application
+  // must reject the declared allocation before asking libpng to decode it.
+  const auto header = QByteArray::fromHex(
+      "89504e470d0a1a0a0000000d49484452000186a0000186a00806000000a8520bc8"
+      "000000004944415435af061e"
+      "0000000049454e44ae426082");
   QFile file(path);
   QVERIFY(file.open(QIODevice::WriteOnly));
   QCOMPARE(file.write(header), header.size());
