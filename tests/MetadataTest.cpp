@@ -3,6 +3,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -27,6 +28,8 @@ private slots:
   void launcherIsDetachedFromShellLifecycle();
   void launcherHelperReportsEarlyExit();
   void launcherHelperReportsPermissionDeniedCandidate();
+  void launcherHelperSkipsUnusableCandidate();
+  void launcherHelperPreservesEmptyPathComponents();
 };
 
 void MetadataTest::manifestDescribesMenuPlugin() {
@@ -60,6 +63,22 @@ void MetadataTest::launcherReportsMissingBinary() {
   QVERIFY(helper.contains("Chromarchy is not installed"));
   QVERIFY(helper.contains("notify-send"));
   QVERIFY(helper.contains("exit 127"));
+
+  QTemporaryDir emptyPath;
+  QVERIFY(emptyPath.isValid());
+  QProcess process;
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert(QStringLiteral("PATH"), emptyPath.path());
+  process.setProcessEnvironment(environment);
+  process.start(QStringLiteral("/bin/sh"),
+                {QStringLiteral(CHROMARCHY_SOURCE_DIR
+                                "/scripts/launch-chromarchy")});
+  QVERIFY(process.waitForFinished(5'000));
+  QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(process.exitCode(), 127);
+  const auto error = process.readAllStandardError();
+  QVERIFY(error.contains("Chromarchy is not installed"));
+  QVERIFY(error.contains("Install the native chromarchy binary on PATH"));
 }
 
 void MetadataTest::launcherHelperReportsPermissionDeniedCandidate() {
@@ -74,10 +93,9 @@ void MetadataTest::launcherHelperReportsPermissionDeniedCandidate() {
 
   QProcess process;
   auto environment = QProcessEnvironment::systemEnvironment();
-  environment.insert(QStringLiteral("PATH"),
-                     directory.path() + QStringLiteral(":/usr/bin:/bin"));
+  environment.insert(QStringLiteral("PATH"), directory.path());
   process.setProcessEnvironment(environment);
-  process.start(QStringLiteral("sh"),
+  process.start(QStringLiteral("/bin/sh"),
                 {QStringLiteral(CHROMARCHY_SOURCE_DIR
                                 "/scripts/launch-chromarchy")});
   QVERIFY(process.waitForFinished(5'000));
@@ -109,10 +127,9 @@ void MetadataTest::launcherHelperReportsEarlyExit() {
 
   QProcess process;
   auto environment = QProcessEnvironment::systemEnvironment();
-  environment.insert(QStringLiteral("PATH"),
-                     directory.path() + QStringLiteral(":/usr/bin:/bin"));
+  environment.insert(QStringLiteral("PATH"), directory.path());
   process.setProcessEnvironment(environment);
-  process.start(QStringLiteral("sh"),
+  process.start(QStringLiteral("/bin/sh"),
                 {QStringLiteral(CHROMARCHY_SOURCE_DIR
                                 "/scripts/launch-chromarchy")});
   QVERIFY(process.waitForFinished(5'000));
@@ -120,6 +137,77 @@ void MetadataTest::launcherHelperReportsEarlyExit() {
   const auto error = process.readAllStandardError();
   QVERIFY(error.contains("Chromarchy exited unexpectedly"));
   QVERIFY(error.contains("status 42"));
+}
+
+void MetadataTest::launcherHelperSkipsUnusableCandidate() {
+  QTemporaryDir unusableDirectory;
+  QTemporaryDir executableDirectory;
+  QVERIFY(unusableDirectory.isValid());
+  QVERIFY(executableDirectory.isValid());
+
+  QFile unusable(unusableDirectory.filePath(QStringLiteral("chromarchy")));
+  QVERIFY(unusable.open(QIODevice::WriteOnly));
+  QCOMPARE(unusable.write("#!/bin/sh\nexit 0\n"), 17);
+  unusable.close();
+  QVERIFY(unusable.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+
+  const auto executablePath =
+      executableDirectory.filePath(QStringLiteral("chromarchy"));
+  QFile executable(executablePath);
+  QVERIFY(executable.open(QIODevice::WriteOnly));
+  QCOMPARE(executable.write("#!/bin/sh\nexit 23\n"), 18);
+  executable.close();
+  QVERIFY(executable.setPermissions(QFileDevice::ReadOwner |
+                                    QFileDevice::WriteOwner |
+                                    QFileDevice::ExeOwner));
+
+  QProcess process;
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert(QStringLiteral("PATH"),
+                     unusableDirectory.path() + QStringLiteral(":") +
+                         executableDirectory.path());
+  process.setProcessEnvironment(environment);
+  process.start(QStringLiteral("/bin/sh"),
+                {QStringLiteral(CHROMARCHY_SOURCE_DIR
+                                "/scripts/launch-chromarchy")});
+  QVERIFY(process.waitForFinished(5'000));
+  QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(process.exitCode(), 23);
+  const auto error = process.readAllStandardError();
+  QVERIFY(error.contains("Chromarchy exited unexpectedly"));
+  QVERIFY(error.contains(executablePath.toUtf8()));
+  QVERIFY(!error.contains("not an executable regular file"));
+}
+
+void MetadataTest::launcherHelperPreservesEmptyPathComponents() {
+  QTemporaryDir workingDirectory;
+  QVERIFY(workingDirectory.isValid());
+  QFile executable(workingDirectory.filePath(QStringLiteral("chromarchy")));
+  QVERIFY(executable.open(QIODevice::WriteOnly));
+  QCOMPARE(executable.write("#!/bin/sh\nexit 24\n"), 18);
+  executable.close();
+  QVERIFY(executable.setPermissions(QFileDevice::ReadOwner |
+                                    QFileDevice::WriteOwner |
+                                    QFileDevice::ExeOwner));
+
+  const QStringList pathValues = {QStringLiteral(":/definitely/not/present"),
+                                  QStringLiteral("/definitely/not/present:")};
+  for (const auto& pathValue : pathValues) {
+    QProcess process;
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("PATH"), pathValue);
+    process.setProcessEnvironment(environment);
+    process.setWorkingDirectory(workingDirectory.path());
+    process.start(QStringLiteral("/bin/sh"),
+                  {QStringLiteral(CHROMARCHY_SOURCE_DIR
+                                  "/scripts/launch-chromarchy")});
+    QVERIFY2(process.waitForFinished(5'000), qPrintable(pathValue));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(process.exitCode(), 24);
+    const auto error = process.readAllStandardError();
+    QVERIFY2(error.contains("native application at ./chromarchy"),
+             error.constData());
+  }
 }
 
 QTEST_APPLESS_MAIN(MetadataTest)

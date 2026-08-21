@@ -11,26 +11,41 @@ report_failure() {
 }
 
 binary=
-old_ifs=$IFS
-IFS=:
-for directory in ${PATH:-}; do
+first_unusable=
+remaining_path=${PATH-}
+while :; do
+  case $remaining_path in
+    *:*)
+      directory=${remaining_path%%:*}
+      remaining_path=${remaining_path#*:}
+      last_component=0
+      ;;
+    *)
+      directory=$remaining_path
+      last_component=1
+      ;;
+  esac
   [ -n "$directory" ] || directory=.
   candidate=$directory/chromarchy
-  if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+  if [ -f "$candidate" ] && [ -x "$candidate" ]; then
     binary=$candidate
     break
   fi
+  if { [ -e "$candidate" ] || [ -L "$candidate" ]; } &&
+     [ -z "$first_unusable" ]; then
+    first_unusable=$candidate
+  fi
+  [ "$last_component" -eq 0 ] || break
 done
-IFS=$old_ifs
 if [ -z "$binary" ]; then
+  if [ -n "$first_unusable" ]; then
+    report_failure "Chromarchy cannot be launched" \
+      "Found $first_unusable on PATH, but it is not an executable regular file. Check its permissions or installation."
+    exit 126
+  fi
   report_failure "Chromarchy is not installed" \
     "Install the native chromarchy binary on PATH, then try again."
   exit 127
-fi
-if [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
-  report_failure "Chromarchy cannot be launched" \
-    "Found $binary on PATH, but it is not an executable regular file. Check its permissions or installation."
-  exit 126
 fi
 
 "$binary" "$@" </dev/null &
