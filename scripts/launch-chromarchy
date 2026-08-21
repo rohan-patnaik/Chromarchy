@@ -10,7 +10,18 @@ report_failure() {
   fi
 }
 
-binary=$(command -v chromarchy 2>/dev/null || :)
+binary=
+old_ifs=$IFS
+IFS=:
+for directory in ${PATH:-}; do
+  [ -n "$directory" ] || directory=.
+  candidate=$directory/chromarchy
+  if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+    binary=$candidate
+    break
+  fi
+done
+IFS=$old_ifs
 if [ -z "$binary" ]; then
   report_failure "Chromarchy is not installed" \
     "Install the native chromarchy binary on PATH, then try again."
@@ -18,7 +29,7 @@ if [ -z "$binary" ]; then
 fi
 if [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
   report_failure "Chromarchy cannot be launched" \
-    "Found $binary, but it is not an executable regular file."
+    "Found $binary on PATH, but it is not an executable regular file. Check its permissions or installation."
   exit 126
 fi
 

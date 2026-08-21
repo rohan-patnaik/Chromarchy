@@ -26,6 +26,7 @@ private slots:
   void launcherReportsMissingBinary();
   void launcherIsDetachedFromShellLifecycle();
   void launcherHelperReportsEarlyExit();
+  void launcherHelperReportsPermissionDeniedCandidate();
 };
 
 void MetadataTest::manifestDescribesMenuPlugin() {
@@ -55,10 +56,36 @@ void MetadataTest::launcherReportsMissingBinary() {
   QVERIFY2(!contents.isEmpty(), "Plugin.qml must be readable");
   QVERIFY(contents.contains("scripts/launch-chromarchy"));
   const auto helper = readRepositoryFile(QStringLiteral("scripts/launch-chromarchy"));
-  QVERIFY(helper.contains("command -v chromarchy"));
+  QVERIFY(helper.contains("candidate=$directory/chromarchy"));
   QVERIFY(helper.contains("Chromarchy is not installed"));
   QVERIFY(helper.contains("notify-send"));
   QVERIFY(helper.contains("exit 127"));
+}
+
+void MetadataTest::launcherHelperReportsPermissionDeniedCandidate() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("chromarchy"));
+  QFile fake(path);
+  QVERIFY(fake.open(QIODevice::WriteOnly));
+  QCOMPARE(fake.write("#!/bin/sh\nexit 0\n"), 17);
+  fake.close();
+  QVERIFY(fake.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+
+  QProcess process;
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert(QStringLiteral("PATH"),
+                     directory.path() + QStringLiteral(":/usr/bin:/bin"));
+  process.setProcessEnvironment(environment);
+  process.start(QStringLiteral("sh"),
+                {QStringLiteral(CHROMARCHY_SOURCE_DIR
+                                "/scripts/launch-chromarchy")});
+  QVERIFY(process.waitForFinished(5'000));
+  QCOMPARE(process.exitCode(), 126);
+  const auto error = process.readAllStandardError();
+  QVERIFY(error.contains("Chromarchy cannot be launched"));
+  QVERIFY(error.contains(path.toUtf8()));
+  QVERIFY(error.contains("not an executable regular file"));
 }
 
 void MetadataTest::launcherIsDetachedFromShellLifecycle() {
