@@ -11,7 +11,7 @@ same commit.
 
 | Complete | Partial | Planned | Excluded | Blocked | Total |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5 | 45 | 149 | 6 | 3 | 208 |
+| 4 | 46 | 149 | 6 | 3 | 208 |
 
 ## Status rules
 
@@ -154,7 +154,7 @@ same commit.
 | `layers.merge-down` | Layers and masks | Merge layer down | Partial | M1 | Merge into the lower layer preserving the composite, locks, undo, persistence, and goldens. | DocumentTest | None | Tile-local bounded temporary storage | `tests/core/DocumentTest.cpp#mergeAndFlattenPreserveComposite` | Undo, persistence, groups/masks, and external goldens are incomplete. |
 | `layers.multi-select` | Layers and masks | Multi-layer selection and operations | Planned | M1 | Select ranges/disjoint layers and apply move, visibility, duplicate, and delete atomically. | Layer tree UI tests | None | One command per multi-operation | None yet | Single active layer only. |
 | `layers.nested-groups` | Layers and masks | Nested layer groups | Planned | M1 | Create nested groups, reorder trees, isolate, merge, persist, and undo. | Layer tree tests | None | Depth and node count validated | None yet | Flat layer vector only. |
-| `layers.opacity-finite` | Layers and masks | Finite validated opacity | Complete | M1 | Reject NaN/infinite opacity at setter, load, and save boundaries. | Document/codec tests | None | Constant time validation | `tests/core/DocumentTest.cpp#rejectsInvalidLayerState`, `tests/core/NativeDocumentCodecTest.cpp#rejectsNonFiniteLayerOpacity` | Opacity only; extended blending pending. |
+| `layers.opacity-finite` | Layers and masks | Finite validated opacity | Partial | M1 | Reject NaN/infinite opacity at the public setter, hostile native-load boundary, and native-save boundary. | Document/codec tests | None | Constant time validation | `tests/core/DocumentTest.cpp#rejectsInvalidLayerState`, `tests/core/NativeDocumentCodecTest.cpp#rejectsNonFiniteLayerOpacity`, `src/core/NativeDocumentCodec.cpp` | Setter and hostile-load rejection are executable evidence. Save contains a defensive finite check, but invalid in-memory opacity is not constructible through the public API and that save rejection branch lacks an executable seam; the row remains Partial. |
 | `layers.opacity-workflow` | Layers and masks | Layer opacity workflow | Partial | M1 | Edit finite opacity with undo, persistence, keyboard control, and source-over goldens. | Document/UI tests | None | Constant-time metadata change | `tests/core/DocumentTest.cpp#compositesVisibilityAndOpacity`, `tests/core/DocumentTest.cpp#rejectsInvalidLayerState` | Undo, UI, and accessibility integration are incomplete. |
 | `layers.pixel-size-invariant` | Layers and masks | Layer pixel-size invariant | Complete | M1 | Reject replacement pixels whose dimensions differ from the document. | DocumentTest | None | Validation before allocation or save | `tests/core/DocumentTest.cpp#rejectsInvalidLayerState`, `src/core/NativeDocumentCodec.cpp` | All layers currently match canvas dimensions. |
 | `layers.raster-masks` | Layers and masks | Raster layer masks | Planned | M3 | Create/edit/disable/apply masks with channels, undo, persistence, and goldens. | Mask goldens | None | Sparse grayscale tiles | None yet | Not implemented. |
