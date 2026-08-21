@@ -11,7 +11,7 @@ same commit.
 
 | Complete | Partial | Planned | Excluded | Blocked | Total |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 | 28 | 88 | 6 | 0 | 128 |
+| 5 | 29 | 88 | 6 | 0 | 128 |
 
 ## Status rules
 
@@ -94,7 +94,7 @@ same commit.
 | `format.webp` | Formats, color, and print | WebP import/export | Partial | M1 | Round-trip lossy/lossless alpha and metadata/profile policy fixtures. | Format goldens | qt6-imageformats | Current full-frame export <= 64 MiPixels | `tests/core/ImageIOTest.cpp#roundTripsSupportedFormats` | Codec-dependent subset and no animation. |
 | `print.native` | Formats, color, and print | Native print setup and output | Planned | M5 | Preview scale/position/color settings and print through local system dialogs. | Print integration | Qt PrintSupport, Approved color pipeline | Preview <= 500 ms for normal pages | None yet | Printer hardware/profile matrix required. |
 | `print.pdf-proof` | Formats, color, and print | PDF proof export | Planned | M5 | Export local proof PDFs with page geometry, profiles, fonts, and verification fixtures. | PDF fixtures | PDF backend decision packet if Poppler considered | Stream pages; bounded raster scratch | None yet | Poppler or other consequential dependency requires approval. |
-| `foundation.arch-exact-sha-package` | Foundation | Exact-SHA Arch package build and install | Complete | M0 | Build/check/install an unprivileged package whose version matches the checked-out SHA. | Arch CI | makepkg, Qt 6 | CI <= 30 min | `.github/workflows/ci.yml`, `packaging/arch/PKGBUILD` | Development package; signed release artifacts are separate. |
+| `foundation.arch-exact-sha-package` | Foundation | Exact-SHA Arch package build and install | Partial | M0 | Build/check/install an unprivileged checksummed source archive whose version matches the checked-out SHA. | Arch CI | makepkg, Qt 6 | Job <= 30 min; build/package command <= 20 min | `.github/workflows/ci.yml`, `packaging/arch/PKGBUILD`, `README.md` | Exact source and execution image/action are pinned; rolling Arch repository dependencies are not snapshot-pinned, so this is not a reproducible-release claim. |
 | `foundation.launch-failure-diagnostics` | Foundation | Native launch failure diagnostics | Partial | M0 | Report missing, found-but-unlaunchable, and early/nonzero native exits without swallowing the exit status. | MetadataTest | POSIX shell, notify-send optional | No polling; one helper and native process per launch | `tests/MetadataTest.cpp#launcherHelperReportsEarlyExit`, `scripts/launch-chromarchy` | Missing/early-exit paths are automated; permission-denied and live desktop notification evidence are incomplete. |
 | `foundation.native-wayland-workspace` | Foundation | Native Wayland workspace | Partial | M0 | Launch a dockable native workspace on Wayland and restore its layout. | UI integration | Qt 6 Widgets | Cold start <= 2 s; idle RSS <= 250 MiB target | `src/MainWindow.cpp` | Real Omarchy, settings, HiDPI, and accessibility evidence missing. |
 | `foundation.offline-no-telemetry` | Foundation | Offline operation without telemetry | Partial | M0 | Run core workflows with networking disabled and observe no connection attempts. | Security integration | None | Zero mandatory network requests | `README.md`, `src/main.cpp` | Network-isolated runtime trace missing. |

@@ -36,6 +36,14 @@ cd packaging/arch
 makepkg -si
 ```
 
+That command intentionally follows the rolling Git branch and therefore is not
+a reproducible-release claim. CI instead archives the exact checked-out SHA,
+records it in the source tree, computes and enforces the archive BLAKE2 checksum,
+runs package `check()`, verifies the package version, and installs the result.
+The Arch container and GitHub action are digest/commit pinned, but Arch's rolling
+repository packages are not yet snapshot-pinned; release reproducibility remains
+Planned until a dated package repository/snapshot policy is adopted.
+
 ## Omarchy plugin
 
 The root `manifest.json` is the marketplace contract. Once the native binary is installed on `PATH` as `chromarchy`:
@@ -48,4 +56,3 @@ omarchy-shell shell summon io.github.rohan-patnaik.chromarchy '{}'
 ## License
 
 MIT. Individual optional dependencies may have their own compatible terms.
-

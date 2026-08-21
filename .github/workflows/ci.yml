@@ -11,31 +11,39 @@ permissions:
 jobs:
   arch-build:
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container: archlinux@sha256:4bf33b21a715aac0b48ce6e9eaed4782a898eae96f88f5da3635572129c2584a
     timeout-minutes: 30
 
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed git base-devel cmake ninja python qt6-base qt6-imageformats
+        timeout-minutes: 10
+        run: timeout 9m pacman -Syu --noconfirm --needed git base-devel cmake ninja python qt6-base qt6-imageformats
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        timeout-minutes: 2
 
       - name: Validate offline capability catalog
-        run: python scripts/generate_offline_parity.py --check
+        timeout-minutes: 2
+        run: timeout 1m python scripts/generate_offline_parity.py --check
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+        timeout-minutes: 5
+        run: timeout 4m cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build build --parallel 2
+        timeout-minutes: 10
+        run: timeout 9m cmake --build build --parallel 2
 
       - name: Test
-        run: ctest --test-dir build -LE benchmark --output-on-failure
+        timeout-minutes: 5
+        run: timeout 4m ctest --test-dir build -LE benchmark --output-on-failure
 
       - name: Benchmark
-        run: ctest --test-dir build -L benchmark --verbose
+        timeout-minutes: 10
+        run: timeout 9m ctest --test-dir build -L benchmark --verbose
 
       - name: Build and verify Arch package
+        timeout-minutes: 25
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -46,12 +54,14 @@ jobs:
             "$source_root/Chromarchy/.chromarchy-source-revision"
           source_archive="chromarchy-source-$GITHUB_SHA.tar.gz"
           tar -C "$source_root" -czf "packaging/arch/$source_archive" Chromarchy
+          source_b2sum=$(b2sum "packaging/arch/$source_archive" | cut -d' ' -f1)
           useradd --create-home package-builder
           chown -R package-builder:package-builder packaging/arch
           runuser -u package-builder -- env \
             CHROMARCHY_SOURCE_ARCHIVE="$source_archive" \
+            CHROMARCHY_SOURCE_B2SUM="$source_b2sum" \
             CHROMARCHY_EXPECTED_REVISION="$GITHUB_SHA" sh -c \
-            'cd packaging/arch && makepkg --cleanbuild --clean --noconfirm'
+            'cd packaging/arch && timeout 20m makepkg --cleanbuild --clean --noconfirm'
           package_count=$(find packaging/arch -maxdepth 1 -type f \
             -name 'chromarchy-git-*.pkg.tar.zst' ! -name '*-debug-*' | wc -l)
           test "$package_count" -eq 1

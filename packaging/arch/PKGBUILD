@@ -14,7 +14,10 @@ if [[ -n ${CHROMARCHY_SOURCE_ARCHIVE:-} ]]; then
 else
   source=('Chromarchy::git+https://github.com/rohan-patnaik/Chromarchy.git')
 fi
-b2sums=('SKIP')
+# Exact-source CI supplies the computed digest for its local archive. The
+# rolling VCS development fallback uses makepkg's standard SKIP convention
+# because a moving git source cannot have a stable archive checksum.
+b2sums=("${CHROMARCHY_SOURCE_B2SUM:-SKIP}")
 
 pkgver() {
   cd Chromarchy
@@ -31,6 +34,8 @@ pkgver() {
 
 prepare() {
   if [[ -n ${CHROMARCHY_EXPECTED_REVISION:-} ]]; then
+    [[ -n ${CHROMARCHY_SOURCE_ARCHIVE:-} ]]
+    [[ -n ${CHROMARCHY_SOURCE_B2SUM:-} ]]
     [[ -f Chromarchy/.chromarchy-source-revision ]]
     local revision
     revision=$(<Chromarchy/.chromarchy-source-revision)
