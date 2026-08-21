@@ -21,9 +21,13 @@ jobs:
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         timeout-minutes: 2
+        with:
+          fetch-depth: 0
 
       - name: Validate offline capability catalog
         timeout-minutes: 2
+        env:
+          CHROMARCHY_ID_BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: timeout 1m python scripts/generate_offline_parity.py --check
 
       - name: Configure

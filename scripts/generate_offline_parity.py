@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import os
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -41,7 +43,47 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
-def validate(catalog: dict) -> list[dict]:
+def has_test_definition(path: Path, symbol: str) -> bool:
+    contents = path.read_text(encoding="utf-8")
+    method = symbol.rsplit("::", 1)[-1]
+    if path.suffix in (".cpp", ".cc", ".cxx"):
+        return re.search(
+            rf"\b[A-Za-z][A-Za-z0-9_]*::{re.escape(method)}\s*\(", contents
+        ) is not None
+    if path.suffix == ".py":
+        return re.search(rf"^\s*def\s+{re.escape(method)}\s*\(", contents, re.MULTILINE) is not None
+    return False
+
+
+def load_history() -> dict:
+    try:
+        return json.loads(ID_HISTORY.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read capability ID history: {error}")
+
+
+def load_previous_history() -> dict | None:
+    revision = os.environ.get("CHROMARCHY_ID_BASE_REVISION", "").strip()
+    if not revision or revision == "0" * 40:
+        return None
+    result = subprocess.run(
+        ["git", "show", f"{revision}:docs/capability-id-history.json"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        fail(f"cannot read capability ID history at base revision {revision}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        fail(f"invalid capability ID history at base revision: {error}")
+
+
+def validate(catalog: dict, history: dict | None = None,
+             previous_history: dict | None = None) -> list[dict]:
     if not isinstance(catalog, dict):
         fail("catalog root must be an object")
     unknown_root = set(catalog) - ROOT_FIELDS
@@ -57,6 +99,7 @@ def validate(catalog: dict) -> list[dict]:
         fail("statusDefinitions must contain exactly the supported statuses")
 
     seen: set[str] = set()
+    complete_test_evidence: dict[str, int] = {}
     for index, capability in enumerate(capabilities):
         label = f"capabilities[{index}]"
         if not isinstance(capability, dict):
@@ -107,14 +150,28 @@ def validate(catalog: dict) -> list[dict]:
                 contents = evidence_path.read_text(encoding="utf-8")
                 if symbol not in contents:
                     fail(f"{capability_id}: missing evidence symbol {evidence}")
-    try:
-        history = json.loads(ID_HISTORY.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        fail(f"cannot read capability ID history: {error}")
-    if not isinstance(history, dict) or set(history) != {"schemaVersion", "retired"}:
-        fail("capability ID history must contain exactly schemaVersion and retired")
-    if history["schemaVersion"] != 1 or not isinstance(history["retired"], list):
+                if relative_path.startswith("tests/"):
+                    if not has_test_definition(evidence_path, symbol):
+                        fail(f"{capability_id}: test evidence is not a method definition: {evidence}")
+                    complete_test_evidence[capability_id] = (
+                        complete_test_evidence.get(capability_id, 0) + 1
+                    )
+        if capability["status"] == "Complete" and not complete_test_evidence.get(capability_id):
+            fail(f"{capability_id}: Complete requires at least one defined test method")
+    history = load_history() if history is None else history
+    if not isinstance(history, dict) or set(history) != {"schemaVersion", "issued", "retired"}:
+        fail("capability ID history must contain exactly schemaVersion, issued, and retired")
+    if (history["schemaVersion"] != 1 or
+            not isinstance(history["issued"], list) or
+            not isinstance(history["retired"], list)):
         fail("invalid capability ID history schema")
+    issued: set[str] = set()
+    for index, capability_id in enumerate(history["issued"]):
+        if (not isinstance(capability_id, str) or
+                not ID_PATTERN.fullmatch(capability_id) or
+                capability_id in issued):
+            fail(f"issued[{index}] has invalid or duplicate ID")
+        issued.add(capability_id)
     retired: set[str] = set()
     for index, entry in enumerate(history["retired"]):
         if not isinstance(entry, dict) or set(entry) != {"id", "replacement", "reason"}:
@@ -127,6 +184,32 @@ def validate(catalog: dict) -> list[dict]:
     overlap = seen & retired
     if overlap:
         fail(f"retired IDs cannot be active: {', '.join(sorted(overlap))}")
+    if issued != seen | retired:
+        missing = (seen | retired) - issued
+        orphaned = issued - (seen | retired)
+        if missing:
+            fail(f"active or retired IDs missing from issued registry: {', '.join(sorted(missing))}")
+        fail(f"issued IDs must remain active or retired: {', '.join(sorted(orphaned))}")
+    if previous_history is not None:
+        previous_issued = set(previous_history.get("issued", []))
+        removed_issued = previous_issued - issued
+        if removed_issued:
+            fail(f"issued IDs are append-only: {', '.join(sorted(removed_issued))}")
+        previous_retired = {
+            entry["id"]: entry for entry in previous_history.get("retired", [])
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+        }
+        current_retired = {entry["id"]: entry for entry in history["retired"]}
+        removed_retired = set(previous_retired) - set(current_retired)
+        if removed_retired:
+            fail(f"retired IDs are append-only: {', '.join(sorted(removed_retired))}")
+        changed_retired = {
+            capability_id for capability_id in previous_retired
+            if capability_id in current_retired and
+            previous_retired[capability_id] != current_retired[capability_id]
+        }
+        if changed_retired:
+            fail(f"retired entries are immutable: {', '.join(sorted(changed_retired))}")
     return capabilities
 
 
@@ -197,7 +280,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
-        capabilities = validate(catalog)
+        capabilities = validate(catalog, previous_history=load_previous_history())
         generated = render(catalog, capabilities)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         print(f"offline parity validation failed: {error}", file=sys.stderr)

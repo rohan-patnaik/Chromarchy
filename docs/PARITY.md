@@ -48,9 +48,13 @@ python scripts/generate_offline_parity.py --check
 
 Unknown fields, invalid phase/status combinations, non-normalized evidence
 paths, and unstructured test anchors are rejected. Test evidence uses the
-repository-relative `tests/path.cpp#testMethod` form. Active IDs live only in
-the catalog; permanently retired IDs are append-only entries in
-`capability-id-history.json` and can never become active again.
+repository-relative `tests/path.cpp#testMethod` form and must resolve to an
+actual method definition. Every Complete row needs at least one such test;
+documentation or source paths alone are insufficient. Every active or retired
+ID remains in the append-only `issued` registry in
+`capability-id-history.json`. Removing an active ID requires an immutable
+retirement entry; CI compares the registry with the GitHub base revision and
+rejects removal or mutation of issued/retired history.
 
 ## Dependency decisions
 
