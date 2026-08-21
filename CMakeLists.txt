@@ -56,6 +56,10 @@ if(BUILD_TESTING)
   )
 
   add_test(NAME chromarchy_metadata COMMAND chromarchy_metadata_tests)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME chromarchy_catalog_validation
+    COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/catalog_validation_test.py
+  )
 
   qt_add_executable(chromarchy_document_tests tests/core/DocumentTest.cpp)
   target_link_libraries(chromarchy_document_tests PRIVATE chromarchy_core Qt6::Test)
@@ -134,4 +138,3 @@ if(BUILD_TESTING)
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
   )
 endif()
-

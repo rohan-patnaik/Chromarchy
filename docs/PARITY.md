@@ -46,6 +46,12 @@ python scripts/generate_offline_parity.py
 python scripts/generate_offline_parity.py --check
 ```
 
+Unknown fields, invalid phase/status combinations, non-normalized evidence
+paths, and unstructured test anchors are rejected. Test evidence uses the
+repository-relative `tests/path.cpp#testMethod` form. Active IDs live only in
+the catalog; permanently retired IDs are append-only entries in
+`capability-id-history.json` and can never become active again.
+
 ## Dependency decisions
 
 lcms2, OpenColorIO, LibRaw, Exiv2, direct OpenEXR, libheif, FFmpeg, ONNX,
