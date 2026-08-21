@@ -26,6 +26,21 @@ Chromarchy uses the image codecs supplied by the installed Qt 6 image-format plu
 
 Metadata inspection and selective preservation controls are planned. Until those controls exist, users who require source metadata must retain the original file separately.
 
+## Cataloged format decisions
+
+Codec availability is not a compatibility claim. BMP, still GIF, TGA, and the
+PBM/PGM/PPM family are Planned until installed-codec audits, hostile fixtures,
+public round trips, metadata/profile behavior, and the application limits above
+are evidenced. Animated GIF and APNG are separately tracked media workflows.
+JPEG 2000 is Blocked on an independently licensed codec, security/isolation,
+and packaging decision.
+
+PDF artwork interchange is distinct from PDF proof export and is Blocked on a
+PDF adapter, license, process-isolation, and vector/raster-loss policy decision.
+EPS interchange is Blocked on an even stricter PostScript interpreter, license,
+network-off sandbox, and resource-limit decision. No PDF, EPS, JPEG 2000, or
+other consequential dependency has been adopted by cataloging the workflow.
+
 ## Native document bounds
 
 Native loads and saves reject files above 64 MiB, more than 64 combined

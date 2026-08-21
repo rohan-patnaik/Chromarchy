@@ -16,11 +16,16 @@ The catalog currently covers all planned local surfaces:
   rulers, guides, grids, snapping, zoom, pan, navigator, menus, and panels;
 - flat and nested layers, groups, multi-layer operations, masks, channels,
   blending, adjustments, effects, filters, and linked/embedded local sources;
-- paint/input/presets, selections, local non-generative subject/background
-  removal, transforms, crop, clone/heal/patch, and tonal/blur tools;
-- paths, shapes, SVG interchange, OpenType, RTL, vertical/variable/path text;
-- native, PNG, JPEG, TIFF, WebP, OpenEXR, HEIF/AVIF, PSD/PSB, RAW, metadata,
-  professional color, print, and PDF proof workflows;
+- independently tracked brush, pencil, eraser, gradient, fill, picker,
+  selection morphology, transform, clone/heal/patch, restoration, and tonal
+  tools rather than bundled tool-family completion claims;
+- paths, shapes, boolean geometry, SVG interchange, and independently tracked
+  horizontal/OpenType/RTL/vertical/variable/path text workflows;
+- native, PNG, JPEG, TIFF, WebP, OpenEXR, BMP, still/animated GIF, APNG,
+  JPEG 2000, TGA, PBM/PGM/PPM, HEIF/AVIF, PSD/PSB, RAW, SVG, and explicit
+  PDF/EPS interchange decision gates;
+- independently tracked ICC display/assign/convert, CMYK, Lab, spot color,
+  soft proof, gamut warning, print, and PDF proof workflows;
 - actions, batch/CLI, scripting, plugins, frame animation, GIF/APNG, and video;
 - corrupt-input, low-disk, release packaging, SBOM, license, and security work;
 - explicit exclusions for generative/cloud/vendor-proprietary workflows and
@@ -55,6 +60,11 @@ ID remains in the append-only `issued` registry in
 `capability-id-history.json`. Removing an active ID requires an immutable
 retirement entry; CI compares the registry with the GitHub base revision and
 rejects removal or mutation of issued/retired history.
+
+Bundled IDs discovered during audits are retired, never silently deleted. Each
+retirement names its replacement IDs. Replacement rows are scoped so their
+workflow, persistence, accessibility, interoperability, dependency decision,
+and resource budget can be reviewed without completing unrelated siblings.
 
 ## Dependency decisions
 
