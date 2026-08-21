@@ -3,6 +3,7 @@
 #include <QTest>
 
 #include <limits>
+#include <cmath>
 
 using chromarchy::Document;
 
@@ -15,6 +16,25 @@ bool colorsWithinRounding(QColor left, QColor right) {
          qAbs(left.alpha() - right.alpha()) <= 1;
 }
 
+QColor sourceOverReference(QColor destination, QColor source,
+                           double layerOpacity) {
+  const double sourceAlpha = source.alphaF() * layerOpacity;
+  const double destinationAlpha = destination.alphaF();
+  const double outputAlpha = sourceAlpha + destinationAlpha * (1.0 - sourceAlpha);
+  if (outputAlpha == 0.0) {
+    return Qt::transparent;
+  }
+  const auto channel = [&](double destinationChannel, double sourceChannel) {
+    return (sourceChannel * sourceAlpha +
+            destinationChannel * destinationAlpha * (1.0 - sourceAlpha)) /
+           outputAlpha;
+  };
+  return QColor::fromRgbF(channel(destination.redF(), source.redF()),
+                          channel(destination.greenF(), source.greenF()),
+                          channel(destination.blueF(), source.blueF()),
+                          outputAlpha);
+}
+
 }  // namespace
 
 class DocumentTest final : public QObject {
@@ -25,6 +45,8 @@ private slots:
   void managesLayerOwnershipAndOrder();
   void duplicateUsesCopyOnWritePixels();
   void compositesVisibilityAndOpacity();
+  void matchesOriginalSourceOverReferenceVectors();
+  void fullImageCompositeIsRepeatableAcrossTileBoundary();
   void mergeAndFlattenPreserveComposite();
   void locksPreventDestructiveLayerOperations();
   void rejectsInvalidLayerState();
@@ -86,6 +108,69 @@ void DocumentTest::compositesVisibilityAndOpacity() {
   const auto blended = document->composite().pixelColor(QPoint(1, 1));
   QVERIFY(blended.red() >= 126 && blended.red() <= 129);
   QVERIFY(blended.blue() >= 126 && blended.blue() <= 129);
+}
+
+void DocumentTest::matchesOriginalSourceOverReferenceVectors() {
+  struct Vector final {
+    QColor destination;
+    QColor source;
+    double opacity;
+  };
+  const QVector<Vector> vectors{
+      {QColor(10, 20, 30, 0), QColor(200, 100, 50, 0), 1.0},
+      {QColor(20, 80, 160, 255), QColor(240, 40, 10, 128), 1.0},
+      {QColor(20, 80, 160, 96), QColor(240, 40, 10, 192), 0.375},
+      {QColor(255, 255, 255, 255), QColor(0, 0, 0, 255), 0.0},
+      {QColor(4, 9, 250, 1), QColor(252, 17, 2, 254), 0.999},
+  };
+
+  for (const auto& vector : vectors) {
+    auto document = Document::create(QSize(1, 1));
+    QVERIFY(document);
+    QVERIFY(document->layerAt(0)->setPixelColor(QPoint(), vector.destination) ||
+            vector.destination.alpha() == 0);
+    const auto top = document->addLayer(QStringLiteral("Source"));
+    QVERIFY(document->layerAt(top)->setPixelColor(QPoint(), vector.source) ||
+            vector.source.alpha() == 0);
+    QVERIFY(document->layerAt(top)->setOpacity(vector.opacity) ||
+            qFuzzyCompare(document->layerAt(top)->opacity(), vector.opacity));
+    const auto actual = document->composite().pixelColor(QPoint());
+    const auto expected = sourceOverReference(vector.destination, vector.source,
+                                              vector.opacity);
+    QVERIFY2(colorsWithinRounding(actual, expected),
+             qPrintable(QStringLiteral("actual=%1 expected=%2")
+                            .arg(actual.name(QColor::HexArgb),
+                                 expected.name(QColor::HexArgb))));
+  }
+}
+
+void DocumentTest::fullImageCompositeIsRepeatableAcrossTileBoundary() {
+  auto document = Document::create(QSize(258, 3));
+  QVERIFY(document);
+  const QVector<QPoint> positions{{0, 0}, {255, 1}, {256, 1}, {257, 2}};
+  for (const auto& position : positions) {
+    QVERIFY(document->layerAt(0)->setPixelColor(position,
+                                                QColor(20, 80, 160, 96)));
+  }
+  const auto top = document->addLayer(QStringLiteral("Source"));
+  for (const auto& position : positions) {
+    QVERIFY(document->layerAt(top)->setPixelColor(position,
+                                                  QColor(240, 40, 10, 192)));
+  }
+  QVERIFY(document->layerAt(top)->setOpacity(0.375));
+
+  const auto first = document->composite();
+  const auto second = document->composite();
+  QCOMPARE(first, second);
+  const auto expected = sourceOverReference(QColor(20, 80, 160, 96),
+                                            QColor(240, 40, 10, 192), 0.375);
+  for (const auto& position : positions) {
+    QVERIFY(colorsWithinRounding(first.pixelColor(position), expected));
+  }
+
+  QVERIFY(document->moveLayer(top, 0));
+  const auto reversed = document->composite();
+  QVERIFY(reversed != first);
 }
 
 void DocumentTest::mergeAndFlattenPreserveComposite() {
