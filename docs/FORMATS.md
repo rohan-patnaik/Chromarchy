@@ -52,6 +52,10 @@ Native loads and saves reject files above 64 MiB, more than 64 combined
 pixel/selection tiles, more than 32 MiB of aggregate compressed tile payload,
 or more than 16 MiB of aggregate decoded tile payload. Save checks are applied
 before atomic publication, and any failure preserves an existing destination.
+Pixel tiles pass through the checked RGBA8 adapter with exact payload and stride
+validation. The v1/v2 version and packed premultiplied RGBA8 wire representation
+remain unchanged; fixtures cover byte-identical v2 save/reopen and v1 pixel
+preservation across upgrade/reopen.
 Per-tile compressed and decompressed
 sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and

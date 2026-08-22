@@ -22,13 +22,34 @@ row alignment, row/alignment/total-size overflow, totals that do not fit
 full buffers, scanline-backed adapters, and individual tiles; the checked
 RGBA8 256-square tile size is 262,144 bytes.
 
+`PixelStorageLayout::createWithRowStride` validates externally supplied
+scanlines. It rejects a stride smaller than the packed row, total-size overflow,
+and caller allocation limits. RGBA8 conversion requires the source span to
+match that checked total exactly, so truncated and trailing payloads fail before
+pixel access. Destination padding is initialized to zero.
+
+The dependency-free RGBA8 adapters currently support only explicit straight
+and premultiplied RGBA8. Straight-to-premultiplied conversion rounds
+`channel * alpha / 255` to the nearest integer. The inverse uses the matching
+bounded integer calculation; transparent premultiplied samples decode to zero,
+so hidden straight color at alpha zero is intentionally not recoverable. The
+checked-in byte vectors cover alpha 0, 1, 127, 128, 254, and 255 independently
+of Qt image conversion.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied
-`QImage` tiles. It now exposes that format and its checked tile layout rather
-than leaving the contract implicit. The new high-depth values are descriptions
-and validation prerequisites only: they do not claim high-depth allocation,
-rendering, conversion, native persistence, or format round trips.
+`QImage` tiles. QImage adapters accept only `Format_RGBA8888` or
+`Format_RGBA8888_Premultiplied` and always return the existing premultiplied
+live format. Native v1/v2 tile encoding and decoding use these adapters, but the
+native version and packed premultiplied RGBA8 wire bytes are unchanged. Fixture
+tests prove byte-identical v2 save/reopen and pixel-identical v1 load, upgrade,
+and reopen across tile boundaries.
+
+The high-depth values remain descriptions and validation prerequisites only:
+they do not claim high-depth allocation, rendering, conversion, native
+persistence, or format round trips. Import, export, display, and render-node
+boundaries beyond the native RGBA8 tile adapter also remain future work.
 
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that
@@ -36,6 +57,5 @@ still contains another nonzero pixel. Import already omits fully transparent
 tiles. Broader normalization of tiles produced by merge, flatten, or native-load
 paths remains future work.
 
-Conversions must be explicit at import, export, display, and future render-node
-boundaries. This slice adds no color interpretation, profiles, transfer
-functions, or color-library dependency.
+This slice adds no color interpretation, profiles, transfer functions, or
+color-library dependency.
