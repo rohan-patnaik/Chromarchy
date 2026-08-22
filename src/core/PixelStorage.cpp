@@ -1,5 +1,7 @@
 #include "core/PixelStorage.h"
 
+#include <algorithm>
+#include <cstring>
 #include <limits>
 #include <utility>
 
@@ -37,6 +39,32 @@ bool isSupportedRgba8(PixelFormat format) noexcept {
          format.byteOrder == ByteOrder::NotApplicable &&
          (format.alpha == AlphaMode::Straight ||
           format.alpha == AlphaMode::Premultiplied);
+}
+
+bool isSupportedTileFormat(PixelFormat format) noexcept {
+  return format.isValid() &&
+         (format.alpha != AlphaMode::Premultiplied ||
+          format == PixelFormat::rgba8Premultiplied());
+}
+
+std::optional<PixelStorageLayout> tileLayout(
+    PixelFormat format, quint64 allocationLimitBytes) noexcept {
+  if (!isSupportedTileFormat(format)) {
+    return std::nullopt;
+  }
+  return PixelStorageLayout::create(
+      QSize(PixelTile::extent, PixelTile::extent), format, 1,
+      std::min(allocationLimitBytes, PixelTile::maximumAllocationBytes));
+}
+
+bool isValidPremultipliedRgba8Pixel(
+    std::span<const std::byte> pixel) noexcept {
+  if (pixel.size() != 4) {
+    return false;
+  }
+  const auto* bytes = reinterpret_cast<const quint8*>(pixel.data());
+  return bytes[0] <= bytes[3] && bytes[1] <= bytes[3] &&
+         bytes[2] <= bytes[3];
 }
 
 quint8 premultiply(quint8 color, quint8 alpha) noexcept {
@@ -189,6 +217,97 @@ quint64 PixelStorageLayout::rowStrideBytes() const noexcept {
 
 quint64 PixelStorageLayout::allocationBytes() const noexcept {
   return allocationBytes_;
+}
+
+std::optional<PixelTile> PixelTile::create(PixelFormat format,
+                                           quint64 allocationLimitBytes) {
+  const auto layout = tileLayout(format, allocationLimitBytes);
+  if (!layout) {
+    return std::nullopt;
+  }
+  QByteArray bytes(static_cast<qsizetype>(layout->allocationBytes()), '\0');
+  if (bytes.size() != static_cast<qsizetype>(layout->allocationBytes())) {
+    return std::nullopt;
+  }
+  return PixelTile(*layout, std::move(bytes));
+}
+
+std::optional<PixelTile> PixelTile::fromPackedBytes(
+    PixelFormat format, std::span<const std::byte> source,
+    quint64 allocationLimitBytes) {
+  const auto layout = tileLayout(format, allocationLimitBytes);
+  if (!layout || source.size() != layout->allocationBytes()) {
+    return std::nullopt;
+  }
+  if (format == PixelFormat::rgba8Premultiplied() &&
+      !hasValidPremultipliedSamples(source, *layout)) {
+    return std::nullopt;
+  }
+  QByteArray bytes(reinterpret_cast<const char*>(source.data()),
+                   static_cast<qsizetype>(source.size()));
+  if (bytes.size() != static_cast<qsizetype>(source.size())) {
+    return std::nullopt;
+  }
+  return PixelTile(*layout, std::move(bytes));
+}
+
+PixelTile::PixelTile(PixelStorageLayout layout, QByteArray bytes)
+    : layout_(std::move(layout)), bytes_(std::move(bytes)) {}
+
+PixelFormat PixelTile::format() const noexcept {
+  return layout_.format();
+}
+
+const PixelStorageLayout& PixelTile::layout() const noexcept {
+  return layout_;
+}
+
+std::span<const std::byte> PixelTile::packedBytes() const noexcept {
+  return {reinterpret_cast<const std::byte*>(bytes_.constData()),
+          static_cast<std::size_t>(bytes_.size())};
+}
+
+std::span<const std::byte> PixelTile::pixelBytes(QPoint position) const noexcept {
+  if (position.x() < 0 || position.y() < 0 || position.x() >= extent ||
+      position.y() >= extent) {
+    return {};
+  }
+  const quint64 bytesPerPixel = layout_.format().bytesPerPixel();
+  const quint64 offset =
+      (static_cast<quint64>(position.y()) * extent +
+       static_cast<quint64>(position.x())) *
+      bytesPerPixel;
+  return {reinterpret_cast<const std::byte*>(bytes_.constData()) + offset,
+          static_cast<std::size_t>(bytesPerPixel)};
+}
+
+bool PixelTile::setPixelBytes(QPoint position,
+                              std::span<const std::byte> source) {
+  const auto existing = pixelBytes(position);
+  if (existing.empty() || source.size() != existing.size() ||
+      (format() == PixelFormat::rgba8Premultiplied() &&
+       !isValidPremultipliedRgba8Pixel(source)) ||
+      std::equal(existing.begin(), existing.end(), source.begin())) {
+    return false;
+  }
+  const auto offset =
+      static_cast<qsizetype>(existing.data() - packedBytes().data());
+  std::memcpy(bytes_.data() + offset, source.data(), source.size());
+  return true;
+}
+
+bool PixelTile::isZero() const noexcept {
+  return std::all_of(bytes_.cbegin(), bytes_.cend(),
+                     [](char byte) { return byte == 0; });
+}
+
+std::optional<Rgba8Buffer> PixelTile::toRgba8Premultiplied(
+    quint64 allocationLimitBytes) const {
+  if (!isSupportedRgba8(format())) {
+    return std::nullopt;
+  }
+  return convertRgba8(packedBytes(), layout_, AlphaMode::Premultiplied, 1,
+                      allocationLimitBytes);
 }
 
 std::optional<Rgba8Buffer> convertRgba8(

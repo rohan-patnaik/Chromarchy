@@ -5,6 +5,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include <algorithm>
@@ -17,6 +19,7 @@ using chromarchy::ChannelLayout;
 using chromarchy::ChannelMeaning;
 using chromarchy::PixelFormat;
 using chromarchy::PixelStorageLayout;
+using chromarchy::PixelTile;
 using chromarchy::SampleFormat;
 
 namespace {
@@ -50,6 +53,10 @@ private slots:
   void honorsCheckedSourceAndDestinationStrides();
   void rejectsHostileRgba8LayoutsAndPayloads();
   void roundTripsQImageWithoutChangingLiveFormat();
+  void allocatesBoundedHighDepthTiles();
+  void accessesHighDepthSamplesWithCopyOnWrite();
+  void roundTripsHighDepthPersistenceSeam();
+  void keepsRgba8ConversionSeamExplicit();
 };
 
 void PixelStorageTest::describesSupportedSampleAndChannelContracts() {
@@ -308,6 +315,134 @@ void PixelStorageTest::roundTripsQImageWithoutChangingLiveFormat() {
   QImage unsupported(1, 1, QImage::Format_ARGB32);
   QVERIFY(!chromarchy::rgba8BytesFromImage(unsupported,
                                            AlphaMode::Premultiplied));
+}
+
+void PixelStorageTest::allocatesBoundedHighDepthTiles() {
+  const QList<QPair<PixelFormat, quint64>> formats = {
+      {{SampleFormat::UnsignedInteger16, ChannelLayout::Gray, AlphaMode::None,
+        ByteOrder::BigEndian},
+       256ULL * 256ULL * 2ULL},
+      {{SampleFormat::UnsignedInteger16, ChannelLayout::RGBA,
+        AlphaMode::Straight, ByteOrder::LittleEndian},
+       256ULL * 256ULL * 8ULL},
+      {{SampleFormat::Float16, ChannelLayout::RGBA, AlphaMode::Straight,
+        ByteOrder::BigEndian},
+       256ULL * 256ULL * 8ULL},
+      {{SampleFormat::Float32, ChannelLayout::RGBA, AlphaMode::Straight,
+        ByteOrder::LittleEndian},
+       PixelTile::maximumAllocationBytes}};
+
+  for (const auto& [format, expectedBytes] : formats) {
+    const auto tile = PixelTile::create(format, expectedBytes);
+    QVERIFY(tile);
+    QCOMPARE(tile->format(), format);
+    QCOMPARE(tile->layout().dimensions(), QSize(256, 256));
+    QCOMPARE(tile->layout().allocationBytes(), expectedBytes);
+    QCOMPARE(tile->packedBytes().size(), expectedBytes);
+    QVERIFY(tile->isZero());
+    QVERIFY(!PixelTile::create(format, expectedBytes - 1));
+  }
+
+  const PixelFormat unsupportedPremultiplied16{
+      SampleFormat::UnsignedInteger16, ChannelLayout::RGBA,
+      AlphaMode::Premultiplied, ByteOrder::LittleEndian};
+  QVERIFY(!PixelTile::create(unsupportedPremultiplied16));
+}
+
+void PixelStorageTest::accessesHighDepthSamplesWithCopyOnWrite() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::RGBA, AlphaMode::Straight,
+                           ByteOrder::LittleEndian};
+  auto original = PixelTile::create(format);
+  QVERIFY(original);
+  auto copy = *original;
+  QCOMPARE(copy.packedBytes().data(), original->packedBytes().data());
+
+  const QPoint position(255, 128);
+  const auto sample = QByteArray::fromHex("34127856bc9af0de");
+  QVERIFY(copy.setPixelBytes(position, bytesOf(sample)));
+  QCOMPARE(QByteArray(reinterpret_cast<const char*>(copy.pixelBytes(position).data()),
+                      static_cast<qsizetype>(copy.pixelBytes(position).size())),
+           sample);
+  QVERIFY(copy.packedBytes().data() != original->packedBytes().data());
+  QVERIFY(original->isZero());
+  QVERIFY(!copy.isZero());
+  QVERIFY(!copy.setPixelBytes(position, bytesOf(sample)));
+  QVERIFY(copy.pixelBytes(QPoint(-1, 0)).empty());
+  QVERIFY(copy.pixelBytes(QPoint(PixelTile::extent, 0)).empty());
+  QVERIFY(!copy.setPixelBytes(position, bytesOf(QByteArray::fromHex("0000"))));
+
+  const QByteArray zeroSample(sample.size(), '\0');
+  QVERIFY(copy.setPixelBytes(position, bytesOf(zeroSample)));
+  QVERIFY(copy.isZero());
+}
+
+void PixelStorageTest::roundTripsHighDepthPersistenceSeam() {
+  const PixelFormat format{SampleFormat::Float32, ChannelLayout::RGB,
+                           AlphaMode::None, ByteOrder::BigEndian};
+  auto tile = PixelTile::create(format);
+  QVERIFY(tile);
+  const auto first = QByteArray::fromHex("3f8000004000000040400000");
+  const auto last = QByteArray::fromHex("bf800000000000007f7fffff");
+  QVERIFY(tile->setPixelBytes(QPoint(0, 0), bytesOf(first)));
+  QVERIFY(tile->setPixelBytes(QPoint(255, 255), bytesOf(last)));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("tile.payload"));
+  QSaveFile output(path);
+  QVERIFY(output.open(QIODevice::WriteOnly));
+  const auto packed = tile->packedBytes();
+  QCOMPARE(output.write(reinterpret_cast<const char*>(packed.data()),
+                        static_cast<qsizetype>(packed.size())),
+           static_cast<qint64>(packed.size()));
+  QVERIFY(output.commit());
+
+  QFile input(path);
+  QVERIFY(input.open(QIODevice::ReadOnly));
+  const auto reopenedBytes = input.readAll();
+  const auto reopened = PixelTile::fromPackedBytes(format,
+                                                    bytesOf(reopenedBytes));
+  QVERIFY(reopened);
+  QVERIFY(std::equal(reopened->packedBytes().begin(),
+                     reopened->packedBytes().end(), packed.begin()));
+  QCOMPARE(QByteArray(
+               reinterpret_cast<const char*>(
+                   reopened->pixelBytes(QPoint(255, 255)).data()),
+               static_cast<qsizetype>(
+                   reopened->pixelBytes(QPoint(255, 255)).size())),
+           last);
+
+  auto truncated = reopenedBytes;
+  truncated.chop(1);
+  QVERIFY(!PixelTile::fromPackedBytes(format, bytesOf(truncated)));
+  auto trailing = reopenedBytes;
+  trailing.append('\0');
+  QVERIFY(!PixelTile::fromPackedBytes(format, bytesOf(trailing)));
+  QVERIFY(!reopened->toRgba8Premultiplied());
+}
+
+void PixelStorageTest::keepsRgba8ConversionSeamExplicit() {
+  auto tile = PixelTile::create(PixelFormat::rgba8Straight());
+  QVERIFY(tile);
+  const auto straight = QByteArray::fromHex("ff80407f");
+  QVERIFY(tile->setPixelBytes(QPoint(0, 0), bytesOf(straight)));
+  const auto converted = tile->toRgba8Premultiplied();
+  QVERIFY(converted);
+  QCOMPARE(converted->layout.format(), PixelFormat::rgba8Premultiplied());
+  QCOMPARE(converted->bytes.first(4), QByteArray::fromHex("7f40207f"));
+
+  auto premultiplied = PixelTile::create(PixelFormat::rgba8Premultiplied());
+  QVERIFY(premultiplied);
+  const auto invalid = QByteArray::fromHex("02010101");
+  QVERIFY(!premultiplied->setPixelBytes(QPoint(0, 0), bytesOf(invalid)));
+  QVERIFY(premultiplied->isZero());
+  QByteArray hostile(
+      reinterpret_cast<const char*>(premultiplied->packedBytes().data()),
+      static_cast<qsizetype>(premultiplied->packedBytes().size()));
+  std::copy(invalid.cbegin(), invalid.cend(), hostile.begin());
+  QVERIFY(!PixelTile::fromPackedBytes(PixelFormat::rgba8Premultiplied(),
+                                      bytesOf(hostile)));
 }
 
 QTEST_APPLESS_MAIN(PixelStorageTest)

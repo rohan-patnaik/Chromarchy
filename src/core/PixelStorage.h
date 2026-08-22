@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QImage>
+#include <QPoint>
 #include <QSize>
 #include <QtTypes>
 
@@ -184,6 +185,36 @@ private:
 struct Rgba8Buffer final {
   PixelStorageLayout layout;
   QByteArray bytes;
+};
+
+class PixelTile final {
+public:
+  static constexpr int extent = 256;
+  static constexpr quint64 maximumAllocationBytes =
+      static_cast<quint64>(extent) * extent * 4U * 4U;
+
+  [[nodiscard]] static std::optional<PixelTile> create(
+      PixelFormat format,
+      quint64 allocationLimitBytes = maximumAllocationBytes);
+  [[nodiscard]] static std::optional<PixelTile> fromPackedBytes(
+      PixelFormat format, std::span<const std::byte> source,
+      quint64 allocationLimitBytes = maximumAllocationBytes);
+
+  [[nodiscard]] PixelFormat format() const noexcept;
+  [[nodiscard]] const PixelStorageLayout& layout() const noexcept;
+  [[nodiscard]] std::span<const std::byte> packedBytes() const noexcept;
+  [[nodiscard]] std::span<const std::byte> pixelBytes(
+      QPoint position) const noexcept;
+  bool setPixelBytes(QPoint position, std::span<const std::byte> source);
+  [[nodiscard]] bool isZero() const noexcept;
+  [[nodiscard]] std::optional<Rgba8Buffer> toRgba8Premultiplied(
+      quint64 allocationLimitBytes = maximumAllocationBytes) const;
+
+private:
+  PixelTile(PixelStorageLayout layout, QByteArray bytes);
+
+  PixelStorageLayout layout_;
+  QByteArray bytes_;
 };
 
 [[nodiscard]] std::optional<Rgba8Buffer> convertRgba8(
