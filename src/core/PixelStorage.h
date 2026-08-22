@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QImage>
 #include <QPoint>
+#include <QRect>
 #include <QSize>
 #include <QVector>
 #include <QtTypes>
@@ -213,6 +214,8 @@ public:
       quint64 allocationLimitBytes = maximumAllocationBytes) const;
 
 private:
+  friend class SparsePixelTileStore;
+
   PixelTile(PixelStorageLayout layout, QByteArray bytes);
 
   PixelStorageLayout layout_;
@@ -242,11 +245,19 @@ struct PixelTileSnapshot final {
       default;
 };
 
+struct PixelRegionBuffer final {
+  PixelStorageLayout layout;
+  QByteArray bytes;
+};
+
 class SparsePixelTileStore final {
 public:
   static constexpr quint64 hardMaximumResidentBytes =
       16ULL * 1024ULL * 1024ULL;
   static constexpr quint64 hardMaximumResidentTiles = 64;
+  static constexpr quint64 hardMaximumRegionBytes =
+      16ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 hardMaximumRegionTiles = 64;
 
   [[nodiscard]] static std::optional<SparsePixelTileStore> create(
       QSize dimensions, PixelFormat format,
@@ -269,6 +280,13 @@ public:
       const QVector<PixelTileSnapshot>& snapshots,
       quint64 maximumResidentBytes = hardMaximumResidentBytes,
       quint64 maximumResidentTiles = hardMaximumResidentTiles);
+  [[nodiscard]] std::optional<PixelRegionBuffer> readRegion(
+      QRect region, quint64 rowAlignment = 1,
+      quint64 maximumAllocationBytes = hardMaximumRegionBytes) const;
+  PixelTileWriteResult writeRegion(
+      QRect region, std::span<const std::byte> source,
+      quint64 sourceRowStrideBytes,
+      quint64 maximumAllocationBytes = hardMaximumRegionBytes);
   PixelTileWriteResult setPixelBytes(QPoint position,
                                      std::span<const std::byte> source);
 

@@ -70,6 +70,10 @@ private slots:
   void exportsSparseSnapshotsInDeterministicOrder();
   void roundTripsOwningSparseSnapshots();
   void rejectsHostileSparseSnapshotsAtomically();
+  void readsExactSparseRegionsAcrossTileBoundaries();
+  void writesAliasedSparseRegionsTransactionally();
+  void elidesTilesAfterZeroRegionWrites();
+  void rejectsHostileSparseRegionsAtomically();
 };
 
 void PixelStorageTest::describesSupportedSampleAndChannelContracts() {
@@ -822,6 +826,206 @@ void PixelStorageTest::rejectsHostileSparseSnapshotsAtomically() {
       QSize(512, 256), rgba8, baseline, tileBytes * 2,
       SparsePixelTileStore::hardMaximumResidentTiles + 1));
   QVERIFY(baseline == baselineBefore);
+}
+
+void PixelStorageTest::readsExactSparseRegionsAcrossTileBoundaries() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::RGBA, AlphaMode::Straight,
+                           ByteOrder::BigEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 8ULL;
+  auto store = SparsePixelTileStore::create(QSize(300, 300), format,
+                                             tileBytes * 3, 3);
+  QVERIFY(store);
+  const auto topLeft = QByteArray::fromHex("0102030405060708");
+  const auto topRight = QByteArray::fromHex("1112131415161718");
+  const auto bottomLeft = QByteArray::fromHex("2122232425262728");
+  QCOMPARE(store->setPixelBytes(QPoint(255, 255), bytesOf(topLeft)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(store->setPixelBytes(QPoint(256, 255), bytesOf(topRight)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(store->setPixelBytes(QPoint(255, 256), bytesOf(bottomLeft)),
+           PixelTileWriteResult::Changed);
+
+  const auto region = store->readRegion(QRect(255, 255, 2, 2), 32, 64);
+  QVERIFY(region);
+  QCOMPARE(region->layout.dimensions(), QSize(2, 2));
+  QCOMPARE(region->layout.format(), format);
+  QCOMPARE(region->layout.packedRowBytes(), quint64(16));
+  QCOMPARE(region->layout.rowStrideBytes(), quint64(32));
+  QCOMPARE(region->layout.allocationBytes(), quint64(64));
+  QCOMPARE(region->bytes.mid(0, 8), topLeft);
+  QCOMPARE(region->bytes.mid(8, 8), topRight);
+  QCOMPARE(region->bytes.mid(16, 16), QByteArray(16, '\0'));
+  QCOMPARE(region->bytes.mid(32, 8), bottomLeft);
+  QCOMPARE(region->bytes.mid(40, 24), QByteArray(24, '\0'));
+  QVERIFY(!store->readRegion(QRect(255, 255, 2, 2), 32, 63));
+
+  auto reopened = SparsePixelTileStore::create(QSize(300, 300), format,
+                                                tileBytes * 3, 3);
+  QVERIFY(reopened);
+  QCOMPARE(reopened->writeRegion(QRect(255, 255, 2, 2),
+                                 bytesOf(region->bytes),
+                                 region->layout.rowStrideBytes(),
+                                 tileBytes * 4),
+           PixelTileWriteResult::Changed);
+  const auto roundTrip = reopened->readRegion(QRect(255, 255, 2, 2), 32, 64);
+  QVERIFY(roundTrip);
+  QCOMPARE(roundTrip->bytes, region->bytes);
+  QCOMPARE(reopened->format().byteOrder, ByteOrder::BigEndian);
+}
+
+void PixelStorageTest::writesAliasedSparseRegionsTransactionally() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::Gray, AlphaMode::None,
+                           ByteOrder::BigEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 2ULL;
+  auto original = SparsePixelTileStore::create(QSize(512, 256), format,
+                                                tileBytes * 2, 2);
+  QVERIFY(original);
+  const auto first = QByteArray::fromHex("0102");
+  const auto second = QByteArray::fromHex("0304");
+  const auto untouched = QByteArray::fromHex("0506");
+  QCOMPARE(original->setPixelBytes(QPoint(0, 0), bytesOf(first)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(original->setPixelBytes(QPoint(1, 0), bytesOf(second)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(original->setPixelBytes(QPoint(256, 0), bytesOf(untouched)),
+           PixelTileWriteResult::Changed);
+  auto copy = *original;
+  const auto* sharedSecondTile =
+      original->packedTileBytes(PixelTileIndex{1, 0})->data();
+  const auto aliasedSource =
+      copy.packedTileBytes(PixelTileIndex{0, 0})->subspan(0, 4);
+
+  QCOMPARE(copy.writeRegion(QRect(1, 0, 2, 1), aliasedSource, 4, tileBytes),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(*copy.pixelBytes(QPoint(1, 0)), first);
+  QCOMPARE(*copy.pixelBytes(QPoint(2, 0)), second);
+  QCOMPARE(*original->pixelBytes(QPoint(1, 0)), second);
+  QVERIFY(copy.packedTileBytes(PixelTileIndex{0, 0})->data() !=
+          original->packedTileBytes(PixelTileIndex{0, 0})->data());
+  QCOMPARE(copy.packedTileBytes(PixelTileIndex{1, 0})->data(),
+           sharedSecondTile);
+
+  const auto unchanged = copy.readRegion(QRect(1, 0, 2, 1), 1, 4);
+  QVERIFY(unchanged);
+  const auto before = copy.tileSnapshots();
+  QCOMPARE(copy.writeRegion(QRect(1, 0, 2, 1), bytesOf(unchanged->bytes), 4,
+                            tileBytes),
+           PixelTileWriteResult::Unchanged);
+  QVERIFY(copy.tileSnapshots() == before);
+}
+
+void PixelStorageTest::elidesTilesAfterZeroRegionWrites() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::Gray, AlphaMode::None,
+                           ByteOrder::LittleEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 2ULL;
+  auto store =
+      SparsePixelTileStore::create(QSize(256, 256), format, tileBytes, 1);
+  QVERIFY(store);
+  const auto nonzero = QByteArray::fromHex("01000200");
+  QCOMPARE(store->writeRegion(QRect(4, 5, 2, 1), bytesOf(nonzero), 4,
+                              tileBytes),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(store->allocatedTileCount(), 1);
+  const QByteArray oneZero(2, '\0');
+  QCOMPARE(store->writeRegion(QRect(4, 5, 1, 1), bytesOf(oneZero), 2,
+                              tileBytes),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(store->allocatedTileCount(), 1);
+  QCOMPARE(store->residentDecodedBytes(), tileBytes);
+  QCOMPARE(*store->pixelBytes(QPoint(5, 5)), QByteArray::fromHex("0200"));
+  QCOMPARE(store->writeRegion(QRect(5, 5, 1, 1), bytesOf(oneZero), 2,
+                              tileBytes),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(store->allocatedTileCount(), 0);
+  QCOMPARE(store->residentDecodedBytes(), quint64(0));
+  QCOMPARE(store->writeRegion(QRect(5, 5, 1, 1), bytesOf(oneZero), 2,
+                              tileBytes),
+           PixelTileWriteResult::Unchanged);
+}
+
+void PixelStorageTest::rejectsHostileSparseRegionsAtomically() {
+  const auto rgba8 = PixelFormat::rgba8Premultiplied();
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 4ULL;
+  auto store = SparsePixelTileStore::create(QSize(512, 256), rgba8,
+                                             tileBytes, 1);
+  QVERIFY(store);
+  const auto existing = QByteArray::fromHex("01010101");
+  QCOMPARE(store->setPixelBytes(QPoint(255, 0), bytesOf(existing)),
+           PixelTileWriteResult::Changed);
+  const auto before = store->tileSnapshots();
+  const auto twoPixels = QByteArray::fromHex("0202020203030303");
+  QCOMPARE(store->writeRegion(QRect(255, 0, 2, 1), bytesOf(twoPixels), 8,
+                              tileBytes * 2),
+           PixelTileWriteResult::Rejected);
+  QVERIFY(store->tileSnapshots() == before);
+  QCOMPARE(store->allocatedTileCount(), 1);
+  QCOMPARE(store->residentDecodedBytes(), tileBytes);
+
+  const auto invalidPremultiplied = QByteArray::fromHex("02010101");
+  QCOMPARE(store->writeRegion(QRect(255, 0, 1, 1),
+                              bytesOf(invalidPremultiplied), 4, tileBytes),
+           PixelTileWriteResult::Rejected);
+  QVERIFY(store->tileSnapshots() == before);
+  QVERIFY(!store->readRegion(QRect(), 1, 1));
+  QVERIFY(!store->readRegion(QRect(-1, 0, 1, 1), 1, 4));
+  QVERIFY(!store->readRegion(QRect(511, 0, 2, 1), 1, 8));
+  QVERIFY(!store->readRegion(QRect(0, 0, 1, 1), 3, 4));
+  QVERIFY(!store->readRegion(
+      QRect(0, 0, 1, 1), 1,
+      SparsePixelTileStore::hardMaximumRegionBytes + 1));
+  QCOMPARE(store->writeRegion(QRect(), bytesOf(existing), 4, 4),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(store->writeRegion(QRect(0, 0, 1, 1),
+                              bytesOf(QByteArray::fromHex("010101")), 4,
+                              tileBytes),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(store->writeRegion(QRect(0, 0, 1, 1),
+                              bytesOf(QByteArray::fromHex("0101010100")), 4,
+                              tileBytes),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(store->writeRegion(QRect(0, 0, 2, 1), bytesOf(twoPixels), 7,
+                              tileBytes),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(store->writeRegion(QRect(0, 0, 1, 1), bytesOf(existing),
+                              std::numeric_limits<quint64>::max(), tileBytes),
+           PixelTileWriteResult::Rejected);
+  QVERIFY(store->tileSnapshots() == before);
+
+  const PixelFormat gray8{SampleFormat::UnsignedInteger8,
+                          ChannelLayout::Gray, AlphaMode::None,
+                          ByteOrder::NotApplicable};
+  auto tall = SparsePixelTileStore::create(QSize(1, 65 * 256), gray8);
+  QVERIFY(tall);
+  const QByteArray tallSource(65 * 256, '\1');
+  QVERIFY(!tall->readRegion(QRect(0, 0, 1, 65 * 256), 1,
+                           tallSource.size()));
+  QCOMPARE(tall->writeRegion(QRect(0, 0, 1, 65 * 256), bytesOf(tallSource), 1,
+                             tallSource.size()),
+           PixelTileWriteResult::Rejected);
+
+  const PixelFormat rgbaFloat{SampleFormat::Float32, ChannelLayout::RGBA,
+                              AlphaMode::Straight,
+                              ByteOrder::LittleEndian};
+  auto wideFloat = SparsePixelTileStore::create(QSize(17 * 256, 1), rgbaFloat);
+  QVERIFY(wideFloat);
+  const QByteArray wideSource(17 * 256 * 16, '\1');
+  QCOMPARE(wideFloat->writeRegion(QRect(0, 0, 17 * 256, 1),
+                                  bytesOf(wideSource), 17 * 256 * 16),
+           PixelTileWriteResult::Rejected);
+
+  auto maximumGeometry = SparsePixelTileStore::create(
+      QSize(std::numeric_limits<int>::max(), std::numeric_limits<int>::max()),
+      gray8);
+  QVERIFY(maximumGeometry);
+  const auto finalPixel = maximumGeometry->readRegion(
+      QRect(std::numeric_limits<int>::max() - 1, 0, 1, 1), 1, 1);
+  QVERIFY(finalPixel);
+  QCOMPARE(finalPixel->bytes, QByteArray(1, '\0'));
+  QVERIFY(!maximumGeometry->readRegion(
+      QRect(std::numeric_limits<int>::max() - 1, 0, 2, 1), 1, 2));
 }
 
 QTEST_APPLESS_MAIN(PixelStorageTest)

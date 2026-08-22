@@ -70,6 +70,43 @@ bool isValidPremultipliedRgba8Pixel(
          bytes[2] <= bytes[3];
 }
 
+struct RegionTileBounds final {
+  quint64 firstColumn = 0;
+  quint64 lastColumn = 0;
+  quint64 firstRow = 0;
+  quint64 lastRow = 0;
+  quint64 tileCount = 0;
+};
+
+std::optional<RegionTileBounds> regionTileBounds(QSize dimensions,
+                                                  QRect region) noexcept {
+  if (region.x() < 0 || region.y() < 0 || region.width() <= 0 ||
+      region.height() <= 0) {
+    return std::nullopt;
+  }
+  const quint64 right = static_cast<quint64>(region.x()) +
+                        static_cast<quint64>(region.width());
+  const quint64 bottom = static_cast<quint64>(region.y()) +
+                         static_cast<quint64>(region.height());
+  if (right > static_cast<quint64>(dimensions.width()) ||
+      bottom > static_cast<quint64>(dimensions.height())) {
+    return std::nullopt;
+  }
+
+  RegionTileBounds bounds{
+      .firstColumn = static_cast<quint64>(region.x()) / PixelTile::extent,
+      .lastColumn = (right - 1U) / PixelTile::extent,
+      .firstRow = static_cast<quint64>(region.y()) / PixelTile::extent,
+      .lastRow = (bottom - 1U) / PixelTile::extent,
+  };
+  const quint64 columns = bounds.lastColumn - bounds.firstColumn + 1U;
+  const quint64 rows = bounds.lastRow - bounds.firstRow + 1U;
+  if (!checkedMultiply(columns, rows, bounds.tileCount)) {
+    return std::nullopt;
+  }
+  return bounds;
+}
+
 quint8 premultiply(quint8 color, quint8 alpha) noexcept {
   return static_cast<quint8>((static_cast<quint32>(color) * alpha + 127U) /
                              255U);
@@ -465,6 +502,208 @@ SparsePixelTileStore::fromTileSnapshots(
   }
   store->residentDecodedBytes_ = count * store->tileAllocationBytes_;
   return store;
+}
+
+std::optional<PixelRegionBuffer> SparsePixelTileStore::readRegion(
+    QRect region, quint64 rowAlignment,
+    quint64 maximumAllocationBytes) const {
+  const auto bounds = regionTileBounds(dimensions_, region);
+  if (!bounds || bounds->tileCount > hardMaximumRegionTiles ||
+      maximumAllocationBytes == 0 ||
+      maximumAllocationBytes > hardMaximumRegionBytes) {
+    return std::nullopt;
+  }
+  const auto layout = PixelStorageLayout::create(
+      region.size(), format_, rowAlignment, maximumAllocationBytes);
+  if (!layout) {
+    return std::nullopt;
+  }
+
+  QByteArray output(static_cast<qsizetype>(layout->allocationBytes()), '\0');
+  if (output.size() != static_cast<qsizetype>(layout->allocationBytes())) {
+    return std::nullopt;
+  }
+  auto* destination = reinterpret_cast<std::byte*>(output.data());
+  const quint64 bytesPerPixel = format_.bytesPerPixel();
+  const quint64 regionRight = static_cast<quint64>(region.x()) +
+                              static_cast<quint64>(region.width());
+  const quint64 regionBottom = static_cast<quint64>(region.y()) +
+                               static_cast<quint64>(region.height());
+
+  for (quint64 tileRow = bounds->firstRow; tileRow <= bounds->lastRow;
+       ++tileRow) {
+    for (quint64 tileColumn = bounds->firstColumn;
+         tileColumn <= bounds->lastColumn; ++tileColumn) {
+      const PixelTileIndex index{static_cast<quint32>(tileColumn),
+                                 static_cast<quint32>(tileRow)};
+      const auto tile = tiles_.constFind(index);
+      if (tile == tiles_.cend()) {
+        continue;
+      }
+      const quint64 tileX = tileColumn * PixelTile::extent;
+      const quint64 tileY = tileRow * PixelTile::extent;
+      const quint64 copyLeft =
+          std::max(tileX, static_cast<quint64>(region.x()));
+      const quint64 copyRight =
+          std::min(tileX + PixelTile::extent, regionRight);
+      const quint64 copyTop =
+          std::max(tileY, static_cast<quint64>(region.y()));
+      const quint64 copyBottom =
+          std::min(tileY + PixelTile::extent, regionBottom);
+      const quint64 copyBytes = (copyRight - copyLeft) * bytesPerPixel;
+      const auto packed = tile->packedBytes();
+      for (quint64 y = copyTop; y < copyBottom; ++y) {
+        const quint64 sourceOffset =
+            ((y - tileY) * PixelTile::extent + copyLeft - tileX) *
+            bytesPerPixel;
+        const quint64 destinationOffset =
+            (y - static_cast<quint64>(region.y())) *
+                layout->rowStrideBytes() +
+            (copyLeft - static_cast<quint64>(region.x())) * bytesPerPixel;
+        std::memcpy(destination + destinationOffset,
+                    packed.data() + sourceOffset, copyBytes);
+      }
+    }
+  }
+  return PixelRegionBuffer{*layout, std::move(output)};
+}
+
+PixelTileWriteResult SparsePixelTileStore::writeRegion(
+    QRect region, std::span<const std::byte> source,
+    quint64 sourceRowStrideBytes, quint64 maximumAllocationBytes) {
+  const auto bounds = regionTileBounds(dimensions_, region);
+  if (!bounds || bounds->tileCount > hardMaximumRegionTiles ||
+      maximumAllocationBytes == 0 ||
+      maximumAllocationBytes > hardMaximumRegionBytes ||
+      bounds->tileCount > maximumAllocationBytes / tileAllocationBytes_) {
+    return PixelTileWriteResult::Rejected;
+  }
+  const auto sourceLayout = PixelStorageLayout::createWithRowStride(
+      region.size(), format_, sourceRowStrideBytes, maximumAllocationBytes);
+  const auto fullTileLayout = tileLayout(format_, tileAllocationBytes_);
+  if (!sourceLayout || !fullTileLayout ||
+      source.size() != sourceLayout->allocationBytes()) {
+    return PixelTileWriteResult::Rejected;
+  }
+
+  QByteArray staged(reinterpret_cast<const char*>(source.data()),
+                    static_cast<qsizetype>(source.size()));
+  if (staged.size() != static_cast<qsizetype>(source.size())) {
+    return PixelTileWriteResult::Rejected;
+  }
+
+  struct PendingTile final {
+    PixelTileIndex index;
+    bool remove = false;
+    bool add = false;
+    std::optional<PixelTile> replacement;
+  };
+  QVector<PendingTile> pending;
+  pending.reserve(static_cast<qsizetype>(bounds->tileCount));
+  quint64 additions = 0;
+  quint64 removals = 0;
+  const quint64 bytesPerPixel = format_.bytesPerPixel();
+  const quint64 regionRight = static_cast<quint64>(region.x()) +
+                              static_cast<quint64>(region.width());
+  const quint64 regionBottom = static_cast<quint64>(region.y()) +
+                               static_cast<quint64>(region.height());
+  const auto* stagedBytes =
+      reinterpret_cast<const std::byte*>(staged.constData());
+
+  for (quint64 tileRow = bounds->firstRow; tileRow <= bounds->lastRow;
+       ++tileRow) {
+    for (quint64 tileColumn = bounds->firstColumn;
+         tileColumn <= bounds->lastColumn; ++tileColumn) {
+      const PixelTileIndex index{static_cast<quint32>(tileColumn),
+                                 static_cast<quint32>(tileRow)};
+      const auto existing = tiles_.constFind(index);
+      const bool existed = existing != tiles_.cend();
+      QByteArray packed(
+          existed ? reinterpret_cast<const char*>(existing->packedBytes().data())
+                  : nullptr,
+          existed ? static_cast<qsizetype>(tileAllocationBytes_) : 0);
+      if (!existed) {
+        packed = QByteArray(static_cast<qsizetype>(tileAllocationBytes_), '\0');
+      }
+      if (packed.size() != static_cast<qsizetype>(tileAllocationBytes_)) {
+        return PixelTileWriteResult::Rejected;
+      }
+
+      const quint64 tileX = tileColumn * PixelTile::extent;
+      const quint64 tileY = tileRow * PixelTile::extent;
+      const quint64 copyLeft =
+          std::max(tileX, static_cast<quint64>(region.x()));
+      const quint64 copyRight =
+          std::min(tileX + PixelTile::extent, regionRight);
+      const quint64 copyTop =
+          std::max(tileY, static_cast<quint64>(region.y()));
+      const quint64 copyBottom =
+          std::min(tileY + PixelTile::extent, regionBottom);
+      const quint64 copyBytes = (copyRight - copyLeft) * bytesPerPixel;
+      auto* packedBytes = reinterpret_cast<std::byte*>(packed.data());
+      for (quint64 y = copyTop; y < copyBottom; ++y) {
+        const quint64 sourceOffset =
+            (y - static_cast<quint64>(region.y())) * sourceRowStrideBytes +
+            (copyLeft - static_cast<quint64>(region.x())) * bytesPerPixel;
+        const quint64 destinationOffset =
+            ((y - tileY) * PixelTile::extent + copyLeft - tileX) *
+            bytesPerPixel;
+        std::memcpy(packedBytes + destinationOffset,
+                    stagedBytes + sourceOffset, copyBytes);
+      }
+
+      if (existed &&
+          std::equal(existing->packedBytes().begin(),
+                     existing->packedBytes().end(),
+                     reinterpret_cast<const std::byte*>(packed.constData()))) {
+        continue;
+      }
+      const bool isZero =
+          std::all_of(packed.cbegin(), packed.cend(),
+                      [](char byte) { return byte == 0; });
+      if (isZero) {
+        if (existed) {
+          pending.push_back({.index = index, .remove = true});
+          ++removals;
+        }
+        continue;
+      }
+      const auto packedSpan = std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(packed.constData()),
+          static_cast<std::size_t>(packed.size()));
+      if (format_ == PixelFormat::rgba8Premultiplied() &&
+          !hasValidPremultipliedSamples(packedSpan, *fullTileLayout)) {
+        return PixelTileWriteResult::Rejected;
+      }
+      pending.push_back({.index = index,
+                         .add = !existed,
+                         .replacement = PixelTile(*fullTileLayout,
+                                                  std::move(packed))});
+      additions += !existed ? 1U : 0U;
+    }
+  }
+
+  if (pending.isEmpty()) {
+    return PixelTileWriteResult::Unchanged;
+  }
+  const quint64 finalTileCount =
+      static_cast<quint64>(tiles_.size()) - removals + additions;
+  if (finalTileCount > maximumResidentTiles_ ||
+      finalTileCount > maximumResidentBytes_ / tileAllocationBytes_) {
+    return PixelTileWriteResult::Rejected;
+  }
+
+  auto candidate = *this;
+  for (auto& change : pending) {
+    if (change.remove) {
+      candidate.tiles_.remove(change.index);
+    } else {
+      candidate.tiles_.insert(change.index, std::move(*change.replacement));
+    }
+  }
+  candidate.residentDecodedBytes_ = finalTileCount * tileAllocationBytes_;
+  *this = std::move(candidate);
+  return PixelTileWriteResult::Changed;
 }
 
 PixelTileWriteResult SparsePixelTileStore::setPixelBytes(
