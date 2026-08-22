@@ -30,6 +30,12 @@ than leaving the contract implicit. The new high-depth values are descriptions
 and validation prerequisites only: they do not claim high-depth allocation,
 rendering, conversion, native persistence, or format round trips.
 
+RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
+The check runs only after a transparent write and never removes a tile that
+still contains another nonzero pixel. Import already omits fully transparent
+tiles. Broader normalization of tiles produced by merge, flatten, or native-load
+paths remains future work.
+
 Conversions must be explicit at import, export, display, and future render-node
 boundaries. This slice adds no color interpretation, profiles, transfer
 functions, or color-library dependency.

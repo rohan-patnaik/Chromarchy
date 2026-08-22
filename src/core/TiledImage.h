@@ -63,6 +63,7 @@ private:
   [[nodiscard]] bool contains(QPoint position) const noexcept;
   [[nodiscard]] static TileIndex tileIndex(QPoint position) noexcept;
   [[nodiscard]] static QPoint tileOrigin(TileIndex index) noexcept;
+  [[nodiscard]] static bool isZeroTile(const QImage& tile) noexcept;
   QImage& ensureTile(TileIndex index);
 
   QSize size_;

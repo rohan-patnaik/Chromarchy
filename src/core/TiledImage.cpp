@@ -2,6 +2,7 @@
 
 #include <QPainter>
 
+#include <algorithm>
 #include <utility>
 
 namespace chromarchy {
@@ -168,6 +169,9 @@ bool TiledImage::setPixelColor(QPoint position, const QColor& color) {
 
   auto& tile = ensureTile(index);
   tile.setPixelColor(position - tileOrigin(index), color);
+  if (color.alpha() == 0 && isZeroTile(tile)) {
+    tiles_.remove(index);
+  }
   dirtyRegion_ += QRect(position, QSize(1, 1));
   return true;
 }
@@ -199,6 +203,13 @@ TileIndex TiledImage::tileIndex(QPoint position) noexcept {
 
 QPoint TiledImage::tileOrigin(TileIndex index) noexcept {
   return {index.column * tileExtent, index.row * tileExtent};
+}
+
+bool TiledImage::isZeroTile(const QImage& tile) noexcept {
+  const auto* begin = tile.constBits();
+  return begin != nullptr &&
+         std::all_of(begin, begin + tile.sizeInBytes(),
+                     [](uchar byte) { return byte == 0; });
 }
 
 QImage& TiledImage::ensureTile(TileIndex index) {

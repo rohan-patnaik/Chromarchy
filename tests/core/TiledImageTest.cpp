@@ -12,6 +12,8 @@ private slots:
   void copiesDetachOnMutation();
   void reportsAndClearsDirtyRegion();
   void rendersRequestedRegion();
+  void elidesTileWhenLastPixelBecomesZero();
+  void zeroTileElisionPreservesCopiesAndNonzeroPixels();
 };
 
 void TiledImageTest::remainsSparseAcrossTileBoundaries() {
@@ -58,6 +60,37 @@ void TiledImageTest::rendersRequestedRegion() {
   const auto rendered = image.render(QRect(250, 260, 20, 20));
   QCOMPARE(rendered.size(), QSize(20, 20));
   QCOMPARE(rendered.pixelColor(QPoint(10, 10)), QColor(10, 20, 30, 255));
+}
+
+void TiledImageTest::elidesTileWhenLastPixelBecomesZero() {
+  TiledImage image(QSize(512, 512));
+  const QPoint position(300, 301);
+  QVERIFY(image.setPixelColor(position, QColor(10, 20, 30, 128)));
+  QCOMPARE(image.allocatedTileCount(), 1);
+  image.takeDirtyRegion();
+
+  QVERIFY(image.setPixelColor(position, Qt::transparent));
+  QCOMPARE(image.allocatedTileCount(), 0);
+  QCOMPARE(image.pixelColor(position), QColor(Qt::transparent));
+  QCOMPARE(image.dirtyRegion(), QRegion(QRect(position, QSize(1, 1))));
+}
+
+void TiledImageTest::zeroTileElisionPreservesCopiesAndNonzeroPixels() {
+  TiledImage original(QSize(256, 256));
+  QVERIFY(original.setPixelColor(QPoint(1, 1), Qt::red));
+  QVERIFY(original.setPixelColor(QPoint(2, 2), Qt::blue));
+  original.takeDirtyRegion();
+  auto copy = original;
+
+  QVERIFY(copy.setPixelColor(QPoint(1, 1), Qt::transparent));
+  QCOMPARE(copy.allocatedTileCount(), 1);
+  QCOMPARE(copy.pixelColor(QPoint(2, 2)), QColor(Qt::blue));
+  QCOMPARE(original.pixelColor(QPoint(1, 1)), QColor(Qt::red));
+  QCOMPARE(original.pixelColor(QPoint(2, 2)), QColor(Qt::blue));
+
+  QVERIFY(copy.setPixelColor(QPoint(2, 2), Qt::transparent));
+  QCOMPARE(copy.allocatedTileCount(), 0);
+  QCOMPARE(original.allocatedTileCount(), 1);
 }
 
 QTEST_APPLESS_MAIN(TiledImageTest)
