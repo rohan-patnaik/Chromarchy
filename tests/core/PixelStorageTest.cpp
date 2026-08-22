@@ -78,6 +78,7 @@ private slots:
   void rejectsHostileSparseRegionsAtomically();
   void createsDeterministicBoundedTileDeltas();
   void appliesTileDeltasForwardAndReverse();
+  void enforcesHardTileDeltaBoundaries();
   void rejectsHostileTileDeltasAtomically();
 };
 
@@ -1159,6 +1160,59 @@ void PixelStorageTest::appliesTileDeltasForwardAndReverse() {
   (*mutableRecords[0].before)[0] = '\x7e';
   QCOMPARE(target.tileSnapshots(), beforeSnapshots);
   QCOMPARE(*records, recordsBefore);
+}
+
+void PixelStorageTest::enforcesHardTileDeltaBoundaries() {
+  const PixelFormat format{SampleFormat::Float32, ChannelLayout::RGBA,
+                           AlphaMode::Straight, ByteOrder::LittleEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 16ULL;
+  static_assert(tileBytes == PixelTile::maximumAllocationBytes);
+  auto before = SparsePixelTileStore::create(
+      QSize(9 * 256, 256), format,
+      SparsePixelTileStore::hardMaximumResidentBytes, 9);
+  QVERIFY(before);
+  const QByteArray first(16, '\1');
+  for (int column = 0; column < 8; ++column) {
+    QCOMPARE(before->setPixelBytes(QPoint(column * 256, 0), bytesOf(first)),
+             PixelTileWriteResult::Changed);
+  }
+  auto after = *before;
+  const QByteArray second(16, '\2');
+  for (int column = 0; column < 8; ++column) {
+    QCOMPARE(after.setPixelBytes(QPoint(column * 256, 0), bytesOf(second)),
+             PixelTileWriteResult::Changed);
+  }
+
+  const auto exact = before->tileDeltaTo(
+      after, SparsePixelTileStore::hardMaximumDeltaBytes, 8);
+  QVERIFY(exact);
+  QCOMPARE(exact->size(), 8);
+  const auto eightTileAfter = after.tileSnapshots();
+  auto target = *before;
+  QCOMPARE(target.applyTileDelta(
+               *exact, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes - 1, 8),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(target.tileSnapshots(), before->tileSnapshots());
+  QCOMPARE(target.applyTileDelta(
+               *exact, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes, 8),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(target.tileSnapshots(), eightTileAfter);
+
+  QCOMPARE(after.setPixelBytes(QPoint(8 * 256, 0), bytesOf(second)),
+           PixelTileWriteResult::Changed);
+  QVERIFY(!before->tileDeltaTo(after));
+  QVERIFY(!before->tileDeltaTo(
+      target, SparsePixelTileStore::hardMaximumDeltaBytes + 1, 8));
+  QVERIFY(!before->tileDeltaTo(
+      target, SparsePixelTileStore::hardMaximumDeltaBytes,
+      SparsePixelTileStore::hardMaximumDeltaRecords + 1));
+  QCOMPARE(target.applyTileDelta(
+               *exact, PixelTileDeltaDirection::Reverse,
+               SparsePixelTileStore::hardMaximumDeltaBytes + 1, 8),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(target.tileSnapshots(), eightTileAfter);
 }
 
 void PixelStorageTest::rejectsHostileTileDeltasAtomically() {
