@@ -1,6 +1,7 @@
 #include "core/PixelStorage.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -292,7 +293,12 @@ bool PixelTile::setPixelBytes(QPoint position,
   }
   const auto offset =
       static_cast<qsizetype>(existing.data() - packedBytes().data());
-  std::memcpy(bytes_.data() + offset, source.data(), source.size());
+  std::array<std::byte, 16> stableSource{};
+  if (source.size() > stableSource.size()) {
+    return false;
+  }
+  std::copy(source.begin(), source.end(), stableSource.begin());
+  std::memcpy(bytes_.data() + offset, stableSource.data(), source.size());
   return true;
 }
 

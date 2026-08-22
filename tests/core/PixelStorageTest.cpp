@@ -55,6 +55,7 @@ private slots:
   void roundTripsQImageWithoutChangingLiveFormat();
   void allocatesBoundedHighDepthTiles();
   void accessesHighDepthSamplesWithCopyOnWrite();
+  void handlesPartiallyOverlappingSelfWrites();
   void roundTripsHighDepthPersistenceSeam();
   void keepsRgba8ConversionSeamExplicit();
 };
@@ -375,6 +376,40 @@ void PixelStorageTest::accessesHighDepthSamplesWithCopyOnWrite() {
   const QByteArray zeroSample(sample.size(), '\0');
   QVERIFY(copy.setPixelBytes(position, bytesOf(zeroSample)));
   QVERIFY(copy.isZero());
+}
+
+void PixelStorageTest::handlesPartiallyOverlappingSelfWrites() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::RGBA, AlphaMode::Straight,
+                           ByteOrder::LittleEndian};
+  auto original = PixelTile::create(format);
+  QVERIFY(original);
+  const auto firstPixel = QByteArray::fromHex("0102030405060708");
+  QVERIFY(original->setPixelBytes(QPoint(0, 0), bytesOf(firstPixel)));
+
+  auto copy = *original;
+  const auto aliasedSource = copy.packedBytes().subspan(7, 8);
+  QVERIFY(copy.setPixelBytes(QPoint(1, 0), aliasedSource));
+
+  const auto expected = QByteArray::fromHex("0800000000000000");
+  QCOMPARE(QByteArray(
+               reinterpret_cast<const char*>(
+                   copy.pixelBytes(QPoint(1, 0)).data()),
+               static_cast<qsizetype>(copy.pixelBytes(QPoint(1, 0)).size())),
+           expected);
+  QCOMPARE(QByteArray(
+               reinterpret_cast<const char*>(
+                   original->pixelBytes(QPoint(0, 0)).data()),
+               static_cast<qsizetype>(
+                   original->pixelBytes(QPoint(0, 0)).size())),
+           firstPixel);
+  QCOMPARE(QByteArray(
+               reinterpret_cast<const char*>(
+                   original->pixelBytes(QPoint(1, 0)).data()),
+               static_cast<qsizetype>(
+                   original->pixelBytes(QPoint(1, 0)).size())),
+           QByteArray(8, '\0'));
+  QVERIFY(copy.packedBytes().data() != original->packedBytes().data());
 }
 
 void PixelStorageTest::roundTripsHighDepthPersistenceSeam() {
