@@ -19,6 +19,10 @@ Chromarchy performance work is measured with reproducible workloads before relea
 The large canvas and selection workloads intentionally verify that cost follows
 allocated or visible tiles rather than total canvas area.
 
+Checked pixel byte geometry is validated independently of allocation. Current
+RGBA8 tiles remain 256×256 (262,144 payload bytes); the typed-format contract
+does not allocate high-depth tiles or change benchmark workloads in this slice.
+
 ## Run locally
 
 ```sh

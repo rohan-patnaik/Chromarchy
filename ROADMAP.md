@@ -48,6 +48,10 @@ APIs, and copied proprietary expressive material are excluded.
 
 Stop for independent high review and remediate findings before M1 closure.
 
+The first item is in progress: dependency-free sample/channel/alpha/endian
+descriptors and checked row/tile/allocation arithmetic exist, while high-depth
+tile allocation, conversions, rendering, and persistence remain future slices.
+
 ### Phase 2 — close M0/M1 local workflows
 
 - Workspace/settings/workspace presets, shortcut editor, accessible names/focus,

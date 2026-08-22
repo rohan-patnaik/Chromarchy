@@ -21,6 +21,8 @@ qt_add_library(chromarchy_core STATIC
   src/core/Layer.h
   src/core/NativeDocumentCodec.cpp
   src/core/NativeDocumentCodec.h
+  src/core/PixelStorage.cpp
+  src/core/PixelStorage.h
   src/core/SelectionMask.cpp
   src/core/SelectionMask.h
   src/core/StorageBlock.h
@@ -68,6 +70,17 @@ if(BUILD_TESTING)
   qt_add_executable(chromarchy_tiled_image_tests tests/core/TiledImageTest.cpp)
   target_link_libraries(chromarchy_tiled_image_tests PRIVATE chromarchy_core Qt6::Test)
   add_test(NAME chromarchy_tiled_image COMMAND chromarchy_tiled_image_tests)
+
+  qt_add_executable(chromarchy_pixel_storage_tests
+    tests/core/PixelStorageTest.cpp
+  )
+  target_link_libraries(chromarchy_pixel_storage_tests PRIVATE
+    chromarchy_core Qt6::Test
+  )
+  target_compile_definitions(chromarchy_pixel_storage_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  add_test(NAME chromarchy_pixel_storage COMMAND chromarchy_pixel_storage_tests)
 
   qt_add_executable(chromarchy_image_io_tests tests/core/ImageIOTest.cpp)
   target_link_libraries(chromarchy_image_io_tests PRIVATE chromarchy_core Qt6::Test)

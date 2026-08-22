@@ -57,6 +57,17 @@ QSize TiledImage::size() const noexcept {
   return size_;
 }
 
+PixelFormat TiledImage::pixelFormat() const noexcept {
+  return PixelFormat::rgba8Premultiplied();
+}
+
+std::optional<PixelStorageLayout> TiledImage::tileStorageLayout(
+    quint64 maximumAllocationBytes) noexcept {
+  return PixelStorageLayout::create(QSize(tileExtent, tileExtent),
+                                    PixelFormat::rgba8Premultiplied(), 1,
+                                    maximumAllocationBytes);
+}
+
 bool TiledImage::isValid() const noexcept {
   return size_.width() > 0 && size_.height() > 0;
 }

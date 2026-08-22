@@ -1,0 +1,41 @@
+[
+  {
+    "name": "current RGBA8 premultiplied 256-square tile",
+    "sample": 0,
+    "channels": 3,
+    "alpha": 2,
+    "byteOrder": 0,
+    "width": 256,
+    "height": 256,
+    "rowAlignment": 1,
+    "packedRowBytes": 1024,
+    "rowStrideBytes": 1024,
+    "allocationBytes": 262144
+  },
+  {
+    "name": "little-endian RGBA16 tile with aligned rows",
+    "sample": 1,
+    "channels": 3,
+    "alpha": 1,
+    "byteOrder": 1,
+    "width": 17,
+    "height": 3,
+    "rowAlignment": 64,
+    "packedRowBytes": 136,
+    "rowStrideBytes": 192,
+    "allocationBytes": 576
+  },
+  {
+    "name": "big-endian RGB float32 scanlines",
+    "sample": 3,
+    "channels": 2,
+    "alpha": 0,
+    "byteOrder": 2,
+    "width": 5,
+    "height": 2,
+    "rowAlignment": 16,
+    "packedRowBytes": 60,
+    "rowStrideBytes": 64,
+    "allocationBytes": 128
+  }
+]

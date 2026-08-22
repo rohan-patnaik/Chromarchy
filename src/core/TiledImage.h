@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/PixelStorage.h"
 #include "core/StorageBlock.h"
 
 #include <QColor>
@@ -37,6 +38,10 @@ public:
   [[nodiscard]] static TiledImage fromImage(const QImage& image);
 
   [[nodiscard]] QSize size() const noexcept;
+  [[nodiscard]] PixelFormat pixelFormat() const noexcept;
+  [[nodiscard]] static std::optional<PixelStorageLayout> tileStorageLayout(
+      quint64 maximumAllocationBytes =
+          std::numeric_limits<quint64>::max()) noexcept;
   [[nodiscard]] bool isValid() const noexcept;
   [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
   [[nodiscard]] QColor pixelColor(QPoint position) const;
