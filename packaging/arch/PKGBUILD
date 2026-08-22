@@ -66,4 +66,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/PERFORMANCE.md"
   install -Dm644 Chromarchy/docs/FORMATS.md \
     "$pkgdir/usr/share/doc/$pkgname/FORMATS.md"
+  install -Dm644 Chromarchy/docs/PIXEL_STORAGE.md \
+    "$pkgdir/usr/share/doc/$pkgname/PIXEL_STORAGE.md"
 }
