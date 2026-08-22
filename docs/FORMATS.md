@@ -3,8 +3,9 @@
 The working engine's sample/channel/alpha/byte-order boundary is documented in
 [`PIXEL_STORAGE.md`](PIXEL_STORAGE.md). High-depth format contracts there are
 prerequisites, not evidence that current imports or exports preserve high-depth
-samples. Packed high-depth tiles are not part of native v1/v2 or raster I/O;
-Qt-decoded input still normalizes into RGBA8 premultiplied tiles.
+samples. Packed high-depth tiles and their isolated sparse owner are not part of
+native v1/v2 or raster I/O; Qt-decoded input still normalizes into RGBA8
+premultiplied tiles.
 
 Chromarchy uses the image codecs supplied by the installed Qt 6 image-format plugins. The Arch package depends on `qt6-base` and `qt6-imageformats`, which provide the target installation's PNG, JPEG, TIFF, WebP, and OpenEXR adapters where supported by that Qt build.
 

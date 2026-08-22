@@ -64,6 +64,27 @@ the existing RGBA8 formats. High-depth conversion deliberately reports
 unsupported until numeric scaling, rounding, nonfinite, and display policies
 are specified and reviewed.
 
+`SparsePixelTileStore` is an isolated typed owner over `PixelTile`. One store
+has one immutable pixel format and positive logical dimensions. Pixel and tile
+coordinates are checked against those dimensions with unsigned tile-grid
+arithmetic, including maximum `QSize` dimensions. Missing tiles read as exact
+byte-zero samples without allocating, and byte-zero writes to missing tiles are
+no-ops.
+
+Resident decoded payload is caller-bounded and hard-capped at 16 MiB and 64
+tiles, matching the existing native decoded-payload and tile-count ceilings.
+The per-format tile size is charged exactly before insertion; a format whose
+single tile exceeds the caller budget is rejected when the store is created.
+Wrong-size, invalid premultiplied RGBA8, out-of-range, tile-limit, and byte-limit
+writes leave the store and its accounting unchanged. Clearing the last nonzero
+byte elides the complete tile and releases its decoded-byte charge.
+
+Store and tile copies retain Qt copy-on-write isolation. Raw high-depth sample
+bytes and their declared endianness are preserved without numeric
+interpretation. The decoded-byte counter covers packed tile payloads exactly;
+`QHash`, allocator, and object metadata remain outside that counter, though the
+hard tile-count ceiling bounds the number of resident entries.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied
@@ -74,11 +95,11 @@ native version and packed premultiplied RGBA8 wire bytes are unchanged. Fixture
 tests prove byte-identical v2 save/reopen and pixel-identical v1 load, upgrade,
 and reopen across tile boundaries.
 
-High-depth tiles are an isolated storage prerequisite: documents and the live
-render path do not own or render them yet. There is no high-depth numeric
-conversion, native persistence, import/export round trip, or color-management
-claim. Import, export, display, and render-node boundaries beyond the native
-RGBA8 tile adapter remain future work.
+High-depth tiles and their sparse owner are isolated storage prerequisites:
+documents and the live render path do not own or render them yet. There is no
+high-depth numeric conversion, native persistence, import/export round trip, or
+color-management claim. Import, export, display, and render-node boundaries
+beyond the native RGBA8 tile adapter remain future work.
 
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that
