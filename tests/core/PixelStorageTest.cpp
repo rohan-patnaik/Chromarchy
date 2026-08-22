@@ -46,6 +46,7 @@ private slots:
   void matchesCheckedLayoutFixtures();
   void rejectsInvalidOverflowingAndOverBudgetLayouts();
   void convertsIndependentRgba8AlphaVectors();
+  void rejectsInvalidPremultipliedSamples();
   void honorsCheckedSourceAndDestinationStrides();
   void rejectsHostileRgba8LayoutsAndPayloads();
   void roundTripsQImageWithoutChangingLiveFormat();
@@ -193,6 +194,36 @@ void PixelStorageTest::convertsIndependentRgba8AlphaVectors() {
   }
 }
 
+void PixelStorageTest::rejectsInvalidPremultipliedSamples() {
+  const auto layout = PixelStorageLayout::create(
+      QSize(4, 1), PixelFormat::rgba8Premultiplied());
+  QVERIFY(layout);
+
+  const QByteArray valid = QByteArray::fromHex(
+      "0000000001010101ffffffff808080ff");
+  const auto copied = chromarchy::convertRgba8(
+      bytesOf(valid), *layout, AlphaMode::Premultiplied);
+  QVERIFY(copied);
+  QCOMPARE(copied->bytes, valid);
+  QVERIFY(chromarchy::convertRgba8(bytesOf(valid), *layout,
+                                   AlphaMode::Straight));
+
+  const QList<QByteArray> invalidSamples = {
+      QByteArray::fromHex("01000000"), QByteArray::fromHex("02010101"),
+      QByteArray::fromHex("01020101"), QByteArray::fromHex("01010201")};
+  const auto singlePixelLayout = PixelStorageLayout::create(
+      QSize(1, 1), PixelFormat::rgba8Premultiplied());
+  QVERIFY(singlePixelLayout);
+  for (const auto& invalid : invalidSamples) {
+    QVERIFY(!chromarchy::convertRgba8(bytesOf(invalid), *singlePixelLayout,
+                                      AlphaMode::Premultiplied));
+    QVERIFY(!chromarchy::convertRgba8(bytesOf(invalid), *singlePixelLayout,
+                                      AlphaMode::Straight));
+    QVERIFY(!chromarchy::rgba8ImageFromBytes(bytesOf(invalid),
+                                             *singlePixelLayout, 4));
+  }
+}
+
 void PixelStorageTest::honorsCheckedSourceAndDestinationStrides() {
   const auto sourceLayout = PixelStorageLayout::createWithRowStride(
       QSize(2, 2), PixelFormat::rgba8Straight(), 12);
@@ -222,6 +253,13 @@ void PixelStorageTest::rejectsHostileRgba8LayoutsAndPayloads() {
       QSize(1, std::numeric_limits<int>::max()), rgba8,
       std::numeric_limits<quint64>::max()));
   QVERIFY(!PixelStorageLayout::createWithRowStride(QSize(2, 2), rgba8, 8, 15));
+  constexpr quint64 smallBudget = 1024;
+  QVERIFY(!PixelStorageLayout::create(
+      QSize(std::numeric_limits<int>::max(), 1), rgba8, 1, smallBudget));
+  QVERIFY(!PixelStorageLayout::createWithRowStride(
+      QSize(std::numeric_limits<int>::max(), 1), rgba8,
+      static_cast<quint64>(std::numeric_limits<int>::max()) * 4U,
+      smallBudget));
 
   const auto layout = PixelStorageLayout::create(QSize(2, 1), rgba8);
   QVERIFY(layout);

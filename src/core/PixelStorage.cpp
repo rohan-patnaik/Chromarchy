@@ -1,6 +1,5 @@
 #include "core/PixelStorage.h"
 
-#include <algorithm>
 #include <limits>
 #include <utility>
 
@@ -49,8 +48,33 @@ quint8 unpremultiply(quint8 color, quint8 alpha) noexcept {
   if (alpha == 0) {
     return 0;
   }
-  return static_cast<quint8>(std::min<quint32>(
-      255U, (static_cast<quint32>(color) * 255U + alpha / 2U) / alpha));
+  return static_cast<quint8>(
+      (static_cast<quint32>(color) * 255U + alpha / 2U) / alpha);
+}
+
+bool hasValidPremultipliedSamples(
+    std::span<const std::byte> source,
+    const PixelStorageLayout& sourceLayout) noexcept {
+  if (sourceLayout.format().alpha != AlphaMode::Premultiplied) {
+    return true;
+  }
+
+  const auto* sourceBytes = reinterpret_cast<const quint8*>(source.data());
+  const quint64 width = static_cast<quint64>(sourceLayout.dimensions().width());
+  const quint64 height =
+      static_cast<quint64>(sourceLayout.dimensions().height());
+  for (quint64 y = 0; y < height; ++y) {
+    const quint64 rowOffset = y * sourceLayout.rowStrideBytes();
+    for (quint64 x = 0; x < width; ++x) {
+      const quint64 pixelOffset = rowOffset + x * 4U;
+      const auto* pixel = sourceBytes + pixelOffset;
+      const quint8 alpha = pixel[3];
+      if (pixel[0] > alpha || pixel[1] > alpha || pixel[2] > alpha) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 void convertRows(std::span<const std::byte> source,
@@ -59,16 +83,17 @@ void convertRows(std::span<const std::byte> source,
                  quint64 destinationRowStride) noexcept {
   const auto* sourceBytes =
       reinterpret_cast<const quint8*>(source.data());
-  const auto width = sourceLayout.dimensions().width();
-  const auto height = sourceLayout.dimensions().height();
-  for (int y = 0; y < height; ++y) {
-    const auto* sourceRow =
-        sourceBytes + static_cast<quint64>(y) * sourceLayout.rowStrideBytes();
-    auto* destinationRow = destinationBytes +
-                           static_cast<quint64>(y) * destinationRowStride;
-    for (int x = 0; x < width; ++x) {
-      const auto* sourcePixel = sourceRow + x * 4;
-      auto* destinationPixel = destinationRow + x * 4;
+  const quint64 width = static_cast<quint64>(sourceLayout.dimensions().width());
+  const quint64 height =
+      static_cast<quint64>(sourceLayout.dimensions().height());
+  for (quint64 y = 0; y < height; ++y) {
+    const quint64 sourceRowOffset = y * sourceLayout.rowStrideBytes();
+    const quint64 destinationRowOffset = y * destinationRowStride;
+    for (quint64 x = 0; x < width; ++x) {
+      const quint64 pixelOffset = x * 4U;
+      const auto* sourcePixel = sourceBytes + sourceRowOffset + pixelOffset;
+      auto* destinationPixel =
+          destinationBytes + destinationRowOffset + pixelOffset;
       const quint8 alpha = sourcePixel[3];
       for (int channel = 0; channel < 3; ++channel) {
         if (sourceLayout.format().alpha == destinationAlpha) {
@@ -173,7 +198,8 @@ std::optional<Rgba8Buffer> convertRgba8(
   if (!isSupportedRgba8(sourceLayout.format()) ||
       (destinationAlpha != AlphaMode::Straight &&
        destinationAlpha != AlphaMode::Premultiplied) ||
-      source.size() != sourceLayout.allocationBytes()) {
+      source.size() != sourceLayout.allocationBytes() ||
+      !hasValidPremultipliedSamples(source, sourceLayout)) {
     return std::nullopt;
   }
 
@@ -235,6 +261,7 @@ std::optional<QImage> rgba8ImageFromBytes(
     quint64 maximumAllocationBytes) {
   if (!isSupportedRgba8(sourceLayout.format()) ||
       source.size() != sourceLayout.allocationBytes() ||
+      !hasValidPremultipliedSamples(source, sourceLayout) ||
       !PixelStorageLayout::create(
           sourceLayout.dimensions(), PixelFormat::rgba8Premultiplied(), 1,
           maximumAllocationBytes)) {
