@@ -36,6 +36,12 @@ so hidden straight color at alpha zero is intentionally not recoverable. The
 checked-in byte vectors cover alpha 0, 1, 127, 128, 254, and 255 independently
 of Qt image conversion.
 
+Premultiplied input is strict: every stored color channel must be less than or
+equal to alpha. This includes requiring zero color channels when alpha is zero.
+Invalid samples are rejected before destination allocation or copying rather
+than being clamped into the live engine. Row and pixel byte offsets use checked
+layout values and unsigned arithmetic throughout conversion.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied

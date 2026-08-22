@@ -55,7 +55,10 @@ before atomic publication, and any failure preserves an existing destination.
 Pixel tiles pass through the checked RGBA8 adapter with exact payload and stride
 validation. The v1/v2 version and packed premultiplied RGBA8 wire representation
 remain unchanged; fixtures cover byte-identical v2 save/reopen and v1 pixel
-preservation across upgrade/reopen.
+preservation across upgrade/reopen. Fixed v1/v2 documents produced and loaded
+at the published pre-adapter revision independently anchor the wire bytes; a
+fixed hostile document proves invalid premultiplied tile samples are rejected
+without changing the source.
 Per-tile compressed and decompressed
 sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and
