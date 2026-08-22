@@ -706,6 +706,185 @@ PixelTileWriteResult SparsePixelTileStore::writeRegion(
   return PixelTileWriteResult::Changed;
 }
 
+std::optional<QVector<PixelTileDeltaRecord>>
+SparsePixelTileStore::tileDeltaTo(const SparsePixelTileStore& after,
+                                  quint64 maximumPayloadBytes,
+                                  quint64 maximumRecordCount) const {
+  if (dimensions_ != after.dimensions_ || format_ != after.format_ ||
+      maximumPayloadBytes == 0 ||
+      maximumPayloadBytes > hardMaximumDeltaBytes ||
+      maximumRecordCount == 0 ||
+      maximumRecordCount > hardMaximumDeltaRecords) {
+    return std::nullopt;
+  }
+
+  QSet<PixelTileIndex> changedIndices;
+  changedIndices.reserve(tiles_.size() + after.tiles_.size());
+  for (auto tile = tiles_.cbegin(); tile != tiles_.cend(); ++tile) {
+    changedIndices.insert(tile.key());
+  }
+  for (auto tile = after.tiles_.cbegin(); tile != after.tiles_.cend(); ++tile) {
+    changedIndices.insert(tile.key());
+  }
+  QVector<PixelTileIndex> orderedIndices(changedIndices.cbegin(),
+                                         changedIndices.cend());
+  std::sort(orderedIndices.begin(), orderedIndices.end(),
+            [](PixelTileIndex left, PixelTileIndex right) {
+              return left.row != right.row ? left.row < right.row
+                                           : left.column < right.column;
+            });
+
+  QVector<PixelTileDeltaRecord> records;
+  records.reserve(std::min<qsizetype>(orderedIndices.size(),
+                                      static_cast<qsizetype>(maximumRecordCount)));
+  quint64 payloadBytes = 0;
+  for (const auto index : orderedIndices) {
+    const auto beforeTile = tiles_.constFind(index);
+    const auto afterTile = after.tiles_.constFind(index);
+    const bool hasBefore = beforeTile != tiles_.cend();
+    const bool hasAfter = afterTile != after.tiles_.cend();
+    if (hasBefore && hasAfter &&
+        std::equal(beforeTile->packedBytes().begin(),
+                   beforeTile->packedBytes().end(),
+                   afterTile->packedBytes().begin())) {
+      continue;
+    }
+    const quint64 recordBytes =
+        (hasBefore ? tileAllocationBytes_ : 0U) +
+        (hasAfter ? tileAllocationBytes_ : 0U);
+    if (static_cast<quint64>(records.size()) >= maximumRecordCount ||
+        recordBytes > maximumPayloadBytes - payloadBytes) {
+      return std::nullopt;
+    }
+
+    records.push_back(
+        {.index = index,
+         .before = hasBefore ? std::optional(beforeTile->bytes_)
+                             : std::nullopt,
+         .after = hasAfter ? std::optional(afterTile->bytes_)
+                           : std::nullopt});
+    payloadBytes += recordBytes;
+  }
+  return records;
+}
+
+PixelTileWriteResult SparsePixelTileStore::applyTileDelta(
+    const QVector<PixelTileDeltaRecord>& records,
+    PixelTileDeltaDirection direction, quint64 maximumPayloadBytes,
+    quint64 maximumRecordCount) {
+  if ((direction != PixelTileDeltaDirection::Forward &&
+       direction != PixelTileDeltaDirection::Reverse) ||
+      maximumPayloadBytes == 0 ||
+      maximumPayloadBytes > hardMaximumDeltaBytes ||
+      maximumRecordCount == 0 ||
+      maximumRecordCount > hardMaximumDeltaRecords ||
+      static_cast<quint64>(records.size()) > maximumRecordCount) {
+    return PixelTileWriteResult::Rejected;
+  }
+  if (records.isEmpty()) {
+    return PixelTileWriteResult::Unchanged;
+  }
+
+  const auto fullTileLayout = tileLayout(format_, tileAllocationBytes_);
+  if (!fullTileLayout) {
+    return PixelTileWriteResult::Rejected;
+  }
+  struct PendingTile final {
+    PixelTileIndex index;
+    bool remove = false;
+    std::optional<PixelTile> replacement;
+  };
+  QVector<PendingTile> pending;
+  pending.reserve(records.size());
+  quint64 payloadBytes = 0;
+  quint64 additions = 0;
+  quint64 removals = 0;
+  std::optional<PixelTileIndex> previousIndex;
+
+  auto validPayload = [this, &fullTileLayout](
+                          const std::optional<QByteArray>& payload) {
+    if (!payload) {
+      return true;
+    }
+    if (payload->size() != static_cast<qsizetype>(tileAllocationBytes_) ||
+        std::all_of(payload->cbegin(), payload->cend(),
+                    [](char byte) { return byte == 0; })) {
+      return false;
+    }
+    const auto bytes = std::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(payload->constData()),
+        static_cast<std::size_t>(payload->size()));
+    return format_ != PixelFormat::rgba8Premultiplied() ||
+           hasValidPremultipliedSamples(bytes, *fullTileLayout);
+  };
+
+  for (const auto& record : records) {
+    const bool orderedAfterPrevious =
+        !previousIndex || previousIndex->row < record.index.row ||
+        (previousIndex->row == record.index.row &&
+         previousIndex->column < record.index.column);
+    const quint64 recordBytes =
+        (record.before ? tileAllocationBytes_ : 0U) +
+        (record.after ? tileAllocationBytes_ : 0U);
+    if (!orderedAfterPrevious || !containsTileIndex(record.index) ||
+        (!record.before && !record.after) || record.before == record.after ||
+        !validPayload(record.before) || !validPayload(record.after) ||
+        recordBytes > maximumPayloadBytes - payloadBytes) {
+      return PixelTileWriteResult::Rejected;
+    }
+    previousIndex = record.index;
+    payloadBytes += recordBytes;
+
+    const auto& expected = direction == PixelTileDeltaDirection::Forward
+                               ? record.before
+                               : record.after;
+    const auto& replacement = direction == PixelTileDeltaDirection::Forward
+                                  ? record.after
+                                  : record.before;
+    const auto current = tiles_.constFind(record.index);
+    const bool currentExists = current != tiles_.cend();
+    if (currentExists != expected.has_value() ||
+        (expected && current->packedBytes().size() !=
+                         static_cast<std::size_t>(expected->size())) ||
+        (expected &&
+         !std::equal(current->packedBytes().begin(),
+                     current->packedBytes().end(),
+                     reinterpret_cast<const std::byte*>(
+                         expected->constData())))) {
+      return PixelTileWriteResult::Rejected;
+    }
+
+    if (!replacement) {
+      pending.push_back({.index = record.index, .remove = true});
+      ++removals;
+    } else {
+      pending.push_back(
+          {.index = record.index,
+           .replacement = PixelTile(*fullTileLayout, *replacement)});
+      additions += !currentExists ? 1U : 0U;
+    }
+  }
+
+  const quint64 finalTileCount =
+      static_cast<quint64>(tiles_.size()) - removals + additions;
+  if (finalTileCount > maximumResidentTiles_ ||
+      finalTileCount > maximumResidentBytes_ / tileAllocationBytes_) {
+    return PixelTileWriteResult::Rejected;
+  }
+
+  auto candidate = *this;
+  for (auto& change : pending) {
+    if (change.remove) {
+      candidate.tiles_.remove(change.index);
+    } else {
+      candidate.tiles_.insert(change.index, std::move(*change.replacement));
+    }
+  }
+  candidate.residentDecodedBytes_ = finalTileCount * tileAllocationBytes_;
+  *this = std::move(candidate);
+  return PixelTileWriteResult::Changed;
+}
+
 PixelTileWriteResult SparsePixelTileStore::setPixelBytes(
     QPoint position, std::span<const std::byte> source) {
   if (!contains(position) || source.size() != format_.bytesPerPixel()) {

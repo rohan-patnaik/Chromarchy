@@ -250,6 +250,20 @@ struct PixelRegionBuffer final {
   QByteArray bytes;
 };
 
+struct PixelTileDeltaRecord final {
+  PixelTileIndex index;
+  std::optional<QByteArray> before;
+  std::optional<QByteArray> after;
+
+  friend bool operator==(const PixelTileDeltaRecord&,
+                         const PixelTileDeltaRecord&) = default;
+};
+
+enum class PixelTileDeltaDirection : quint8 {
+  Forward,
+  Reverse,
+};
+
 class SparsePixelTileStore final {
 public:
   static constexpr quint64 hardMaximumResidentBytes =
@@ -258,6 +272,9 @@ public:
   static constexpr quint64 hardMaximumRegionBytes =
       16ULL * 1024ULL * 1024ULL;
   static constexpr quint64 hardMaximumRegionTiles = 64;
+  static constexpr quint64 hardMaximumDeltaBytes =
+      16ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 hardMaximumDeltaRecords = 64;
 
   [[nodiscard]] static std::optional<SparsePixelTileStore> create(
       QSize dimensions, PixelFormat format,
@@ -287,6 +304,15 @@ public:
       QRect region, std::span<const std::byte> source,
       quint64 sourceRowStrideBytes,
       quint64 maximumAllocationBytes = hardMaximumRegionBytes);
+  [[nodiscard]] std::optional<QVector<PixelTileDeltaRecord>> tileDeltaTo(
+      const SparsePixelTileStore& after,
+      quint64 maximumPayloadBytes = hardMaximumDeltaBytes,
+      quint64 maximumRecordCount = hardMaximumDeltaRecords) const;
+  PixelTileWriteResult applyTileDelta(
+      const QVector<PixelTileDeltaRecord>& records,
+      PixelTileDeltaDirection direction,
+      quint64 maximumPayloadBytes = hardMaximumDeltaBytes,
+      quint64 maximumRecordCount = hardMaximumDeltaRecords);
   PixelTileWriteResult setPixelBytes(QPoint position,
                                      std::span<const std::byte> source);
 
