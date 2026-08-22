@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QPoint>
 #include <QSize>
+#include <QVector>
 #include <QtTypes>
 
 #include <cstddef>
@@ -233,6 +234,14 @@ enum class PixelTileWriteResult : quint8 {
   Rejected,
 };
 
+struct PixelTileSnapshot final {
+  PixelTileIndex index;
+  QByteArray packedBytes;
+
+  friend bool operator==(const PixelTileSnapshot&, const PixelTileSnapshot&) =
+      default;
+};
+
 class SparsePixelTileStore final {
 public:
   static constexpr quint64 hardMaximumResidentBytes =
@@ -254,6 +263,12 @@ public:
   [[nodiscard]] std::optional<QByteArray> pixelBytes(QPoint position) const;
   [[nodiscard]] std::optional<std::span<const std::byte>> packedTileBytes(
       PixelTileIndex index) const noexcept;
+  [[nodiscard]] QVector<PixelTileSnapshot> tileSnapshots() const;
+  [[nodiscard]] static std::optional<SparsePixelTileStore> fromTileSnapshots(
+      QSize dimensions, PixelFormat format,
+      const QVector<PixelTileSnapshot>& snapshots,
+      quint64 maximumResidentBytes = hardMaximumResidentBytes,
+      quint64 maximumResidentTiles = hardMaximumResidentTiles);
   PixelTileWriteResult setPixelBytes(QPoint position,
                                      std::span<const std::byte> source);
 

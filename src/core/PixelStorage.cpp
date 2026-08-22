@@ -1,5 +1,7 @@
 #include "core/PixelStorage.h"
 
+#include <QSet>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -404,6 +406,65 @@ SparsePixelTileStore::packedTileBytes(PixelTileIndex index) const noexcept {
     return std::nullopt;
   }
   return tile->packedBytes();
+}
+
+QVector<PixelTileSnapshot> SparsePixelTileStore::tileSnapshots() const {
+  QVector<PixelTileSnapshot> snapshots;
+  snapshots.reserve(tiles_.size());
+  for (auto tile = tiles_.cbegin(); tile != tiles_.cend(); ++tile) {
+    const auto bytes = tile->packedBytes();
+    snapshots.push_back(
+        {tile.key(),
+         QByteArray(reinterpret_cast<const char*>(bytes.data()),
+                    static_cast<qsizetype>(bytes.size()))});
+  }
+  std::sort(snapshots.begin(), snapshots.end(),
+            [](const PixelTileSnapshot& left,
+               const PixelTileSnapshot& right) {
+              return left.index.row != right.index.row
+                         ? left.index.row < right.index.row
+                         : left.index.column < right.index.column;
+            });
+  return snapshots;
+}
+
+std::optional<SparsePixelTileStore>
+SparsePixelTileStore::fromTileSnapshots(
+    QSize dimensions, PixelFormat format,
+    const QVector<PixelTileSnapshot>& snapshots, quint64 maximumResidentBytes,
+    quint64 maximumResidentTiles) {
+  auto store = create(dimensions, format, maximumResidentBytes,
+                      maximumResidentTiles);
+  if (!store) {
+    return std::nullopt;
+  }
+  const auto count = static_cast<quint64>(snapshots.size());
+  if (count > store->maximumResidentTiles_ ||
+      count > store->maximumResidentBytes_ / store->tileAllocationBytes_) {
+    return std::nullopt;
+  }
+
+  QSet<PixelTileIndex> seen;
+  seen.reserve(snapshots.size());
+  for (const auto& snapshot : snapshots) {
+    if (!store->containsTileIndex(snapshot.index) ||
+        seen.contains(snapshot.index)) {
+      return std::nullopt;
+    }
+    auto tile = PixelTile::fromPackedBytes(
+        format,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(snapshot.packedBytes.constData()),
+            static_cast<std::size_t>(snapshot.packedBytes.size())),
+        store->tileAllocationBytes_);
+    if (!tile || tile->isZero()) {
+      return std::nullopt;
+    }
+    seen.insert(snapshot.index);
+    store->tiles_.insert(snapshot.index, std::move(*tile));
+  }
+  store->residentDecodedBytes_ = count * store->tileAllocationBytes_;
+  return store;
 }
 
 PixelTileWriteResult SparsePixelTileStore::setPixelBytes(

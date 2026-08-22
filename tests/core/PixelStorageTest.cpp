@@ -21,6 +21,7 @@ using chromarchy::PixelFormat;
 using chromarchy::PixelStorageLayout;
 using chromarchy::PixelTile;
 using chromarchy::PixelTileIndex;
+using chromarchy::PixelTileSnapshot;
 using chromarchy::PixelTileWriteResult;
 using chromarchy::SampleFormat;
 using chromarchy::SparsePixelTileStore;
@@ -66,6 +67,9 @@ private slots:
   void mutatesSparseTilesWithCopyOnWrite();
   void elidesZeroTypedTilesAndPreservesCopies();
   void preservesSparseHighDepthByteOrder();
+  void exportsSparseSnapshotsInDeterministicOrder();
+  void roundTripsOwningSparseSnapshots();
+  void rejectsHostileSparseSnapshotsAtomically();
 };
 
 void PixelStorageTest::describesSupportedSampleAndChannelContracts() {
@@ -692,6 +696,132 @@ void PixelStorageTest::preservesSparseHighDepthByteOrder() {
   QCOMPARE(*little->pixelBytes(QPoint(255, 255)), sample);
   QCOMPARE(big->format().byteOrder, ByteOrder::BigEndian);
   QCOMPARE(little->format().byteOrder, ByteOrder::LittleEndian);
+}
+
+void PixelStorageTest::exportsSparseSnapshotsInDeterministicOrder() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::Gray, AlphaMode::None,
+                           ByteOrder::BigEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 2ULL;
+  auto store = SparsePixelTileStore::create(QSize(768, 512), format,
+                                             tileBytes * 4, 4);
+  QVERIFY(store);
+  const QList<QPair<QPoint, QByteArray>> writes = {
+      {QPoint(512, 256), QByteArray::fromHex("0400")},
+      {QPoint(0, 256), QByteArray::fromHex("0300")},
+      {QPoint(256, 0), QByteArray::fromHex("0200")},
+      {QPoint(0, 0), QByteArray::fromHex("0100")}};
+  for (const auto& [position, bytes] : writes) {
+    QCOMPARE(store->setPixelBytes(position, bytesOf(bytes)),
+             PixelTileWriteResult::Changed);
+  }
+
+  auto snapshots = store->tileSnapshots();
+  QCOMPARE(snapshots.size(), 4);
+  QCOMPARE(snapshots[0].index, PixelTileIndex(0, 0));
+  QCOMPARE(snapshots[1].index, PixelTileIndex(1, 0));
+  QCOMPARE(snapshots[2].index, PixelTileIndex(0, 1));
+  QCOMPARE(snapshots[3].index, PixelTileIndex(2, 1));
+  QVERIFY(snapshots == store->tileSnapshots());
+
+  const auto firstRecordBytes = snapshots[0].packedBytes;
+  const auto replacement = QByteArray::fromHex("0500");
+  QCOMPARE(store->setPixelBytes(QPoint(0, 0), bytesOf(replacement)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(snapshots[0].packedBytes, firstRecordBytes);
+  snapshots[0].packedBytes[0] = '\x7f';
+  QCOMPARE(*store->pixelBytes(QPoint(0, 0)), replacement);
+}
+
+void PixelStorageTest::roundTripsOwningSparseSnapshots() {
+  const PixelFormat format{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::RGBA, AlphaMode::Straight,
+                           ByteOrder::BigEndian};
+  constexpr quint64 tileBytes = 256ULL * 256ULL * 8ULL;
+  auto source = SparsePixelTileStore::create(QSize(512, 512), format,
+                                              tileBytes * 2, 2);
+  QVERIFY(source);
+  const auto first = QByteArray::fromHex("123456789abcdef0");
+  const auto second = QByteArray::fromHex("fedcba9876543210");
+  QCOMPARE(source->setPixelBytes(QPoint(255, 255), bytesOf(first)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(source->setPixelBytes(QPoint(256, 256), bytesOf(second)),
+           PixelTileWriteResult::Changed);
+
+  const auto canonicalSnapshots = source->tileSnapshots();
+  auto snapshots = canonicalSnapshots;
+  std::reverse(snapshots.begin(), snapshots.end());
+  const auto snapshotsBefore = snapshots;
+  auto reopened = SparsePixelTileStore::fromTileSnapshots(
+      source->dimensions(), format, snapshots, tileBytes * 2, 2);
+  QVERIFY(reopened);
+  QVERIFY(snapshots == snapshotsBefore);
+  QCOMPARE(reopened->format(), format);
+  QCOMPARE(reopened->residentDecodedBytes(), tileBytes * 2);
+  QVERIFY(reopened->tileSnapshots() == canonicalSnapshots);
+  QCOMPARE(*reopened->pixelBytes(QPoint(255, 255)), first);
+  QCOMPARE(*reopened->pixelBytes(QPoint(256, 256)), second);
+
+  auto copy = *reopened;
+  const auto changed = QByteArray::fromHex("0102030405060708");
+  QCOMPARE(copy.setPixelBytes(QPoint(255, 255), bytesOf(changed)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(*reopened->pixelBytes(QPoint(255, 255)), first);
+  QCOMPARE(*copy.pixelBytes(QPoint(255, 255)), changed);
+}
+
+void PixelStorageTest::rejectsHostileSparseSnapshotsAtomically() {
+  const auto rgba8 = PixelFormat::rgba8Premultiplied();
+  constexpr qsizetype tileBytes = 256 * 256 * 4;
+  QByteArray valid(tileBytes, '\0');
+  const auto validSample = QByteArray::fromHex("01010101");
+  std::copy(validSample.cbegin(), validSample.cend(), valid.begin());
+  const QVector<PixelTileSnapshot> baseline = {
+      {{0, 0}, valid},
+      {{1, 0}, valid},
+  };
+  const auto baselineBefore = baseline;
+  QVERIFY(SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, baseline, tileBytes * 2, 2));
+  QVERIFY(baseline == baselineBefore);
+
+  auto duplicate = baseline;
+  duplicate[1].index = {0, 0};
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, duplicate, tileBytes * 2, 2));
+  auto outOfGrid = baseline;
+  outOfGrid[1].index = {2, 0};
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, outOfGrid, tileBytes * 2, 2));
+  auto truncated = baseline;
+  truncated[0].packedBytes.chop(1);
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, truncated, tileBytes * 2, 2));
+  auto trailing = baseline;
+  trailing[0].packedBytes.append('\0');
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, trailing, tileBytes * 2, 2));
+  auto noncanonicalZero = baseline;
+  noncanonicalZero[0].packedBytes.fill('\0');
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, noncanonicalZero, tileBytes * 2, 2));
+  auto hostilePremultiplied = baseline;
+  const auto invalid = QByteArray::fromHex("02010101");
+  std::copy(invalid.cbegin(), invalid.cend(),
+            hostilePremultiplied[0].packedBytes.begin());
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, hostilePremultiplied, tileBytes * 2, 2));
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, baseline, tileBytes, 2));
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, baseline, tileBytes * 2, 1));
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, baseline,
+      SparsePixelTileStore::hardMaximumResidentBytes + 1, 2));
+  QVERIFY(!SparsePixelTileStore::fromTileSnapshots(
+      QSize(512, 256), rgba8, baseline, tileBytes * 2,
+      SparsePixelTileStore::hardMaximumResidentTiles + 1));
+  QVERIFY(baseline == baselineBefore);
 }
 
 QTEST_APPLESS_MAIN(PixelStorageTest)
