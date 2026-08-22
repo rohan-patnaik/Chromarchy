@@ -92,6 +92,9 @@ if(BUILD_TESTING)
   target_link_libraries(chromarchy_native_document_tests PRIVATE
     chromarchy_core Qt6::Test
   )
+  target_compile_definitions(chromarchy_native_document_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME chromarchy_native_document COMMAND chromarchy_native_document_tests)
 
   qt_add_executable(chromarchy_history_tests tests/core/DocumentHistoryTest.cpp)

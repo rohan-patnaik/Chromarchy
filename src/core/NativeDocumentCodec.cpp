@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <span>
 
 namespace chromarchy {
 namespace {
@@ -45,11 +46,21 @@ bool readBytes(QDataStream& stream, quint32 maximumSize, QByteArray& bytes) {
          static_cast<qsizetype>(size);
 }
 
-QByteArray tileBytes(const QImage& image) {
+std::span<const std::byte> bytesOf(const QByteArray& bytes) {
+  return {reinterpret_cast<const std::byte*>(bytes.constData()),
+          static_cast<std::size_t>(bytes.size())};
+}
+
+std::optional<QByteArray> tileBytes(const QImage& image) {
   const auto normalized =
       image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
-  return {reinterpret_cast<const char*>(normalized.constBits()),
-          static_cast<qsizetype>(normalized.sizeInBytes())};
+  const auto encoded = rgba8BytesFromImage(
+      normalized, AlphaMode::Premultiplied, 1,
+      static_cast<quint64>(tileByteCount));
+  if (!encoded || encoded->bytes.size() != tileByteCount) {
+    return std::nullopt;
+  }
+  return encoded->bytes;
 }
 
 bool isValidCompressedPayload(const QByteArray& bytes, qsizetype expectedBytes,
@@ -164,7 +175,12 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
     stream << static_cast<quint32>(tiles.size());
     for (const auto& tile : tiles) {
       stream << tile.origin.x() << tile.origin.y();
-      const auto compressed = qCompress(tileBytes(tile.pixels), 6);
+      const auto raw = tileBytes(tile.pixels);
+      if (!raw) {
+        output.cancelWriting();
+        return {.error = QStringLiteral("A layer has an invalid pixel tile.")};
+      }
+      const auto compressed = qCompress(*raw, 6);
       if (compressed.size() > maximumCompressedTileBytes ||
           aggregateCompressedBytes >
               NativeDocumentCodec::maximumCompressedStorageBytes -
@@ -351,10 +367,14 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
         return {.error = streamError(QStringLiteral("tile decompression"))};
       }
 
-      QImage tile(TiledImage::tileExtent, TiledImage::tileExtent,
-                  QImage::Format_RGBA8888_Premultiplied);
-      std::memcpy(tile.bits(), pixels.constData(), tileByteCount);
-      layer.pixels_.tiles_.insert(index, std::move(tile));
+      const auto layout = TiledImage::tileStorageLayout(tileByteCount);
+      auto tile = layout ? rgba8ImageFromBytes(bytesOf(pixels), *layout,
+                                               tileByteCount)
+                         : std::nullopt;
+      if (!tile) {
+        return {.error = streamError(QStringLiteral("tile conversion"))};
+      }
+      layer.pixels_.tiles_.insert(index, std::move(*tile));
     }
   }
 

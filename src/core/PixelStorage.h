@@ -1,10 +1,14 @@
 #pragma once
 
+#include <QByteArray>
+#include <QImage>
 #include <QSize>
 #include <QtTypes>
 
+#include <cstddef>
 #include <limits>
 #include <optional>
+#include <span>
 
 namespace chromarchy {
 
@@ -50,6 +54,13 @@ struct PixelFormat final {
 
   [[nodiscard]] static constexpr PixelFormat rgba8Premultiplied() noexcept {
     return {};
+  }
+
+  [[nodiscard]] static constexpr PixelFormat rgba8Straight() noexcept {
+    return {.sample = SampleFormat::UnsignedInteger8,
+            .channels = ChannelLayout::RGBA,
+            .alpha = AlphaMode::Straight,
+            .byteOrder = ByteOrder::NotApplicable};
   }
 
   [[nodiscard]] constexpr bool isValid() const noexcept {
@@ -149,6 +160,9 @@ public:
   [[nodiscard]] static std::optional<PixelStorageLayout> create(
       QSize dimensions, PixelFormat format, quint64 rowAlignment = 1,
       quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max()) noexcept;
+  [[nodiscard]] static std::optional<PixelStorageLayout> createWithRowStride(
+      QSize dimensions, PixelFormat format, quint64 rowStrideBytes,
+      quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max()) noexcept;
 
   [[nodiscard]] QSize dimensions() const noexcept;
   [[nodiscard]] PixelFormat format() const noexcept;
@@ -166,5 +180,24 @@ private:
   quint64 rowStrideBytes_ = 0;
   quint64 allocationBytes_ = 0;
 };
+
+struct Rgba8Buffer final {
+  PixelStorageLayout layout;
+  QByteArray bytes;
+};
+
+[[nodiscard]] std::optional<Rgba8Buffer> convertRgba8(
+    std::span<const std::byte> source, const PixelStorageLayout& sourceLayout,
+    AlphaMode destinationAlpha, quint64 destinationRowAlignment = 1,
+    quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max());
+
+[[nodiscard]] std::optional<Rgba8Buffer> rgba8BytesFromImage(
+    const QImage& image, AlphaMode destinationAlpha,
+    quint64 destinationRowAlignment = 1,
+    quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max());
+
+[[nodiscard]] std::optional<QImage> rgba8ImageFromBytes(
+    std::span<const std::byte> source, const PixelStorageLayout& sourceLayout,
+    quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max());
 
 }  // namespace chromarchy

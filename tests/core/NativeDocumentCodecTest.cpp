@@ -3,6 +3,9 @@
 #include <QDataStream>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QtEndian>
@@ -18,6 +21,7 @@ class NativeDocumentCodecTest final : public QObject {
 private slots:
   void preservesLayeredDocument();
   void loadsVersionOneWithoutSelection();
+  void preservesRgba8AcrossVersionOneAndTwoReopen();
   void rejectsCorruptAndTruncatedDocuments();
   void rejectsNonFiniteLayerOpacity();
   void rejectsOversizedSparseFileBeforeParsing();
@@ -99,6 +103,83 @@ void NativeDocumentCodecTest::loadsVersionOneWithoutSelection() {
   QCOMPARE(loaded.document->size(), QSize(40, 30));
   QCOMPARE(loaded.document->layerAt(0)->name(), QStringLiteral("Legacy"));
   QVERIFY(loaded.document->selection().isEmpty());
+}
+
+void NativeDocumentCodecTest::preservesRgba8AcrossVersionOneAndTwoReopen() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/rgba8-persistence.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  const auto fixtureDocument = QJsonDocument::fromJson(fixture.readAll());
+  QVERIFY(fixtureDocument.isObject());
+  const auto fixtureObject = fixtureDocument.object();
+  const auto sizeValues = fixtureObject["size"].toArray();
+  QCOMPARE(sizeValues.size(), 2);
+
+  auto document = Document::create(
+      QSize(sizeValues[0].toInt(), sizeValues[1].toInt()));
+  QVERIFY(document);
+  document->layerAt(0)->setName(QStringLiteral("RGBA8 persistence fixture"));
+  QVector<QPair<QPoint, QRgb>> expectedPixels;
+  for (const auto& value : fixtureObject["pixels"].toArray()) {
+    const auto pixel = value.toObject();
+    const QPoint position(pixel["x"].toInt(), pixel["y"].toInt());
+    const auto rgba = pixel["rgba"].toArray();
+    QCOMPARE(rgba.size(), 4);
+    const QColor color(rgba[0].toInt(), rgba[1].toInt(), rgba[2].toInt(),
+                       rgba[3].toInt());
+    QVERIFY(document->layerAt(0)->setPixelColor(position, color));
+    expectedPixels.push_back(
+        {position, document->layerAt(0)->pixels().pixelColor(position).rgba()});
+  }
+
+  const auto verifyPixels = [&expectedPixels](const Document& candidate) {
+    for (const auto& [position, expected] : expectedPixels) {
+      QCOMPARE(candidate.layerAt(0)->pixels().pixelColor(position).rgba(),
+               expected);
+    }
+  };
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto versionTwoPath =
+      directory.filePath(QStringLiteral("fixture-v2.chromarchy"));
+  const auto versionTwoReopenPath =
+      directory.filePath(QStringLiteral("fixture-v2-reopen.chromarchy"));
+  QVERIFY(NativeDocumentCodec::save(*document, versionTwoPath));
+  const auto versionTwo = NativeDocumentCodec::load(versionTwoPath);
+  QVERIFY2(versionTwo, qPrintable(versionTwo.error));
+  verifyPixels(*versionTwo.document);
+  QVERIFY(NativeDocumentCodec::save(*versionTwo.document,
+                                    versionTwoReopenPath));
+
+  QFile versionTwoFile(versionTwoPath);
+  QFile versionTwoReopenFile(versionTwoReopenPath);
+  QVERIFY(versionTwoFile.open(QIODevice::ReadOnly));
+  QVERIFY(versionTwoReopenFile.open(QIODevice::ReadOnly));
+  const auto versionTwoBytes = versionTwoFile.readAll();
+  QCOMPARE(versionTwoReopenFile.readAll(), versionTwoBytes);
+
+  auto versionOneBytes = versionTwoBytes;
+  QVERIFY(versionOneBytes.size() > 17);
+  qToLittleEndian<quint32>(
+      1, reinterpret_cast<uchar*>(versionOneBytes.data() + 8));
+  versionOneBytes.chop(5);
+  const auto versionOnePath =
+      directory.filePath(QStringLiteral("fixture-v1.chromarchy"));
+  QFile versionOneFile(versionOnePath);
+  QVERIFY(versionOneFile.open(QIODevice::WriteOnly));
+  QCOMPARE(versionOneFile.write(versionOneBytes), versionOneBytes.size());
+  versionOneFile.close();
+
+  const auto versionOne = NativeDocumentCodec::load(versionOnePath);
+  QVERIFY2(versionOne, qPrintable(versionOne.error));
+  verifyPixels(*versionOne.document);
+  const auto upgradedPath =
+      directory.filePath(QStringLiteral("fixture-v1-upgraded.chromarchy"));
+  QVERIFY(NativeDocumentCodec::save(*versionOne.document, upgradedPath));
+  const auto upgraded = NativeDocumentCodec::load(upgradedPath);
+  QVERIFY2(upgraded, qPrintable(upgraded.error));
+  verifyPixels(*upgraded.document);
 }
 
 void NativeDocumentCodecTest::rejectsCorruptAndTruncatedDocuments() {

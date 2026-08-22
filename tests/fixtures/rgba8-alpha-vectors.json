@@ -1,0 +1,38 @@
+[
+  {
+    "name": "transparent samples discard hidden straight color",
+    "straight": [255, 128, 1, 0],
+    "premultiplied": [0, 0, 0, 0],
+    "unpremultiplied": [0, 0, 0, 0]
+  },
+  {
+    "name": "one-alpha samples use nearest integer rounding",
+    "straight": [255, 128, 1, 1],
+    "premultiplied": [1, 1, 0, 1],
+    "unpremultiplied": [255, 255, 0, 1]
+  },
+  {
+    "name": "half-alpha odd sample",
+    "straight": [255, 128, 64, 127],
+    "premultiplied": [127, 64, 32, 127],
+    "unpremultiplied": [255, 129, 64, 127]
+  },
+  {
+    "name": "half-alpha even sample",
+    "straight": [10, 20, 30, 128],
+    "premultiplied": [5, 10, 15, 128],
+    "unpremultiplied": [10, 20, 30, 128]
+  },
+  {
+    "name": "near-opaque sample",
+    "straight": [1, 128, 255, 254],
+    "premultiplied": [1, 127, 254, 254],
+    "unpremultiplied": [1, 128, 255, 254]
+  },
+  {
+    "name": "opaque sample is byte exact",
+    "straight": [1, 2, 3, 255],
+    "premultiplied": [1, 2, 3, 255],
+    "unpremultiplied": [1, 2, 3, 255]
+  }
+]
