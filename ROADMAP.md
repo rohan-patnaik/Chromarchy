@@ -50,8 +50,10 @@ Stop for independent high review and remediate findings before M1 closure.
 
 The first item is in progress: dependency-free sample/channel/alpha/endian
 descriptors, checked row/tile/allocation arithmetic, and bounded RGBA8
-straight/premultiplied adapters exist. High-depth tile allocation, conversion,
-rendering, and persistence remain future slices.
+straight/premultiplied adapters exist. Bounded packed high-depth tiles now
+provide raw sample access, copy-on-write mutation, and explicit conversion and
+persistence seams. High-depth numeric conversion, document integration,
+rendering, and native persistence remain future slices.
 
 ### Phase 2 — close M0/M1 local workflows
 
