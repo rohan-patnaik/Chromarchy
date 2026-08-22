@@ -411,13 +411,19 @@ PixelTileWriteResult SparsePixelTileStore::setPixelBytes(
   if (!contains(position) || source.size() != format_.bytesPerPixel()) {
     return PixelTileWriteResult::Rejected;
   }
+  const bool sourceIsZero =
+      std::all_of(source.begin(), source.end(),
+                  [](std::byte byte) { return byte == std::byte{}; });
+  if (format_ == PixelFormat::rgba8Premultiplied() &&
+      !isValidPremultipliedRgba8Pixel(source)) {
+    return PixelTileWriteResult::Rejected;
+  }
 
   const auto index = tileIndex(position);
   const auto localPosition = tilePosition(position);
   const auto existing = tiles_.constFind(index);
   if (existing == tiles_.cend()) {
-    if (std::all_of(source.begin(), source.end(),
-                    [](std::byte byte) { return byte == std::byte{}; })) {
+    if (sourceIsZero) {
       return PixelTileWriteResult::Unchanged;
     }
     if (static_cast<quint64>(tiles_.size()) >= maximumResidentTiles_ ||
@@ -437,15 +443,13 @@ PixelTileWriteResult SparsePixelTileStore::setPixelBytes(
   if (std::equal(existingPixel.begin(), existingPixel.end(), source.begin())) {
     return PixelTileWriteResult::Unchanged;
   }
-  auto candidate = *existing;
-  if (!candidate.setPixelBytes(localPosition, source)) {
+  auto tile = tiles_.find(index);
+  if (!tile->setPixelBytes(localPosition, source)) {
     return PixelTileWriteResult::Rejected;
   }
-  if (candidate.isZero()) {
-    tiles_.remove(index);
+  if (sourceIsZero && tile->isZero()) {
+    tiles_.erase(tile);
     residentDecodedBytes_ -= tileAllocationBytes_;
-  } else {
-    tiles_.insert(index, std::move(candidate));
   }
   return PixelTileWriteResult::Changed;
 }

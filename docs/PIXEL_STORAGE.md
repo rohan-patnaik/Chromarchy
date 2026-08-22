@@ -85,6 +85,13 @@ interpretation. The decoded-byte counter covers packed tile payloads exactly;
 `QHash`, allocator, and object metadata remain outside that counter, though the
 hard tile-count ceiling bounds the number of resident entries.
 
+`packedTileBytes()` is a borrowed read view. It is valid only until the store is
+destroyed or any non-const operation is attempted on that store; callers that
+need bytes across mutation must copy them first. Consecutive nonzero writes to
+a uniquely owned tile retain its allocation. Mutating a copied store detaches
+only the affected tile, and the complete byte-zero scan runs only after a
+byte-zero sample write can make a tile empty.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied

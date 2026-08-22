@@ -63,6 +63,7 @@ private slots:
   void keepsRgba8ConversionSeamExplicit();
   void ownsSparseTypedTilesWithinHardBudgets();
   void rejectsSparseWritesAtomically();
+  void mutatesSparseTilesWithCopyOnWrite();
   void elidesZeroTypedTilesAndPreservesCopies();
   void preservesSparseHighDepthByteOrder();
 };
@@ -592,6 +593,51 @@ void PixelStorageTest::rejectsSparseWritesAtomically() {
            PixelTileWriteResult::Rejected);
   QCOMPARE(premultiplied->allocatedTileCount(), 0);
   QCOMPARE(premultiplied->residentDecodedBytes(), quint64(0));
+}
+
+void PixelStorageTest::mutatesSparseTilesWithCopyOnWrite() {
+  const PixelFormat format{SampleFormat::Float32, ChannelLayout::RGBA,
+                           AlphaMode::Straight, ByteOrder::LittleEndian};
+  constexpr quint64 tileBytes = PixelTile::maximumAllocationBytes;
+  auto original = SparsePixelTileStore::create(QSize(512, 256), format,
+                                                tileBytes * 2, 2);
+  QVERIFY(original);
+  const auto first = QByteArray::fromHex(
+      "0000803f000000400000404000008040");
+  const auto second = QByteArray::fromHex(
+      "0000a0400000c0400000e04000000041");
+  const auto third = QByteArray::fromHex(
+      "00001041000020410000304100004041");
+  QCOMPARE(original->setPixelBytes(QPoint(0, 0), bytesOf(first)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(original->setPixelBytes(QPoint(256, 0), bytesOf(first)),
+           PixelTileWriteResult::Changed);
+  const auto* uniqueFirstPointer =
+      original->packedTileBytes(PixelTileIndex{0, 0})->data();
+  const auto* uniqueSecondPointer =
+      original->packedTileBytes(PixelTileIndex{1, 0})->data();
+
+  QCOMPARE(original->setPixelBytes(QPoint(1, 0), bytesOf(second)),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(original->packedTileBytes(PixelTileIndex{0, 0})->data(),
+           uniqueFirstPointer);
+  QCOMPARE(original->packedTileBytes(PixelTileIndex{1, 0})->data(),
+           uniqueSecondPointer);
+
+  auto copy = *original;
+  QCOMPARE(copy.packedTileBytes(PixelTileIndex{0, 0})->data(),
+           uniqueFirstPointer);
+  QCOMPARE(copy.packedTileBytes(PixelTileIndex{1, 0})->data(),
+           uniqueSecondPointer);
+  QCOMPARE(copy.setPixelBytes(QPoint(2, 0), bytesOf(third)),
+           PixelTileWriteResult::Changed);
+  QVERIFY(copy.packedTileBytes(PixelTileIndex{0, 0})->data() !=
+          original->packedTileBytes(PixelTileIndex{0, 0})->data());
+  QCOMPARE(copy.packedTileBytes(PixelTileIndex{1, 0})->data(),
+           original->packedTileBytes(PixelTileIndex{1, 0})->data());
+  QCOMPARE(*original->pixelBytes(QPoint(2, 0)), QByteArray(16, '\0'));
+  QCOMPARE(*copy.pixelBytes(QPoint(2, 0)), third);
+  QCOMPARE(*original->pixelBytes(QPoint(1, 0)), second);
 }
 
 void PixelStorageTest::elidesZeroTypedTilesAndPreservesCopies() {
