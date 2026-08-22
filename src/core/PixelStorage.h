@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
 #include <QImage>
 #include <QPoint>
 #include <QSize>
@@ -215,6 +216,64 @@ private:
 
   PixelStorageLayout layout_;
   QByteArray bytes_;
+};
+
+struct PixelTileIndex final {
+  quint32 column = 0;
+  quint32 row = 0;
+
+  friend bool operator==(const PixelTileIndex&, const PixelTileIndex&) = default;
+};
+
+size_t qHash(const PixelTileIndex& index, size_t seed = 0) noexcept;
+
+enum class PixelTileWriteResult : quint8 {
+  Changed,
+  Unchanged,
+  Rejected,
+};
+
+class SparsePixelTileStore final {
+public:
+  static constexpr quint64 hardMaximumResidentBytes =
+      16ULL * 1024ULL * 1024ULL;
+  static constexpr quint64 hardMaximumResidentTiles = 64;
+
+  [[nodiscard]] static std::optional<SparsePixelTileStore> create(
+      QSize dimensions, PixelFormat format,
+      quint64 maximumResidentBytes = hardMaximumResidentBytes,
+      quint64 maximumResidentTiles = hardMaximumResidentTiles);
+
+  [[nodiscard]] QSize dimensions() const noexcept;
+  [[nodiscard]] PixelFormat format() const noexcept;
+  [[nodiscard]] quint64 maximumResidentBytes() const noexcept;
+  [[nodiscard]] quint64 maximumResidentTiles() const noexcept;
+  [[nodiscard]] quint64 residentDecodedBytes() const noexcept;
+  [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
+  [[nodiscard]] bool containsTileIndex(PixelTileIndex index) const noexcept;
+  [[nodiscard]] std::optional<QByteArray> pixelBytes(QPoint position) const;
+  [[nodiscard]] std::optional<std::span<const std::byte>> packedTileBytes(
+      PixelTileIndex index) const noexcept;
+  PixelTileWriteResult setPixelBytes(QPoint position,
+                                     std::span<const std::byte> source);
+
+private:
+  SparsePixelTileStore(QSize dimensions, PixelFormat format,
+                       quint64 tileAllocationBytes,
+                       quint64 maximumResidentBytes,
+                       quint64 maximumResidentTiles) noexcept;
+
+  [[nodiscard]] bool contains(QPoint position) const noexcept;
+  [[nodiscard]] static PixelTileIndex tileIndex(QPoint position) noexcept;
+  [[nodiscard]] static QPoint tilePosition(QPoint position) noexcept;
+
+  QSize dimensions_;
+  PixelFormat format_;
+  quint64 tileAllocationBytes_ = 0;
+  quint64 maximumResidentBytes_ = 0;
+  quint64 maximumResidentTiles_ = 0;
+  quint64 residentDecodedBytes_ = 0;
+  QHash<PixelTileIndex, PixelTile> tiles_;
 };
 
 [[nodiscard]] std::optional<Rgba8Buffer> convertRgba8(

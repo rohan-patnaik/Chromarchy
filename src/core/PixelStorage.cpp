@@ -316,6 +316,156 @@ std::optional<Rgba8Buffer> PixelTile::toRgba8Premultiplied(
                       allocationLimitBytes);
 }
 
+size_t qHash(const PixelTileIndex& index, size_t seed) noexcept {
+  return qHashMulti(seed, index.column, index.row);
+}
+
+std::optional<SparsePixelTileStore> SparsePixelTileStore::create(
+    QSize dimensions, PixelFormat format, quint64 maximumResidentBytes,
+    quint64 maximumResidentTiles) {
+  const auto layout = tileLayout(format, PixelTile::maximumAllocationBytes);
+  if (dimensions.width() <= 0 || dimensions.height() <= 0 || !layout ||
+      maximumResidentBytes == 0 ||
+      maximumResidentBytes > hardMaximumResidentBytes ||
+      maximumResidentTiles == 0 ||
+      maximumResidentTiles > hardMaximumResidentTiles ||
+      layout->allocationBytes() > maximumResidentBytes) {
+    return std::nullopt;
+  }
+  return SparsePixelTileStore(dimensions, format, layout->allocationBytes(),
+                              maximumResidentBytes, maximumResidentTiles);
+}
+
+SparsePixelTileStore::SparsePixelTileStore(
+    QSize dimensions, PixelFormat format, quint64 tileAllocationBytes,
+    quint64 maximumResidentBytes, quint64 maximumResidentTiles) noexcept
+    : dimensions_(dimensions),
+      format_(format),
+      tileAllocationBytes_(tileAllocationBytes),
+      maximumResidentBytes_(maximumResidentBytes),
+      maximumResidentTiles_(maximumResidentTiles) {}
+
+QSize SparsePixelTileStore::dimensions() const noexcept {
+  return dimensions_;
+}
+
+PixelFormat SparsePixelTileStore::format() const noexcept {
+  return format_;
+}
+
+quint64 SparsePixelTileStore::maximumResidentBytes() const noexcept {
+  return maximumResidentBytes_;
+}
+
+quint64 SparsePixelTileStore::maximumResidentTiles() const noexcept {
+  return maximumResidentTiles_;
+}
+
+quint64 SparsePixelTileStore::residentDecodedBytes() const noexcept {
+  return residentDecodedBytes_;
+}
+
+qsizetype SparsePixelTileStore::allocatedTileCount() const noexcept {
+  return tiles_.size();
+}
+
+bool SparsePixelTileStore::containsTileIndex(
+    PixelTileIndex index) const noexcept {
+  const quint64 columns =
+      (static_cast<quint64>(dimensions_.width()) + PixelTile::extent - 1U) /
+      PixelTile::extent;
+  const quint64 rows =
+      (static_cast<quint64>(dimensions_.height()) + PixelTile::extent - 1U) /
+      PixelTile::extent;
+  return index.column < columns && index.row < rows;
+}
+
+std::optional<QByteArray> SparsePixelTileStore::pixelBytes(
+    QPoint position) const {
+  if (!contains(position)) {
+    return std::nullopt;
+  }
+  const auto tile = tiles_.constFind(tileIndex(position));
+  if (tile == tiles_.cend()) {
+    return QByteArray(format_.bytesPerPixel(), '\0');
+  }
+  const auto pixel = tile->pixelBytes(tilePosition(position));
+  return QByteArray(reinterpret_cast<const char*>(pixel.data()),
+                    static_cast<qsizetype>(pixel.size()));
+}
+
+std::optional<std::span<const std::byte>>
+SparsePixelTileStore::packedTileBytes(PixelTileIndex index) const noexcept {
+  if (!containsTileIndex(index)) {
+    return std::nullopt;
+  }
+  const auto tile = tiles_.constFind(index);
+  if (tile == tiles_.cend()) {
+    return std::nullopt;
+  }
+  return tile->packedBytes();
+}
+
+PixelTileWriteResult SparsePixelTileStore::setPixelBytes(
+    QPoint position, std::span<const std::byte> source) {
+  if (!contains(position) || source.size() != format_.bytesPerPixel()) {
+    return PixelTileWriteResult::Rejected;
+  }
+
+  const auto index = tileIndex(position);
+  const auto localPosition = tilePosition(position);
+  const auto existing = tiles_.constFind(index);
+  if (existing == tiles_.cend()) {
+    if (std::all_of(source.begin(), source.end(),
+                    [](std::byte byte) { return byte == std::byte{}; })) {
+      return PixelTileWriteResult::Unchanged;
+    }
+    if (static_cast<quint64>(tiles_.size()) >= maximumResidentTiles_ ||
+        residentDecodedBytes_ > maximumResidentBytes_ - tileAllocationBytes_) {
+      return PixelTileWriteResult::Rejected;
+    }
+    auto candidate = PixelTile::create(format_, tileAllocationBytes_);
+    if (!candidate || !candidate->setPixelBytes(localPosition, source)) {
+      return PixelTileWriteResult::Rejected;
+    }
+    tiles_.insert(index, std::move(*candidate));
+    residentDecodedBytes_ += tileAllocationBytes_;
+    return PixelTileWriteResult::Changed;
+  }
+
+  const auto existingPixel = existing->pixelBytes(localPosition);
+  if (std::equal(existingPixel.begin(), existingPixel.end(), source.begin())) {
+    return PixelTileWriteResult::Unchanged;
+  }
+  auto candidate = *existing;
+  if (!candidate.setPixelBytes(localPosition, source)) {
+    return PixelTileWriteResult::Rejected;
+  }
+  if (candidate.isZero()) {
+    tiles_.remove(index);
+    residentDecodedBytes_ -= tileAllocationBytes_;
+  } else {
+    tiles_.insert(index, std::move(candidate));
+  }
+  return PixelTileWriteResult::Changed;
+}
+
+bool SparsePixelTileStore::contains(QPoint position) const noexcept {
+  return position.x() >= 0 && position.y() >= 0 &&
+         position.x() < dimensions_.width() &&
+         position.y() < dimensions_.height();
+}
+
+PixelTileIndex SparsePixelTileStore::tileIndex(QPoint position) noexcept {
+  return {static_cast<quint32>(position.x() / PixelTile::extent),
+          static_cast<quint32>(position.y() / PixelTile::extent)};
+}
+
+QPoint SparsePixelTileStore::tilePosition(QPoint position) noexcept {
+  return {position.x() % PixelTile::extent,
+          position.y() % PixelTile::extent};
+}
+
 std::optional<Rgba8Buffer> convertRgba8(
     std::span<const std::byte> source, const PixelStorageLayout& sourceLayout,
     AlphaMode destinationAlpha, quint64 destinationRowAlignment,
