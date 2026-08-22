@@ -150,6 +150,39 @@ input must own it or rely on the write's internal staging during that call.
 This boundary adds no native or raster persistence, document/render wiring,
 implicit numeric conversion, scaling, nonfinite policy, or color management.
 
+## Reversible typed-tile delta boundary
+
+`tileDeltaTo()` compares stores only when their logical dimensions and pixel
+formats match. It emits owning changed-tile records in strict row-major order,
+independent of `QHash` order. Each record carries an optional before tile and
+optional after tile; absence means the canonical byte-zero sparse tile. Records
+whose two sides are equal are omitted. Exact packed bytes and declared sample
+endianness are preserved without numeric interpretation.
+
+One delta is caller-bounded and hard-capped at 64 records and 16 MiB of combined
+before-plus-after packed payload. Generation returns no delta if either cap is
+exceeded. The returned records are owning Qt byte arrays and can share immutable
+payload with their source stores until either owner mutates; changing a returned
+record cannot change either source store.
+
+`applyTileDelta()` accepts only the same canonical row-major record order. It
+rejects duplicate or out-of-grid indices, absent-to-absent or equal-sided
+records, truncated/trailing payloads, resident all-zero payloads, invalid
+premultiplied RGBA8, unknown directions, and caller or hard-cap violations. The
+selected before or after side must exactly match every current resident tile;
+this conflict check prevents applying a delta to the wrong state. Both sides of
+every record, the final resident tile/byte budgets, and all conflicts are
+validated before a candidate store is committed, so forward and reverse
+application expose no partial mutation. An empty canonical delta is an
+`Unchanged` no-op; a nonempty valid application is `Changed`; every invalid,
+conflicting, or over-budget input is `Rejected`.
+
+Delta records are an in-memory reversible raw-tile prerequisite, not a command,
+serialized encoding, native-format addition, dirty-state tracker, or coalescing
+policy. They are not integrated with live `DocumentHistory`, which continues to
+retain copy-on-write RGBA8 document snapshots. Consequently the cataloged
+reversible delta/coalesced history capability remains Planned.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied
@@ -160,12 +193,12 @@ native version and packed premultiplied RGBA8 wire bytes are unchanged. Fixture
 tests prove byte-identical v2 save/reopen and pixel-identical v1 load, upgrade,
 and reopen across tile boundaries.
 
-High-depth tiles, their sparse owner, snapshots, and rectangular access are
-isolated storage prerequisites: documents and the live render path do not own
-or render them yet. There is no high-depth numeric conversion, native
-persistence, import/export round trip, or color-management claim. Import,
-export, display, and render-node boundaries beyond the native RGBA8 tile
-adapter remain future work.
+High-depth tiles, their sparse owner, snapshots, rectangular access, and
+reversible tile deltas are isolated storage prerequisites: documents and the
+live render path do not own or render them yet. There is no high-depth numeric
+conversion, native persistence, import/export round trip, or color-management
+claim. Import, export, display, and render-node boundaries beyond the native
+RGBA8 tile adapter remain future work.
 
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that
