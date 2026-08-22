@@ -153,11 +153,12 @@ implicit numeric conversion, scaling, nonfinite policy, or color management.
 ## Reversible typed-tile delta boundary
 
 `tileDeltaTo()` compares stores only when their logical dimensions and pixel
-formats match. It emits owning changed-tile records in strict row-major order,
-independent of `QHash` order. Each record carries an optional before tile and
-optional after tile; absence means the canonical byte-zero sparse tile. Records
-whose two sides are equal are omitted. Exact packed bytes and declared sample
-endianness are preserved without numeric interpretation.
+formats match. Its owning delta envelope retains those exact dimensions and the
+complete `PixelFormat`, then emits changed-tile records in strict row-major
+order, independent of `QHash` order. Each record carries an optional before tile
+and optional after tile; absence means the canonical byte-zero sparse tile.
+Records whose two sides are equal are omitted. Exact packed bytes and declared
+sample endianness are preserved without numeric interpretation.
 
 One delta is caller-bounded and hard-capped at 64 records and 16 MiB of combined
 before-plus-after packed payload. Generation returns no delta if either cap is
@@ -165,17 +166,19 @@ exceeded. The returned records are owning Qt byte arrays and can share immutable
 payload with their source stores until either owner mutates; changing a returned
 record cannot change either source store.
 
-`applyTileDelta()` accepts only the same canonical row-major record order. It
+`applyTileDelta()` first requires the envelope dimensions and complete format,
+including sample kind, channels, alpha mode, and byte order, to equal the target
+store. It then accepts only the same canonical row-major record order. It
 rejects duplicate or out-of-grid indices, absent-to-absent or equal-sided
 records, truncated/trailing payloads, resident all-zero payloads, invalid
 premultiplied RGBA8, unknown directions, and caller or hard-cap violations. The
-selected before or after side must exactly match every current resident tile;
-this conflict check prevents applying a delta to the wrong state. Both sides of
-every record, the final resident tile/byte budgets, and all conflicts are
-validated before a candidate store is committed, so forward and reverse
-application expose no partial mutation. An empty canonical delta is an
-`Unchanged` no-op; a nonempty valid application is `Changed`; every invalid,
-conflicting, or over-budget input is `Rejected`.
+selected before or after side must exactly match every current resident tile.
+The envelope binding and byte conflict check together prevent application to a
+wrong typed state. Both sides of every record, the final resident tile/byte
+budgets, and all conflicts are validated before a candidate store is committed,
+so forward and reverse application expose no partial mutation. An empty
+canonical delta is an `Unchanged` no-op; a nonempty valid application is
+`Changed`; every invalid, conflicting, or over-budget input is `Rejected`.
 
 Delta records are an in-memory reversible raw-tile prerequisite, not a command,
 serialized encoding, native-format addition, dirty-state tracker, or coalescing

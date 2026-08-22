@@ -706,7 +706,7 @@ PixelTileWriteResult SparsePixelTileStore::writeRegion(
   return PixelTileWriteResult::Changed;
 }
 
-std::optional<QVector<PixelTileDeltaRecord>>
+std::optional<PixelTileDelta>
 SparsePixelTileStore::tileDeltaTo(const SparsePixelTileStore& after,
                                   quint64 maximumPayloadBytes,
                                   quint64 maximumRecordCount) const {
@@ -765,23 +765,24 @@ SparsePixelTileStore::tileDeltaTo(const SparsePixelTileStore& after,
                            : std::nullopt});
     payloadBytes += recordBytes;
   }
-  return records;
+  return PixelTileDelta{dimensions_, format_, std::move(records)};
 }
 
 PixelTileWriteResult SparsePixelTileStore::applyTileDelta(
-    const QVector<PixelTileDeltaRecord>& records,
+    const PixelTileDelta& delta,
     PixelTileDeltaDirection direction, quint64 maximumPayloadBytes,
     quint64 maximumRecordCount) {
-  if ((direction != PixelTileDeltaDirection::Forward &&
+  if (delta.dimensions != dimensions_ || delta.format != format_ ||
+      (direction != PixelTileDeltaDirection::Forward &&
        direction != PixelTileDeltaDirection::Reverse) ||
       maximumPayloadBytes == 0 ||
       maximumPayloadBytes > hardMaximumDeltaBytes ||
       maximumRecordCount == 0 ||
       maximumRecordCount > hardMaximumDeltaRecords ||
-      static_cast<quint64>(records.size()) > maximumRecordCount) {
+      static_cast<quint64>(delta.records.size()) > maximumRecordCount) {
     return PixelTileWriteResult::Rejected;
   }
-  if (records.isEmpty()) {
+  if (delta.records.isEmpty()) {
     return PixelTileWriteResult::Unchanged;
   }
 
@@ -795,7 +796,7 @@ PixelTileWriteResult SparsePixelTileStore::applyTileDelta(
     std::optional<PixelTile> replacement;
   };
   QVector<PendingTile> pending;
-  pending.reserve(records.size());
+  pending.reserve(delta.records.size());
   quint64 payloadBytes = 0;
   quint64 additions = 0;
   quint64 removals = 0;
@@ -818,7 +819,7 @@ PixelTileWriteResult SparsePixelTileStore::applyTileDelta(
            hasValidPremultipliedSamples(bytes, *fullTileLayout);
   };
 
-  for (const auto& record : records) {
+  for (const auto& record : delta.records) {
     const bool orderedAfterPrevious =
         !previousIndex || previousIndex->row < record.index.row ||
         (previousIndex->row == record.index.row &&

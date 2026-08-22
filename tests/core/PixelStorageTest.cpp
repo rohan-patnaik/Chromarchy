@@ -20,6 +20,7 @@ using chromarchy::ChannelMeaning;
 using chromarchy::PixelFormat;
 using chromarchy::PixelStorageLayout;
 using chromarchy::PixelTile;
+using chromarchy::PixelTileDelta;
 using chromarchy::PixelTileDeltaDirection;
 using chromarchy::PixelTileDeltaRecord;
 using chromarchy::PixelTileIndex;
@@ -1065,22 +1066,24 @@ void PixelStorageTest::createsDeterministicBoundedTileDeltas() {
   const auto beforeSnapshots = before->tileSnapshots();
   const auto afterSnapshots = after.tileSnapshots();
 
-  const auto records = before->tileDeltaTo(after, tileBytes * 4, 3);
-  QVERIFY(records);
-  QCOMPARE(records->size(), 3);
-  QCOMPARE((*records)[0].index, PixelTileIndex(0, 0));
-  QVERIFY(!(*records)[0].before);
-  QVERIFY((*records)[0].after);
-  QCOMPARE((*records)[1].index, PixelTileIndex(1, 0));
-  QVERIFY((*records)[1].before);
-  QVERIFY((*records)[1].after);
-  QCOMPARE((*records)[2].index, PixelTileIndex(0, 1));
-  QVERIFY((*records)[2].before);
-  QVERIFY(!(*records)[2].after);
-  QCOMPARE((*records)[0].after->left(2), added);
-  QCOMPARE((*records)[1].before->left(2), changedBefore);
-  QCOMPARE((*records)[1].after->left(2), changedAfter);
-  QCOMPARE((*records)[2].before->left(2), removed);
+  const auto delta = before->tileDeltaTo(after, tileBytes * 4, 3);
+  QVERIFY(delta);
+  QCOMPARE(delta->dimensions, before->dimensions());
+  QCOMPARE(delta->format, format);
+  QCOMPARE(delta->records.size(), 3);
+  QCOMPARE(delta->records[0].index, PixelTileIndex(0, 0));
+  QVERIFY(!delta->records[0].before);
+  QVERIFY(delta->records[0].after);
+  QCOMPARE(delta->records[1].index, PixelTileIndex(1, 0));
+  QVERIFY(delta->records[1].before);
+  QVERIFY(delta->records[1].after);
+  QCOMPARE(delta->records[2].index, PixelTileIndex(0, 1));
+  QVERIFY(delta->records[2].before);
+  QVERIFY(!delta->records[2].after);
+  QCOMPARE(delta->records[0].after->left(2), added);
+  QCOMPARE(delta->records[1].before->left(2), changedBefore);
+  QCOMPARE(delta->records[1].after->left(2), changedAfter);
+  QCOMPARE(delta->records[2].before->left(2), removed);
   QCOMPARE(before->format().byteOrder, ByteOrder::BigEndian);
   QCOMPARE(before->tileSnapshots(), beforeSnapshots);
   QCOMPARE(after.tileSnapshots(), afterSnapshots);
@@ -1098,11 +1101,11 @@ void PixelStorageTest::createsDeterministicBoundedTileDeltas() {
   QVERIFY(wrongFormat);
   QVERIFY(!before->tileDeltaTo(*wrongFormat));
 
-  const auto recordsBeforeMutation = *records;
+  const auto deltaBeforeMutation = *delta;
   const auto later = QByteArray::fromHex("3300");
   QCOMPARE(after.setPixelBytes(QPoint(256, 0), bytesOf(later)),
            PixelTileWriteResult::Changed);
-  QCOMPARE(*records, recordsBeforeMutation);
+  QCOMPARE(*delta, deltaBeforeMutation);
   QCOMPARE(before->tileSnapshots(), beforeSnapshots);
 }
 
@@ -1128,38 +1131,67 @@ void PixelStorageTest::appliesTileDeltasForwardAndReverse() {
   QCOMPARE(after.setPixelBytes(QPoint(256, 0), bytesOf(addition)),
            PixelTileWriteResult::Changed);
 
-  const auto records = before->tileDeltaTo(after, tileBytes * 3, 2);
-  QVERIFY(records);
-  const auto recordsBefore = *records;
+  const auto delta = before->tileDeltaTo(after, tileBytes * 3, 2);
+  QVERIFY(delta);
+  const auto deltaBefore = *delta;
   const auto beforeSnapshots = before->tileSnapshots();
   const auto afterSnapshots = after.tileSnapshots();
   auto target = *before;
   const auto* untouchedPayload =
       before->packedTileBytes(PixelTileIndex{2, 0})->data();
-  QCOMPARE(target.applyTileDelta(*records, PixelTileDeltaDirection::Forward,
+
+  auto wrongDimensions = SparsePixelTileStore::fromTileSnapshots(
+      QSize(1024, 256), format, beforeSnapshots, tileBytes * 3, 3);
+  QVERIFY(wrongDimensions);
+  QCOMPARE(wrongDimensions->applyTileDelta(
+               *delta, PixelTileDeltaDirection::Forward, tileBytes * 3, 2),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(wrongDimensions->tileSnapshots(), beforeSnapshots);
+  const PixelFormat float16{SampleFormat::Float16, ChannelLayout::Gray,
+                            AlphaMode::None, ByteOrder::LittleEndian};
+  auto wrongFormat = SparsePixelTileStore::fromTileSnapshots(
+      before->dimensions(), float16, beforeSnapshots, tileBytes * 3, 3);
+  QVERIFY(wrongFormat);
+  QCOMPARE(wrongFormat->applyTileDelta(
+               *delta, PixelTileDeltaDirection::Forward, tileBytes * 3, 2),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(wrongFormat->tileSnapshots(), beforeSnapshots);
+  const PixelFormat bigEndian{SampleFormat::UnsignedInteger16,
+                              ChannelLayout::Gray, AlphaMode::None,
+                              ByteOrder::BigEndian};
+  auto wrongEndian = SparsePixelTileStore::fromTileSnapshots(
+      before->dimensions(), bigEndian, beforeSnapshots, tileBytes * 3, 3);
+  QVERIFY(wrongEndian);
+  QCOMPARE(wrongEndian->applyTileDelta(
+               *delta, PixelTileDeltaDirection::Forward, tileBytes * 3, 2),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(wrongEndian->tileSnapshots(), beforeSnapshots);
+
+  QCOMPARE(target.applyTileDelta(*delta, PixelTileDeltaDirection::Forward,
                                  tileBytes * 3, 2),
            PixelTileWriteResult::Changed);
   QCOMPARE(target.tileSnapshots(), afterSnapshots);
   QCOMPARE(before->tileSnapshots(), beforeSnapshots);
   QCOMPARE(target.packedTileBytes(PixelTileIndex{2, 0})->data(),
            untouchedPayload);
-  QCOMPARE(*records, recordsBefore);
-  auto mutableRecords = *records;
-  (*mutableRecords[0].after)[0] = '\x7f';
+  QCOMPARE(*delta, deltaBefore);
+  auto mutableDelta = *delta;
+  (*mutableDelta.records[0].after)[0] = '\x7f';
   QCOMPARE(target.tileSnapshots(), afterSnapshots);
-  QCOMPARE(*records, recordsBefore);
-  QCOMPARE(target.applyTileDelta(*records, PixelTileDeltaDirection::Forward,
+  QCOMPARE(*delta, deltaBefore);
+  QCOMPARE(target.applyTileDelta(*delta, PixelTileDeltaDirection::Forward,
                                  tileBytes * 3, 2),
            PixelTileWriteResult::Rejected);
-  QCOMPARE(target.applyTileDelta(*records, PixelTileDeltaDirection::Reverse,
+  QCOMPARE(target.applyTileDelta(*delta, PixelTileDeltaDirection::Reverse,
                                  tileBytes * 3, 2),
            PixelTileWriteResult::Changed);
   QCOMPARE(target.tileSnapshots(), beforeSnapshots);
-  QCOMPARE(target.applyTileDelta({}, PixelTileDeltaDirection::Forward),
+  const PixelTileDelta empty{before->dimensions(), format, {}};
+  QCOMPARE(target.applyTileDelta(empty, PixelTileDeltaDirection::Forward),
            PixelTileWriteResult::Unchanged);
-  (*mutableRecords[0].before)[0] = '\x7e';
+  (*mutableDelta.records[0].before)[0] = '\x7e';
   QCOMPARE(target.tileSnapshots(), beforeSnapshots);
-  QCOMPARE(*records, recordsBefore);
+  QCOMPARE(*delta, deltaBefore);
 }
 
 void PixelStorageTest::enforcesHardTileDeltaBoundaries() {
@@ -1186,7 +1218,7 @@ void PixelStorageTest::enforcesHardTileDeltaBoundaries() {
   const auto exact = before->tileDeltaTo(
       after, SparsePixelTileStore::hardMaximumDeltaBytes, 8);
   QVERIFY(exact);
-  QCOMPARE(exact->size(), 8);
+  QCOMPARE(exact->records.size(), 8);
   const auto eightTileAfter = after.tileSnapshots();
   auto target = *before;
   QCOMPARE(target.applyTileDelta(
@@ -1213,6 +1245,74 @@ void PixelStorageTest::enforcesHardTileDeltaBoundaries() {
                SparsePixelTileStore::hardMaximumDeltaBytes + 1, 8),
            PixelTileWriteResult::Rejected);
   QCOMPARE(target.tileSnapshots(), eightTileAfter);
+
+  const PixelFormat gray8{SampleFormat::UnsignedInteger8,
+                          ChannelLayout::Gray, AlphaMode::None,
+                          ByteOrder::NotApplicable};
+  constexpr quint64 grayTileBytes = 256ULL * 256ULL;
+  auto before64 = SparsePixelTileStore::create(
+      QSize(65 * 256, 256), gray8,
+      SparsePixelTileStore::hardMaximumResidentBytes, 64);
+  auto after64 = SparsePixelTileStore::create(
+      QSize(65 * 256, 256), gray8,
+      SparsePixelTileStore::hardMaximumResidentBytes, 64);
+  QVERIFY(before64);
+  QVERIFY(after64);
+  const QByteArray graySample(1, '\1');
+  for (int column = 0; column < 32; ++column) {
+    QCOMPARE(before64->setPixelBytes(QPoint(column * 256, 0),
+                                     bytesOf(graySample)),
+             PixelTileWriteResult::Changed);
+  }
+  for (int column = 32; column < 64; ++column) {
+    QCOMPARE(after64->setPixelBytes(QPoint(column * 256, 0),
+                                    bytesOf(graySample)),
+             PixelTileWriteResult::Changed);
+  }
+  const auto exact64 = before64->tileDeltaTo(
+      *after64, SparsePixelTileStore::hardMaximumDeltaBytes,
+      SparsePixelTileStore::hardMaximumDeltaRecords);
+  QVERIFY(exact64);
+  QCOMPARE(exact64->records.size(), 64);
+  const auto before64Snapshots = before64->tileSnapshots();
+  const auto after64Snapshots = after64->tileSnapshots();
+  auto target64 = *before64;
+  QCOMPARE(target64.applyTileDelta(
+               *exact64, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes, 63),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(target64.tileSnapshots(), before64Snapshots);
+  QCOMPARE(target64.applyTileDelta(
+               *exact64, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes,
+               SparsePixelTileStore::hardMaximumDeltaRecords),
+           PixelTileWriteResult::Changed);
+  QCOMPARE(target64.tileSnapshots(), after64Snapshots);
+
+  auto after65 = *after64;
+  QCOMPARE(after65.setPixelBytes(QPoint(64 * 256, 0), bytesOf(graySample)),
+           PixelTileWriteResult::Changed);
+  QVERIFY(!before64->tileDeltaTo(after65));
+  QVERIFY(!before64->tileDeltaTo(
+      *after64, SparsePixelTileStore::hardMaximumDeltaBytes,
+      SparsePixelTileStore::hardMaximumDeltaRecords + 1));
+  auto delta65 = *exact64;
+  QByteArray grayPayload(static_cast<qsizetype>(grayTileBytes), '\0');
+  grayPayload[0] = '\1';
+  delta65.records.push_back({{64, 0}, std::nullopt, grayPayload});
+  auto rejectedTarget = *before64;
+  QCOMPARE(rejectedTarget.applyTileDelta(
+               delta65, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes,
+               SparsePixelTileStore::hardMaximumDeltaRecords),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(rejectedTarget.tileSnapshots(), before64Snapshots);
+  QCOMPARE(rejectedTarget.applyTileDelta(
+               *exact64, PixelTileDeltaDirection::Forward,
+               SparsePixelTileStore::hardMaximumDeltaBytes,
+               SparsePixelTileStore::hardMaximumDeltaRecords + 1),
+           PixelTileWriteResult::Rejected);
+  QCOMPARE(rejectedTarget.tileSnapshots(), before64Snapshots);
 }
 
 void PixelStorageTest::rejectsHostileTileDeltasAtomically() {
@@ -1233,7 +1333,8 @@ void PixelStorageTest::rejectsHostileTileDeltasAtomically() {
 
   auto rejectsWithLimits = [&](const QVector<PixelTileDeltaRecord>& records,
                                quint64 bytes, quint64 count) {
-    QCOMPARE(store->applyTileDelta(records, PixelTileDeltaDirection::Forward,
+    const PixelTileDelta delta{store->dimensions(), format, records};
+    QCOMPARE(store->applyTileDelta(delta, PixelTileDeltaDirection::Forward,
                                    bytes, count),
              PixelTileWriteResult::Rejected);
     QCOMPARE(store->tileSnapshots(), baseline);
@@ -1263,8 +1364,9 @@ void PixelStorageTest::rejectsHostileTileDeltasAtomically() {
   rejects({invalidPremultiplied});
   rejectsWithLimits({valid}, tileBytes * 2 - 1, 1);
   rejectsWithLimits({valid}, tileBytes * 2, 0);
+  const PixelTileDelta validDelta{store->dimensions(), format, {valid}};
   QCOMPARE(store->applyTileDelta(
-               {valid}, static_cast<PixelTileDeltaDirection>(255),
+               validDelta, static_cast<PixelTileDeltaDirection>(255),
                tileBytes * 2, 1),
            PixelTileWriteResult::Rejected);
   QCOMPARE(store->tileSnapshots(), baseline);

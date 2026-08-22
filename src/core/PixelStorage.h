@@ -259,6 +259,15 @@ struct PixelTileDeltaRecord final {
                          const PixelTileDeltaRecord&) = default;
 };
 
+struct PixelTileDelta final {
+  QSize dimensions;
+  PixelFormat format;
+  QVector<PixelTileDeltaRecord> records;
+
+  friend bool operator==(const PixelTileDelta&, const PixelTileDelta&) =
+      default;
+};
+
 enum class PixelTileDeltaDirection : quint8 {
   Forward,
   Reverse,
@@ -304,12 +313,12 @@ public:
       QRect region, std::span<const std::byte> source,
       quint64 sourceRowStrideBytes,
       quint64 maximumAllocationBytes = hardMaximumRegionBytes);
-  [[nodiscard]] std::optional<QVector<PixelTileDeltaRecord>> tileDeltaTo(
+  [[nodiscard]] std::optional<PixelTileDelta> tileDeltaTo(
       const SparsePixelTileStore& after,
       quint64 maximumPayloadBytes = hardMaximumDeltaBytes,
       quint64 maximumRecordCount = hardMaximumDeltaRecords) const;
   PixelTileWriteResult applyTileDelta(
-      const QVector<PixelTileDeltaRecord>& records,
+      const PixelTileDelta& delta,
       PixelTileDeltaDirection direction,
       quint64 maximumPayloadBytes = hardMaximumDeltaBytes,
       quint64 maximumRecordCount = hardMaximumDeltaRecords);
