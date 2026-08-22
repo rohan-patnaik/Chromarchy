@@ -92,6 +92,30 @@ a uniquely owned tile retain its allocation. Mutating a copied store detaches
 only the affected tile, and the complete byte-zero scan runs only after a
 byte-zero sample write can make a tile empty.
 
+## Owning snapshot boundary
+
+`tileSnapshots()` returns owning records containing a tile index and its exact
+packed bytes. Records are always exported in row-major index order, independent
+of `QHash` iteration order. The source store may be destroyed or mutated after
+export without changing a snapshot, and snapshot bytes may be mutated without
+changing the store. Because resident payload is hard-bounded, one exported
+snapshot set owns at most 16 MiB of packed tile bytes plus at most 64 records
+and their container metadata.
+
+`fromTileSnapshots()` builds a new store or returns no store. It accepts input
+record order but rejects duplicate or out-of-grid indices, truncated or
+trailing payload bytes, invalid premultiplied RGBA8 samples, aggregate byte or
+tile limits, and all-byte-zero resident records. Rejecting zero records keeps
+the sparse representation canonical; absent tiles already represent those
+bytes. Import copies exact bytes, preserves the declared sample endianness, and
+does not modify its source records. A rejected input exposes no partially built
+store.
+
+These records are an in-memory persistence boundary, not a serialized format.
+They add no headers, framing, version, native v1/v2 change, or raster/document
+integration. Any future on-disk container requires its own reviewed format and
+compatibility contract.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied
