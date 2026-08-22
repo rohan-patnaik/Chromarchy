@@ -116,6 +116,40 @@ They add no headers, framing, version, native v1/v2 change, or raster/document
 integration. Any future on-disk container requires its own reviewed format and
 compatibility contract.
 
+## Bounded rectangular region boundary
+
+`readRegion()` and `writeRegion()` move exact packed sample bytes across a
+rectangular part of `SparsePixelTileStore`, including regions that cross sparse
+tile boundaries. They do not interpret or convert numeric samples. Reads return
+an owning buffer with a checked layout; absent pixels and row padding are
+byte-zero, and the store's declared sample byte order is unchanged.
+
+Regions must be nonempty and fully inside the logical image. Checked unsigned
+geometry rejects coordinate, stride, row-size, and total-size overflow. One
+operation may touch at most 64 tiles. A read allocation is caller-bounded and
+hard-capped at 16 MiB. A write requires an exact source span and explicit row
+stride. Its caller limit independently bounds both the staged source allocation
+and the aggregate full-tile replacement payload, each with a 16-MiB hard cap;
+the two temporary payload sets can coexist during validation, in addition to
+the existing store and bounded container metadata.
+
+Writes stage the complete source before inspecting or changing the store, so a
+source may overlap a resident tile payload without invalidation or undefined
+copy behavior. All touched replacements, premultiplied RGBA8 samples, and final
+resident budgets are validated before a candidate store is committed. A
+failure exposes no partial mutation. Byte-identical writes return `Unchanged`,
+successful mutations return `Changed`, and failures return `Rejected`; these
+are dirty-state-equivalent results rather than a document dirty-state tracker.
+All-zero replacements are elided, and copying then mutating a store preserves
+the original through tile-level copy-on-write isolation.
+
+The returned read buffer is owning. As with other non-const store operations,
+attempting a region write invalidates previously borrowed `packedTileBytes()`
+views even when it returns `Unchanged` or `Rejected`; callers needing stable
+input must own it or rely on the write's internal staging during that call.
+This boundary adds no native or raster persistence, document/render wiring,
+implicit numeric conversion, scaling, nonfinite policy, or color management.
+
 ## Current engine boundary
 
 The live sparse `TiledImage` engine still stores only RGBA8 premultiplied
@@ -126,11 +160,12 @@ native version and packed premultiplied RGBA8 wire bytes are unchanged. Fixture
 tests prove byte-identical v2 save/reopen and pixel-identical v1 load, upgrade,
 and reopen across tile boundaries.
 
-High-depth tiles and their sparse owner are isolated storage prerequisites:
-documents and the live render path do not own or render them yet. There is no
-high-depth numeric conversion, native persistence, import/export round trip, or
-color-management claim. Import, export, display, and render-node boundaries
-beyond the native RGBA8 tile adapter remain future work.
+High-depth tiles, their sparse owner, snapshots, and rectangular access are
+isolated storage prerequisites: documents and the live render path do not own
+or render them yet. There is no high-depth numeric conversion, native
+persistence, import/export round trip, or color-management claim. Import,
+export, display, and render-node boundaries beyond the native RGBA8 tile
+adapter remain future work.
 
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that

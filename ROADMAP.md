@@ -55,9 +55,10 @@ provide raw sample access, copy-on-write mutation, and explicit conversion and
 persistence seams. A bounded sparse typed owner provides lazy allocation,
 byte-zero elision, exact decoded-payload accounting, and checked coordinates,
 plus deterministic owning snapshot records with atomic bounded rebuild, but
-remains isolated from documents and defines no file format. High-depth numeric
-conversion, document integration, rendering, and native persistence remain
-future slices.
+remains isolated from documents and defines no file format. Checked rectangular
+raw-byte access crosses sparse tile boundaries with atomic writes, alias-safe
+staging, and zero-tile elision. High-depth numeric conversion, document
+integration, rendering, and native persistence remain future slices.
 
 ### Phase 2 — close M0/M1 local workflows
 
