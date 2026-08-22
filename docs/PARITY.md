@@ -22,7 +22,9 @@ The catalog currently covers all planned local surfaces:
 - paths, shapes, boolean geometry, SVG interchange, and independently tracked
   horizontal/OpenType/RTL/vertical/variable/path text workflows;
 - native, PNG, JPEG, TIFF, WebP, OpenEXR, BMP, still/animated GIF, APNG,
-  JPEG 2000, TGA, PBM/PGM/PPM, HEIF/AVIF, PSD/PSB, RAW, SVG, and explicit
+  JPEG 2000, TGA, PBM/PGM/PPM, HEIF/AVIF, PSD/PSB, camera RAW, SVG,
+  Cineon, DICOM, IFF, PCX, DCS 1.0/2.0, headerless raw raster, read-only
+  PICT, Pixar PXR, Radiance HDR, Scitex CT, Wireless Bitmap, and explicit
   PDF/EPS interchange decision gates;
 - independently tracked ICC display/assign/convert, CMYK, Lab, spot color,
   soft proof, gamut warning, print, and PDF proof workflows;
@@ -79,3 +81,11 @@ Documentation may cite individual Complete stable IDs. It must not claim broad
 Photoshop parity, proprietary behavior, or compatibility not demonstrated by
 public fixtures and the catalog. Adobe code, APIs, UI, icons, strings, layouts,
 models, and sample assets are not inputs to Chromarchy.
+
+Catalog presence is not format support. Planned and Blocked legacy-format rows
+record an acceptance boundary, resource budget, and required public
+specification/fixture or dependency decision without claiming that a codec is
+installed. Headerless raw raster interchange is tracked separately from camera
+RAW development, and PICT is intentionally scoped as read-only. Ambiguous or
+insufficiently documented dialects stay Blocked until an independently
+implementable subset and lawful interoperability fixtures are approved.

@@ -230,7 +230,19 @@
     "view.navigator-panel",
     "view.rotate",
     "view.rulers-guides",
-    "view.zoom-pan"
+    "view.zoom-pan",
+    "format.cineon",
+    "format.dicom",
+    "format.iff",
+    "format.pcx",
+    "format.dcs1",
+    "format.dcs2",
+    "format.photoshop-raw",
+    "format.pict-read",
+    "format.pixar-pxr",
+    "format.radiance-hdr",
+    "format.scitex-ct",
+    "format.wbmp"
   ],
   "retired": [
     {"id":"color.cmyk-lab-spot-proof","replacement":"color.cmyk, color.lab, color.spot, color.soft-proof, color.gamut-warning","reason":"Split independently verifiable document-space, spot-channel, proof, and gamut workflows."},
