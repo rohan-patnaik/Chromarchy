@@ -86,6 +86,11 @@ Sparse selection masks now canonicalize tiles that equal their base coverage
 after live point/rectangle edits and native v2 load. Declared legacy records
 remain charged against existing hostile-input budgets before elision, and the
 wire format is unchanged.
+The CPU source-over path is anchored by an original, independently calculated
+full-image golden across the x=255/256 tile boundary. Repeated full and bounded
+region rendering, the painter entry point, native save/reopen, flatten, and
+merge-down persistence are checked without changing the RGBA8 renderer or its
+color interpretation.
 
 ### Phase 2 — close M0/M1 local workflows
 

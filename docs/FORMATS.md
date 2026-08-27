@@ -86,3 +86,9 @@ sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and
 in-process, so cancellation, wall-time enforcement, and helper isolation remain
 explicitly incomplete.
+
+The original independent source-over full-image fixture is also saved and
+reopened through native v2 before comparison. Flattened and complete merge-down
+results are separately saved and reopened, anchoring persistence of their
+deterministic RGBA8 output without defining a new native version or color
+meaning.

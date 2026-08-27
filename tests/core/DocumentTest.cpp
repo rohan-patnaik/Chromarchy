@@ -1,9 +1,18 @@
 #include "core/Document.h"
+#include "core/NativeDocumentCodec.h"
 
+#include <QCryptographicHash>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPainter>
+#include <QSet>
+#include <QTemporaryDir>
 #include <QTest>
 
-#include <limits>
 #include <cmath>
+#include <limits>
 
 using chromarchy::Document;
 
@@ -47,6 +56,7 @@ private slots:
   void compositesVisibilityAndOpacity();
   void matchesOriginalSourceOverReferenceVectors();
   void fullImageCompositeIsRepeatableAcrossTileBoundary();
+  void matchesIndependentCompositeGoldenAfterNativeRoundTrip();
   void mergeAndFlattenPreserveComposite();
   void mergeAndFlattenElideTransparentTiles();
   void locksPreventDestructiveLayerOperations();
@@ -172,6 +182,177 @@ void DocumentTest::fullImageCompositeIsRepeatableAcrossTileBoundary() {
   QVERIFY(document->moveLayer(top, 0));
   const auto reversed = document->composite();
   QVERIFY(reversed != first);
+}
+
+void DocumentTest::matchesIndependentCompositeGoldenAfterNativeRoundTrip() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/composite-source-over-golden.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  QJsonParseError parseError;
+  const auto fixtureDocument =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError);
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QVERIFY(fixtureDocument.isObject());
+  const auto root = fixtureDocument.object();
+  QCOMPARE(root["schemaVersion"].toInt(), 1);
+
+  const auto sizeValues = root["size"].toArray();
+  QCOMPARE(sizeValues.size(), 2);
+  const QSize size(sizeValues[0].toInt(), sizeValues[1].toInt());
+  QCOMPARE(size, QSize(257, 2));
+  auto document = Document::create(size);
+  QVERIFY(document);
+
+  const auto layers = root["layers"].toArray();
+  QVERIFY(!layers.isEmpty() && layers.size() <= 8);
+  for (qsizetype layerIndex = 0; layerIndex < layers.size(); ++layerIndex) {
+    const auto layerObject = layers[layerIndex].toObject();
+    const auto documentIndex =
+        layerIndex == 0
+            ? 0
+            : document->addLayer(layerObject["name"].toString());
+    auto* layer = document->layerAt(documentIndex);
+    QVERIFY(layer);
+    if (layerIndex == 0) {
+      layer->setName(layerObject["name"].toString());
+    }
+    layer->setVisible(layerObject["visible"].toBool());
+    QVERIFY(layer->setOpacity(layerObject["opacity"].toDouble()) ||
+            layer->opacity() == layerObject["opacity"].toDouble());
+
+    const auto pixels = layerObject["pixels"].toArray();
+    QVERIFY(pixels.size() <= 64);
+    QSet<QPoint> positions;
+    for (const auto pixelValue : pixels) {
+      const auto pixel = pixelValue.toArray();
+      QCOMPARE(pixel.size(), 6);
+      const QPoint position(pixel[0].toInt(-1), pixel[1].toInt(-1));
+      QVERIFY(QRect(QPoint(), size).contains(position));
+      QVERIFY(!positions.contains(position));
+      positions.insert(position);
+      for (int channel = 2; channel < 6; ++channel) {
+        QVERIFY(pixel[channel].isDouble());
+        QVERIFY(pixel[channel].toInt(-1) >= 0 &&
+                pixel[channel].toInt(-1) <= 255);
+      }
+      QVERIFY(layer->setPixelColor(
+          position, QColor(pixel[2].toInt(), pixel[3].toInt(),
+                           pixel[4].toInt(), pixel[5].toInt())));
+    }
+  }
+
+  const auto defaultPixel = root["expectedDefaultRgba8"].toArray();
+  QCOMPARE(defaultPixel.size(), 4);
+  for (const auto channel : defaultPixel) {
+    QVERIFY(channel.isDouble());
+    QVERIFY(channel.toInt(-1) >= 0 && channel.toInt(-1) <= 255);
+  }
+  QImage expected(size, QImage::Format_RGBA8888);
+  expected.fill(QColor(defaultPixel[0].toInt(), defaultPixel[1].toInt(),
+                       defaultPixel[2].toInt(), defaultPixel[3].toInt()));
+  const auto expectedPixels = root["expectedPixels"].toArray();
+  QVERIFY(expectedPixels.size() <= 64);
+  QSet<QPoint> expectedPositions;
+  for (const auto pixelValue : expectedPixels) {
+    const auto pixel = pixelValue.toArray();
+    QCOMPARE(pixel.size(), 6);
+    const QPoint position(pixel[0].toInt(-1), pixel[1].toInt(-1));
+    QVERIFY(QRect(QPoint(), size).contains(position));
+    QVERIFY(!expectedPositions.contains(position));
+    expectedPositions.insert(position);
+    for (int channel = 2; channel < 6; ++channel) {
+      QVERIFY(pixel[channel].isDouble());
+      QVERIFY(pixel[channel].toInt(-1) >= 0 &&
+              pixel[channel].toInt(-1) <= 255);
+    }
+    expected.setPixelColor(position, QColor(pixel[2].toInt(), pixel[3].toInt(),
+                                            pixel[4].toInt(),
+                                            pixel[5].toInt()));
+  }
+  const QByteArray expectedBytes(
+      reinterpret_cast<const char*>(expected.constBits()),
+      static_cast<qsizetype>(expected.sizeInBytes()));
+  QCOMPARE(QCryptographicHash::hash(expectedBytes, QCryptographicHash::Sha256)
+               .toHex(),
+           root["expectedRgba8Sha256"].toString().toLatin1());
+
+  const auto verifyGolden = [&](const QImage& actual,
+                                const QImage& reference) {
+    QCOMPARE(actual.size(), reference.size());
+    for (int y = 0; y < reference.height(); ++y) {
+      for (int x = 0; x < reference.width(); ++x) {
+        const auto actualColor = actual.pixelColor(x, y);
+        const auto expectedColor = reference.pixelColor(x, y);
+        const auto withinCompoundedRounding =
+            qAbs(actualColor.red() - expectedColor.red()) <= 2 &&
+            qAbs(actualColor.green() - expectedColor.green()) <= 2 &&
+            qAbs(actualColor.blue() - expectedColor.blue()) <= 2 &&
+            qAbs(actualColor.alpha() - expectedColor.alpha()) <= 2;
+        QVERIFY2(withinCompoundedRounding,
+                 qPrintable(QStringLiteral("at %1,%2 actual=%3 expected=%4")
+                                .arg(x)
+                                .arg(y)
+                                .arg(actualColor.name(QColor::HexArgb),
+                                     expectedColor.name(QColor::HexArgb))));
+      }
+    }
+  };
+
+  const auto first = document->composite();
+  QCOMPARE(document->composite(), first);
+  verifyGolden(first, expected);
+
+  const QRect boundaryRegion(254, 0, 3, 2);
+  const auto region = document->composite(boundaryRegion);
+  verifyGolden(region, expected.copy(boundaryRegion));
+
+  QImage painted(size, QImage::Format_RGBA8888_Premultiplied);
+  painted.fill(Qt::transparent);
+  QPainter painter(&painted);
+  document->paintComposite(painter, QRect(QPoint(), size));
+  painter.end();
+  QCOMPARE(painted, first);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto nativePath =
+      directory.filePath(QStringLiteral("reference.chromarchy"));
+  const auto saved =
+      chromarchy::NativeDocumentCodec::save(*document, nativePath);
+  QVERIFY2(saved, qPrintable(saved.error));
+  QCOMPARE(document->composite(), first);
+  const auto reopened = chromarchy::NativeDocumentCodec::load(nativePath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->composite(), first);
+  verifyGolden(reopened.document->composite(), expected);
+
+  auto flattened = *reopened.document;
+  QVERIFY(flattened.flatten());
+  QCOMPARE(flattened.composite(), first);
+  const auto flattenedPath =
+      directory.filePath(QStringLiteral("flattened.chromarchy"));
+  const auto flattenedSave =
+      chromarchy::NativeDocumentCodec::save(flattened, flattenedPath);
+  QVERIFY2(flattenedSave, qPrintable(flattenedSave.error));
+  const auto reopenedFlattened =
+      chromarchy::NativeDocumentCodec::load(flattenedPath);
+  QVERIFY2(reopenedFlattened, qPrintable(reopenedFlattened.error));
+  QCOMPARE(reopenedFlattened.document->composite(), first);
+
+  auto merged = *reopened.document;
+  while (merged.layerCount() > 1) {
+    QVERIFY(merged.mergeLayerDown(static_cast<int>(merged.layerCount() - 1)));
+    verifyGolden(merged.composite(), expected);
+  }
+  const auto mergedComposite = merged.composite();
+  const auto mergedPath =
+      directory.filePath(QStringLiteral("merged.chromarchy"));
+  const auto mergedSave =
+      chromarchy::NativeDocumentCodec::save(merged, mergedPath);
+  QVERIFY2(mergedSave, qPrintable(mergedSave.error));
+  const auto reopenedMerged = chromarchy::NativeDocumentCodec::load(mergedPath);
+  QVERIFY2(reopenedMerged, qPrintable(reopenedMerged.error));
+  QCOMPARE(reopenedMerged.document->composite(), mergedComposite);
 }
 
 void DocumentTest::mergeAndFlattenPreserveComposite() {

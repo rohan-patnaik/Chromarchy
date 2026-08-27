@@ -65,6 +65,9 @@ if(BUILD_TESTING)
 
   qt_add_executable(chromarchy_document_tests tests/core/DocumentTest.cpp)
   target_link_libraries(chromarchy_document_tests PRIVATE chromarchy_core Qt6::Test)
+  target_compile_definitions(chromarchy_document_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME chromarchy_document COMMAND chromarchy_document_tests)
 
   qt_add_executable(chromarchy_tiled_image_tests tests/core/TiledImageTest.cpp)

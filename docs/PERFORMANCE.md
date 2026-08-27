@@ -46,3 +46,14 @@ ctest --test-dir build -L benchmark --output-on-failure
 ```
 
 CI builds and executes the benchmark on current Arch Linux to catch crashes and pathological regressions. Stable latency and memory gates will be added after measurements are collected on the target Omarchy Quattro hardware.
+
+## Deterministic reference fixture
+
+`tests/fixtures/composite-source-over-golden.json` defines a complete 257×2
+source-over result from an independent exact-rational implementation. It covers
+fractional opacity, alpha endpoints, a hidden layer, ordering, and the x=255/256
+tile boundary. The fixture digest authenticates every row-major RGBA8 output
+byte; the document test checks its documented compounded 8-bit rounding bound,
+byte-identical repeat and region/painter behavior, and native persistence for
+the layered, flattened, and merge-down results. This is an RGBA8 reference
+contract, not a color-managed or extended-blend-mode claim.
