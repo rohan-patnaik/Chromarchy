@@ -464,7 +464,7 @@ bool MainWindow::canClose(DocumentView* view) {
   prompt.setEscapeButton(QMessageBox::Cancel);
   prompt.exec();
   const auto choice = prompt.standardButton(prompt.clickedButton());
-  if (choice == QMessageBox::Cancel) {
+  if (choice == QMessageBox::Cancel || choice == QMessageBox::NoButton) {
     return false;
   }
   return choice == QMessageBox::Discard || saveDocument(view, false);

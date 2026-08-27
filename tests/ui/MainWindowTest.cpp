@@ -56,6 +56,14 @@ bool hasStandardShortcut(const QAction* action,
   return false;
 }
 
+void cancelPrompt(QMessageBox* prompt) {
+  if (auto* cancel = prompt->button(QMessageBox::Cancel)) {
+    cancel->click();
+  } else {
+    prompt->reject();
+  }
+}
+
 }  // namespace
 
 class MainWindowTest final : public QObject {
@@ -295,23 +303,28 @@ void MainWindowTest::cancelsAndDiscardsClosePromptByKeyboard() {
         discard->objectName() != QStringLiteral("discardChangesButton") ||
         cancel->objectName() != QStringLiteral("cancelCloseButton")) {
       dialogError = QStringLiteral("Unsaved Changes metadata is incomplete");
-      prompt->reject();
+      cancelPrompt(prompt);
       return;
     }
     if (prompt->focusWidget() != save) {
       dialogError = QStringLiteral("Save was not initially focused");
-      prompt->reject();
+      cancelPrompt(prompt);
       return;
     }
     QTimer::singleShot(500, prompt, [prompt, &dialogError] {
       if (dialogError.isEmpty()) {
         dialogError = QStringLiteral("Escape did not cancel close");
       }
-      prompt->reject();
+      cancelPrompt(prompt);
     });
     QTest::keyClick(prompt->focusWidget(), Qt::Key_Escape);
   });
-  closeAction->trigger();
+  const auto closeBindings = QKeySequence::keyBindings(QKeySequence::Close);
+  QVERIFY(!closeBindings.isEmpty());
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  tabs->currentWidget()->setFocus();
+  QTest::keySequence(tabs->currentWidget(), closeBindings.constFirst());
   QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
   QCOMPARE(tabs->count(), 1);
 
@@ -327,25 +340,25 @@ void MainWindowTest::cancelsAndDiscardsClosePromptByKeyboard() {
     auto* discard = prompt->button(QMessageBox::Discard);
     if (!save || !discard || prompt->focusWidget() != save) {
       dialogError = QStringLiteral("Discard prompt focus was incomplete");
-      prompt->reject();
+      cancelPrompt(prompt);
       return;
     }
     QTest::keyClick(prompt->focusWidget(), Qt::Key_Tab);
     if (prompt->focusWidget() != discard) {
       dialogError = QStringLiteral("Save does not tab to Discard");
-      prompt->reject();
+      cancelPrompt(prompt);
       return;
     }
     QTimer::singleShot(500, prompt, [prompt, &dialogError] {
       if (dialogError.isEmpty()) {
         dialogError = QStringLiteral("Space did not discard changes");
       }
-      prompt->reject();
+      cancelPrompt(prompt);
     });
     QTest::keyClick(prompt->focusWidget(), Qt::Key_Space);
     if (prompt->clickedButton() != discard) {
       dialogError = QStringLiteral("Space did not activate Discard");
-      prompt->reject();
+      cancelPrompt(prompt);
     }
   });
   closeAction->trigger();
@@ -396,14 +409,14 @@ void MainWindowTest::savesDirtyDocumentBeforeCloseByKeyboard() {
     auto* save = prompt->button(QMessageBox::Save);
     if (!save || prompt->focusWidget() != save) {
       dialogError = QStringLiteral("Save prompt focus was incomplete");
-      prompt->reject();
+      cancelPrompt(prompt);
       return;
     }
     QTimer::singleShot(500, prompt, [prompt, &dialogError] {
       if (dialogError.isEmpty()) {
         dialogError = QStringLiteral("Return did not save before close");
       }
-      prompt->reject();
+      cancelPrompt(prompt);
     });
     QTest::keyClick(prompt->focusWidget(), Qt::Key_Return);
   });
