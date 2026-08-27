@@ -304,6 +304,7 @@ void DocumentTest::matchesIndependentCompositeGoldenAfterNativeRoundTrip() {
 
   const QRect boundaryRegion(254, 0, 3, 2);
   const auto region = document->composite(boundaryRegion);
+  QCOMPARE(region, first.copy(boundaryRegion));
   verifyGolden(region, expected.copy(boundaryRegion));
 
   QImage painted(size, QImage::Format_RGBA8888_Premultiplied);

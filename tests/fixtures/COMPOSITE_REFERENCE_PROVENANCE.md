@@ -8,12 +8,15 @@ to x=256 tile boundary.
 
 The expected full image was calculated independently with exact rational
 Porter-Duff source-over arithmetic in straight RGBA. After each bottom-to-top
-layer, effective source alpha is `sample alpha * layer opacity`; output alpha
-is `source alpha + destination alpha * (1 - source alpha)`; unassociated color
+layer, effective source alpha is `sample alpha * layer opacity`; JSON opacity
+decimals are interpreted as their exact rational values (`0.375 = 3/8` and
+`0.5 = 1/2`). Output alpha is
+`source alpha + destination alpha * (1 - source alpha)`; unassociated color
 channels are divided by output alpha and all four channels are rounded to the
-nearest unsigned byte. Unspecified pixels are explicitly transparent. The
-fixture records the SHA-256 of all 2,056 row-major RGBA bytes, so its sparse
-notation still defines and authenticates the complete image.
+nearest unsigned byte with exact halves rounded upward. Unspecified pixels are
+explicitly transparent. The fixture records the SHA-256 of all 2,056 row-major
+RGBA bytes, so its sparse notation still defines and authenticates the complete
+image.
 
 The production renderer is permitted two bytes of compounded integer-raster
 rounding difference per channel from this independent straight-alpha reference;
