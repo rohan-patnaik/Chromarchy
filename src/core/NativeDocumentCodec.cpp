@@ -309,7 +309,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
                    nameBytes)) {
       return {.error = streamError(QStringLiteral("layer identity"))};
     }
-    QStringDecoder nameDecoder(QStringDecoder::Utf8);
+    QStringDecoder nameDecoder(QStringDecoder::Utf8,
+                               QStringConverter::Flag::Stateless);
     const QString layerName = nameDecoder.decode(nameBytes);
     if (nameDecoder.hasError()) {
       return {.error = streamError(QStringLiteral("layer name encoding"))};

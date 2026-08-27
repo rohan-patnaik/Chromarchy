@@ -284,7 +284,19 @@ void NativeDocumentCodecTest::validatesNativeLayerNameEncodingAndBounds() {
        QByteArray(NativeDocumentCodec::maximumLayerNameBytes + 1, 'a')},
       {QStringLiteral("malformed"),
        QByteArray(NativeDocumentCodec::maximumLayerNameBytes,
-                  static_cast<char>(0xff))}};
+                  static_cast<char>(0xff))},
+      {QStringLiteral("truncated-two-byte"),
+       QByteArray::fromHex("41c2")},
+      {QStringLiteral("truncated-three-byte-one"),
+       QByteArray::fromHex("41e2")},
+      {QStringLiteral("truncated-three-byte-two"),
+       QByteArray::fromHex("41e282")},
+      {QStringLiteral("truncated-four-byte-one"),
+       QByteArray::fromHex("41f0")},
+      {QStringLiteral("truncated-four-byte-two"),
+       QByteArray::fromHex("41f09f")},
+      {QStringLiteral("truncated-four-byte-three"),
+       QByteArray::fromHex("41f09f92")}};
   for (const auto& [label, nameBytes] : rejectedNames) {
     const auto sourceBytes = minimalNativeWithLayerName(nameBytes);
     QVERIFY(!sourceBytes.isEmpty());
