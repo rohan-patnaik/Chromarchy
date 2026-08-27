@@ -65,6 +65,8 @@ private slots:
   void handlesPartiallyOverlappingSelfWrites();
   void roundTripsHighDepthPersistenceSeam();
   void keepsRgba8ConversionSeamExplicit();
+  void convertsUnsignedChannelsToRgba8Premultiplied();
+  void rejectsHostileUnsignedConversionRequests();
   void ownsSparseTypedTilesWithinHardBudgets();
   void rejectsSparseWritesAtomically();
   void mutatesSparseTilesWithCopyOnWrite();
@@ -501,6 +503,115 @@ void PixelStorageTest::keepsRgba8ConversionSeamExplicit() {
   std::copy(invalid.cbegin(), invalid.cend(), hostile.begin());
   QVERIFY(!PixelTile::fromPackedBytes(PixelFormat::rgba8Premultiplied(),
                                       bytesOf(hostile)));
+}
+
+void PixelStorageTest::convertsUnsignedChannelsToRgba8Premultiplied() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/unsigned-rgba8-vectors.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  const auto document = QJsonDocument::fromJson(fixture.readAll());
+  QVERIFY(document.isArray());
+
+  for (const auto& value : document.array()) {
+    const auto object = value.toObject();
+    const PixelFormat format{
+        static_cast<SampleFormat>(object["sample"].toInt()),
+        static_cast<ChannelLayout>(object["channels"].toInt()),
+        static_cast<AlphaMode>(object["alpha"].toInt()),
+        static_cast<ByteOrder>(object["byteOrder"].toInt())};
+    const auto source =
+        QByteArray::fromHex(object["sourceHex"].toString().toLatin1());
+    const auto expected =
+        QByteArray::fromHex(object["expectedHex"].toString().toLatin1());
+    const auto layout = PixelStorageLayout::create(
+        QSize(object["width"].toInt(), 1), format);
+    QVERIFY2(layout, qPrintable(object["name"].toString()));
+    QCOMPARE(source.size(),
+             static_cast<qsizetype>(layout->allocationBytes()));
+
+    constexpr quint64 destinationRowStride = 32;
+    const auto converted =
+        chromarchy::convertUnsignedToRgba8Premultiplied(
+            bytesOf(source), *layout, destinationRowStride,
+            destinationRowStride);
+    QVERIFY2(converted, qPrintable(object["name"].toString()));
+    QCOMPARE(converted->layout.format(), PixelFormat::rgba8Premultiplied());
+    QCOMPARE(converted->layout.packedRowBytes(),
+             static_cast<quint64>(expected.size()));
+    QCOMPARE(converted->layout.rowStrideBytes(), destinationRowStride);
+    QCOMPARE(converted->bytes.left(expected.size()), expected);
+    QCOMPARE(converted->bytes.mid(expected.size()),
+             QByteArray(destinationRowStride - expected.size(), '\0'));
+
+    auto tile = PixelTile::create(format);
+    QVERIFY(tile);
+    const auto firstPixelBytes = source.left(format.bytesPerPixel());
+    QVERIFY(tile->setPixelBytes(QPoint(0, 0), bytesOf(firstPixelBytes)) ||
+            firstPixelBytes == QByteArray(firstPixelBytes.size(), '\0'));
+    const auto tileConverted = tile->toRgba8Premultiplied();
+    QVERIFY(tileConverted);
+    QCOMPARE(tileConverted->bytes.first(4), expected.first(4));
+  }
+
+  const PixelFormat gray16{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::Gray, AlphaMode::None,
+                           ByteOrder::LittleEndian};
+  const auto paddedLayout = PixelStorageLayout::createWithRowStride(
+      QSize(2, 2), gray16, 8, 16);
+  QVERIFY(paddedLayout);
+  const auto paddedSource = QByteArray::fromHex(
+      "0000ffffffffffff00800100ffffffff");
+  QCOMPARE(paddedSource.size(),
+           static_cast<qsizetype>(paddedLayout->allocationBytes()));
+  const auto paddedConverted =
+      chromarchy::convertUnsignedToRgba8Premultiplied(
+          bytesOf(paddedSource), *paddedLayout, 16, 32);
+  QVERIFY(paddedConverted);
+  QCOMPARE(paddedConverted->layout.rowStrideBytes(), quint64(16));
+  QCOMPARE(paddedConverted->bytes.left(8),
+           QByteArray::fromHex("000000ffffffffff"));
+  QCOMPARE(paddedConverted->bytes.mid(8, 8), QByteArray(8, '\0'));
+  QCOMPARE(paddedConverted->bytes.mid(16, 8),
+           QByteArray::fromHex("808080ff000000ff"));
+  QCOMPARE(paddedConverted->bytes.mid(24, 8), QByteArray(8, '\0'));
+}
+
+void PixelStorageTest::rejectsHostileUnsignedConversionRequests() {
+  const PixelFormat rgba16{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::RGBA, AlphaMode::Straight,
+                           ByteOrder::LittleEndian};
+  const auto layout = PixelStorageLayout::create(QSize(1, 1), rgba16);
+  QVERIFY(layout);
+  const auto source = QByteArray::fromHex("ffff000000008000");
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(source), *layout, 1, 3));
+
+  auto truncated = source;
+  truncated.chop(1);
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(truncated), *layout));
+  auto trailing = source;
+  trailing.append('\0');
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(trailing), *layout));
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(source), *layout, 3));
+
+  const PixelFormat float16{SampleFormat::Float16, ChannelLayout::RGBA,
+                            AlphaMode::Straight, ByteOrder::LittleEndian};
+  const auto floatLayout = PixelStorageLayout::create(QSize(1, 1), float16);
+  QVERIFY(floatLayout);
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(source), *floatLayout));
+
+  const PixelFormat premultiplied16{
+      SampleFormat::UnsignedInteger16, ChannelLayout::RGBA,
+      AlphaMode::Premultiplied, ByteOrder::BigEndian};
+  const auto premultipliedLayout =
+      PixelStorageLayout::create(QSize(1, 1), premultiplied16);
+  QVERIFY(premultipliedLayout);
+  QVERIFY(!chromarchy::convertUnsignedToRgba8Premultiplied(
+      bytesOf(source), *premultipliedLayout));
 }
 
 void PixelStorageTest::ownsSparseTypedTilesWithinHardBudgets() {

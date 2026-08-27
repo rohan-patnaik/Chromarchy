@@ -22,8 +22,10 @@ allocated or visible tiles rather than total canvas area.
 Checked pixel byte geometry is validated independently of allocation. Current
 RGBA8 tiles remain 256×256 (262,144 payload bytes); the typed-format contract
 allocates high-depth tiles only in isolated tests under 1-MiB per-tile and
-16-MiB/64-tile store, region, and combined delta-payload bounds. It does not
-change the live RGBA8 renderer or benchmark workloads in this slice.
+16-MiB/64-tile store, region, and combined delta-payload bounds. Checked
+unsigned 8/16-bit channel conversion has a caller-bounded RGBA8 destination and
+never allocates an implicit full frame. It does not change the live RGBA8
+renderer or benchmark workloads in this slice.
 
 ## Run locally
 

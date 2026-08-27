@@ -349,6 +349,11 @@ private:
     AlphaMode destinationAlpha, quint64 destinationRowAlignment = 1,
     quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max());
 
+[[nodiscard]] std::optional<Rgba8Buffer> convertUnsignedToRgba8Premultiplied(
+    std::span<const std::byte> source, const PixelStorageLayout& sourceLayout,
+    quint64 destinationRowAlignment = 1,
+    quint64 maximumAllocationBytes = std::numeric_limits<quint64>::max());
+
 [[nodiscard]] std::optional<Rgba8Buffer> rgba8BytesFromImage(
     const QImage& image, AlphaMode destinationAlpha,
     quint64 destinationRowAlignment = 1,

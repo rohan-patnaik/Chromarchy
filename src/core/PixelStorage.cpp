@@ -177,6 +177,76 @@ void convertRows(std::span<const std::byte> source,
   }
 }
 
+quint64 readUnsignedSample(const quint8* sample, quint8 bytesPerSample,
+                           ByteOrder byteOrder) noexcept {
+  if (bytesPerSample == 1) {
+    return sample[0];
+  }
+  return byteOrder == ByteOrder::LittleEndian
+             ? static_cast<quint64>(sample[0]) |
+                   (static_cast<quint64>(sample[1]) << 8U)
+             : (static_cast<quint64>(sample[0]) << 8U) |
+                   static_cast<quint64>(sample[1]);
+}
+
+quint8 roundedRatioToByte(quint64 numerator, quint64 denominator) noexcept {
+  return static_cast<quint8>((numerator + denominator / 2U) / denominator);
+}
+
+void convertUnsignedRowsToRgba8Premultiplied(
+    std::span<const std::byte> source,
+    const PixelStorageLayout& sourceLayout, quint8* destinationBytes,
+    quint64 destinationRowStride) noexcept {
+  const PixelFormat format = sourceLayout.format();
+  const quint64 maximumSample =
+      format.sample == SampleFormat::UnsignedInteger8 ? 255U : 65'535U;
+  const quint64 premultiplyDenominator = maximumSample * maximumSample;
+  const quint8 bytesPerSample = format.bytesPerSample();
+  const quint8 channelCount = format.channelCount();
+  const auto* sourceBytes = reinterpret_cast<const quint8*>(source.data());
+  const quint64 width = static_cast<quint64>(sourceLayout.dimensions().width());
+  const quint64 height =
+      static_cast<quint64>(sourceLayout.dimensions().height());
+
+  for (quint64 y = 0; y < height; ++y) {
+    const quint64 sourceRowOffset = y * sourceLayout.rowStrideBytes();
+    const quint64 destinationRowOffset = y * destinationRowStride;
+    for (quint64 x = 0; x < width; ++x) {
+      const auto* sourcePixel =
+          sourceBytes + sourceRowOffset +
+          x * static_cast<quint64>(format.bytesPerPixel());
+      const auto sample = [&](quint8 channel) {
+        return readUnsignedSample(sourcePixel + channel * bytesPerSample,
+                                  bytesPerSample, format.byteOrder);
+      };
+      const quint64 alpha = format.hasAlpha() ? sample(channelCount - 1U)
+                                               : maximumSample;
+      quint64 red = 0;
+      quint64 green = 0;
+      quint64 blue = 0;
+      if (format.channels == ChannelLayout::Gray ||
+          format.channels == ChannelLayout::GrayAlpha) {
+        red = green = blue = sample(0);
+      } else {
+        red = sample(0);
+        green = sample(1);
+        blue = sample(2);
+      }
+
+      auto* destinationPixel =
+          destinationBytes + destinationRowOffset + x * 4U;
+      destinationPixel[0] =
+          roundedRatioToByte(red * alpha * 255U, premultiplyDenominator);
+      destinationPixel[1] =
+          roundedRatioToByte(green * alpha * 255U, premultiplyDenominator);
+      destinationPixel[2] =
+          roundedRatioToByte(blue * alpha * 255U, premultiplyDenominator);
+      destinationPixel[3] =
+          roundedRatioToByte(alpha * 255U, maximumSample);
+    }
+  }
+}
+
 }  // namespace
 
 std::optional<PixelStorageLayout> PixelStorageLayout::create(
@@ -348,11 +418,8 @@ bool PixelTile::isZero() const noexcept {
 
 std::optional<Rgba8Buffer> PixelTile::toRgba8Premultiplied(
     quint64 allocationLimitBytes) const {
-  if (!isSupportedRgba8(format())) {
-    return std::nullopt;
-  }
-  return convertRgba8(packedBytes(), layout_, AlphaMode::Premultiplied, 1,
-                      allocationLimitBytes);
+  return convertUnsignedToRgba8Premultiplied(
+      packedBytes(), layout_, 1, allocationLimitBytes);
 }
 
 size_t qHash(const PixelTileIndex& index, size_t seed) noexcept {
@@ -985,6 +1052,41 @@ std::optional<Rgba8Buffer> convertRgba8(
   convertRows(source, sourceLayout, destinationAlpha, destinationBytes,
               destinationLayout->rowStrideBytes());
 
+  return Rgba8Buffer{*destinationLayout, std::move(destination)};
+}
+
+std::optional<Rgba8Buffer> convertUnsignedToRgba8Premultiplied(
+    std::span<const std::byte> source,
+    const PixelStorageLayout& sourceLayout,
+    quint64 destinationRowAlignment, quint64 maximumAllocationBytes) {
+  const PixelFormat sourceFormat = sourceLayout.format();
+  if (sourceFormat == PixelFormat::rgba8Premultiplied()) {
+    return convertRgba8(source, sourceLayout, AlphaMode::Premultiplied,
+                        destinationRowAlignment, maximumAllocationBytes);
+  }
+  if ((sourceFormat.sample != SampleFormat::UnsignedInteger8 &&
+       sourceFormat.sample != SampleFormat::UnsignedInteger16) ||
+      (sourceFormat.alpha != AlphaMode::None &&
+       sourceFormat.alpha != AlphaMode::Straight) ||
+      source.size() != sourceLayout.allocationBytes()) {
+    return std::nullopt;
+  }
+
+  const auto destinationLayout = PixelStorageLayout::create(
+      sourceLayout.dimensions(), PixelFormat::rgba8Premultiplied(),
+      destinationRowAlignment, maximumAllocationBytes);
+  if (!destinationLayout) {
+    return std::nullopt;
+  }
+  QByteArray destination(
+      static_cast<qsizetype>(destinationLayout->allocationBytes()), '\0');
+  if (destination.size() !=
+      static_cast<qsizetype>(destinationLayout->allocationBytes())) {
+    return std::nullopt;
+  }
+  convertUnsignedRowsToRgba8Premultiplied(
+      source, sourceLayout, reinterpret_cast<quint8*>(destination.data()),
+      destinationLayout->rowStrideBytes());
   return Rgba8Buffer{*destinationLayout, std::move(destination)};
 }
 

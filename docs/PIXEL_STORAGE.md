@@ -59,10 +59,20 @@ rejected until its integer/float validity policy is defined.
 
 `fromPackedBytes()` requires the exact checked payload and retains the caller's
 format descriptor, providing a bounded byte-preserving persistence seam without
-changing the native document format. `toRgba8Premultiplied()` succeeds only for
-the existing RGBA8 formats. High-depth conversion deliberately reports
-unsupported until numeric scaling, rounding, nonfinite, and display policies
-are specified and reviewed.
+changing the native document format. `convertUnsignedToRgba8Premultiplied()`
+and the tile `toRgba8Premultiplied()` seam accept unsigned 8-bit and unsigned
+16-bit Gray, GrayAlpha, RGB, and straight-alpha RGBA input. Gray is replicated
+to RGB, absent alpha becomes opaque, and 16-bit samples honor the declared byte
+order. Conversion maps the full unsigned range with nearest-integer rounding;
+straight color is multiplied by alpha at source precision and rounded once into
+the premultiplied 8-bit result. Destination geometry, row alignment, payload,
+and allocation limits remain checked, and output padding is byte-zero.
+
+Strict premultiplied RGBA8 remains accepted after validating color channels do
+not exceed alpha. Higher-depth premultiplied and all floating-point conversion
+remain rejected until their validity, nonfinite, range, transfer, and display
+policies are reviewed. This numeric adapter is a deterministic conversion into
+the existing RGBA8 working boundary, not a color-space or profile transform.
 
 `SparsePixelTileStore` is an isolated typed owner over `PixelTile`. One store
 has one immutable pixel format and positive logical dimensions. Pixel and tile
@@ -196,12 +206,12 @@ native version and packed premultiplied RGBA8 wire bytes are unchanged. Fixture
 tests prove byte-identical v2 save/reopen and pixel-identical v1 load, upgrade,
 and reopen across tile boundaries.
 
-High-depth tiles, their sparse owner, snapshots, rectangular access, and
-reversible tile deltas are isolated storage prerequisites: documents and the
-live render path do not own or render them yet. There is no high-depth numeric
-conversion, native persistence, import/export round trip, or color-management
-claim. Import, export, display, and render-node boundaries beyond the native
-RGBA8 tile adapter remain future work.
+High-depth tiles, their sparse owner, snapshots, rectangular access, reversible
+tile deltas, and unsigned-to-RGBA8 adapter are isolated storage prerequisites:
+documents and the live render path do not own or render typed tiles yet. There
+is no floating-point conversion, native typed persistence, high-depth
+import/export round trip, or color-management claim. Import, export, display,
+and render-node wiring beyond the native RGBA8 tile adapter remain future work.
 
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that
@@ -209,5 +219,5 @@ still contains another nonzero pixel. Import already omits fully transparent
 tiles. Broader normalization of tiles produced by merge, flatten, or native-load
 paths remains future work.
 
-This slice adds no color interpretation, profiles, transfer functions, or
+This slice adds no profile or transfer-function interpretation and no
 color-library dependency.

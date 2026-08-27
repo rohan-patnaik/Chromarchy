@@ -5,8 +5,11 @@ The working engine's sample/channel/alpha/byte-order boundary is documented in
 prerequisites, not evidence that current imports or exports preserve high-depth
 samples. Packed high-depth tiles and their isolated sparse owner are not part of
 native v1/v2 or raster I/O; Qt-decoded input still normalizes into RGBA8
-premultiplied tiles. Deterministic owning tile snapshot records are an in-memory
-boundary only and do not define framing, headers, or an on-disk format. Bounded
+premultiplied tiles. The isolated checked unsigned 8/16-bit channel adapter can
+produce that RGBA8 premultiplied boundary, but is not wired to codecs or native
+persistence and performs no profile/color-space transform. Deterministic owning
+tile snapshot records are an in-memory boundary only and do not define framing,
+headers, or an on-disk format. Bounded
 rectangular typed-region access likewise moves exact in-memory sample bytes
 only; it is not raster I/O or native persistence. Reversible typed-tile delta
 records are also an in-memory boundary with no headers, framing, or on-disk

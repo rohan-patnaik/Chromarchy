@@ -1,0 +1,11 @@
+[
+  {"name":"gray-u8-extremes","sample":0,"channels":0,"alpha":0,"byteOrder":0,"width":4,"sourceHex":"00017fff","expectedHex":"000000ff010101ff7f7f7ffffffffffF"},
+  {"name":"gray-alpha-u8-rounding","sample":0,"channels":1,"alpha":1,"byteOrder":0,"width":4,"sourceHex":"ff000101ff7fff80","expectedHex":"00000000000000017f7f7f7f80808080"},
+  {"name":"rgb-u8-channels","sample":0,"channels":2,"alpha":0,"byteOrder":0,"width":2,"sourceHex":"ff8000017ffe","expectedHex":"ff8000ff017ffeff"},
+  {"name":"rgba-u8-straight","sample":0,"channels":3,"alpha":1,"byteOrder":0,"width":2,"sourceHex":"ff80407f010203ff","expectedHex":"7f40207f010203ff"},
+  {"name":"gray-u16-little-endian","sample":1,"channels":0,"alpha":0,"byteOrder":1,"width":4,"sourceHex":"000001000080ffff","expectedHex":"000000ff000000ff808080ffffffffff"},
+  {"name":"gray-u16-big-endian","sample":1,"channels":0,"alpha":0,"byteOrder":2,"width":4,"sourceHex":"000000017ffffffe","expectedHex":"000000ff000000ff7f7f7fffffffffff"},
+  {"name":"gray-alpha-u16-little-endian","sample":1,"channels":1,"alpha":1,"byteOrder":1,"width":2,"sourceHex":"ffff008000800080","expectedHex":"8080808040404080"},
+  {"name":"rgb-u16-big-endian","sample":1,"channels":2,"alpha":0,"byteOrder":2,"width":2,"sourceHex":"ffff8000000000017ffffffe","expectedHex":"ff8000ff007fffff"},
+  {"name":"rgba-u16-big-endian","sample":1,"channels":3,"alpha":1,"byteOrder":2,"width":2,"sourceHex":"ffff800040008000000100020003ffff","expectedHex":"80402080000000ff"}
+]
