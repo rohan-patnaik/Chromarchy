@@ -257,13 +257,25 @@ void MainWindow::createLayersDock() {
 
 void MainWindow::newDocument() {
   QDialog dialog(this);
+  dialog.setObjectName(QStringLiteral("newDocumentDialog"));
+  dialog.setAccessibleName(QStringLiteral("New image document"));
+  dialog.setAccessibleDescription(
+      QStringLiteral("Choose bounded pixel dimensions for a new document"));
   dialog.setWindowTitle(QStringLiteral("New Document"));
   auto* layout = new QFormLayout(&dialog);
   auto* width = new QSpinBox(&dialog);
+  width->setObjectName(QStringLiteral("newDocumentWidth"));
+  width->setAccessibleName(QStringLiteral("Document width"));
+  width->setAccessibleDescription(
+      QStringLiteral("Width of the new document in pixels"));
   width->setRange(1, Document::maximumDimension);
   width->setValue(1600);
   width->setSuffix(QStringLiteral(" px"));
   auto* height = new QSpinBox(&dialog);
+  height->setObjectName(QStringLiteral("newDocumentHeight"));
+  height->setAccessibleName(QStringLiteral("Document height"));
+  height->setAccessibleDescription(
+      QStringLiteral("Height of the new document in pixels"));
   height->setRange(1, Document::maximumDimension);
   height->setValue(1200);
   height->setSuffix(QStringLiteral(" px"));
@@ -271,9 +283,17 @@ void MainWindow::newDocument() {
   layout->addRow(QStringLiteral("Height"), height);
   auto* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  buttons->setObjectName(QStringLiteral("newDocumentButtons"));
+  buttons->setAccessibleName(QStringLiteral("New document actions"));
+  buttons->setAccessibleDescription(
+      QStringLiteral("Create the document or cancel without changes"));
   connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
   layout->addRow(buttons);
+  QWidget::setTabOrder(width, height);
+  QWidget::setTabOrder(height, buttons);
+  width->setFocus();
+  width->selectAll();
   if (dialog.exec() != QDialog::Accepted) {
     return;
   }

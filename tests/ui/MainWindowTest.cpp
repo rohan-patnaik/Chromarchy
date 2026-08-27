@@ -6,13 +6,17 @@
 #include <QAccessible>
 #include <QApplication>
 #include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QImage>
 #include <QListWidget>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 namespace {
 
@@ -30,6 +34,13 @@ void verifyAccessibleWidget(QWidget* widget, const QString& name) {
   QVERIFY(interface->role() != QAccessible::NoRole);
 }
 
+bool hasAccessibleMetadata(QWidget* widget) {
+  const auto* interface = QAccessible::queryAccessibleInterface(widget);
+  return interface && !interface->text(QAccessible::Name).isEmpty() &&
+         !interface->text(QAccessible::Description).isEmpty() &&
+         interface->role() != QAccessible::NoRole;
+}
+
 }  // namespace
 
 class MainWindowTest final : public QObject {
@@ -39,6 +50,7 @@ private slots:
   void initTestCase();
   void exposesCoreWorkspaceAccessibility();
   void supportsCoreKeyboardWorkflow();
+  void createsAndCancelsNewDocumentByKeyboard();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -135,6 +147,78 @@ void MainWindowTest::supportsCoreKeyboardWorkflow() {
   QCOMPARE(layers->count(), 2);
   QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(layers->count(), 3);
+}
+
+void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
+  MainWindow window;
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  QVERIFY(tabs);
+  QCOMPARE(tabs->count(), 0);
+
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* dialog =
+        qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    if (!dialog) {
+      dialogError = QStringLiteral("New Document dialog was not modal");
+      QApplication::closeAllWindows();
+      return;
+    }
+    if (dialog->objectName() != QStringLiteral("newDocumentDialog") ||
+        dialog->accessibleName() != QStringLiteral("New image document") ||
+        !hasAccessibleMetadata(dialog)) {
+      dialogError = QStringLiteral("New Document dialog metadata is incomplete");
+      dialog->reject();
+      return;
+    }
+    auto* width = requiredChild<QSpinBox>(*dialog, "newDocumentWidth");
+    auto* height = requiredChild<QSpinBox>(*dialog, "newDocumentHeight");
+    auto* buttons =
+        requiredChild<QDialogButtonBox>(*dialog, "newDocumentButtons");
+    if (!width || !height || !buttons || !hasAccessibleMetadata(width) ||
+        !hasAccessibleMetadata(height) || !hasAccessibleMetadata(buttons)) {
+      dialogError = QStringLiteral("New Document controls are incomplete");
+      dialog->reject();
+      return;
+    }
+    width->setFocus();
+    width->selectAll();
+    QTest::keyClicks(width, QStringLiteral("320"));
+    QTest::keyClick(width, Qt::Key_Tab);
+    if (dialog->focusWidget() != height) {
+      dialogError = QStringLiteral("Width does not tab to height");
+      dialog->reject();
+      return;
+    }
+    height->selectAll();
+    QTest::keyClicks(height, QStringLiteral("240"));
+    QTest::keyClick(dialog, Qt::Key_Return);
+  });
+
+  QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(tabs->count(), 1);
+  auto* document = qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(document);
+  QCOMPARE(document->document().size(), QSize(320, 240));
+  QVERIFY(document->isModified());
+  QCOMPARE(document->accessibleName(), QStringLiteral("Document Untitled 1"));
+
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* dialog =
+        qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    if (!dialog) {
+      dialogError = QStringLiteral("Cancel dialog was not modal");
+      QApplication::closeAllWindows();
+      return;
+    }
+    QTest::keyClick(dialog, Qt::Key_Escape);
+  });
+  QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(tabs->count(), 1);
 }
 
 QTEST_MAIN(MainWindowTest)

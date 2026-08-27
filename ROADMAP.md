@@ -98,8 +98,9 @@ leaves no temporary file; commit/power-loss injection remains incomplete.
 The current document/layers workspace now exposes stable Qt accessibility
 names and descriptions, an explicit core layer-control tab order, and tested
 keyboard dispatch for selection, layer creation/duplication, undo, and redo.
-This is an offscreen-tested subset; complete dialog/action traversal and live
-AT-SPI/screen-reader verification remain open.
+The bounded New Document dialog additionally has named controls and tested
+keyboard create/cancel paths. This is an offscreen-tested subset; remaining
+dialog/action traversal and live AT-SPI/screen-reader verification remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 
