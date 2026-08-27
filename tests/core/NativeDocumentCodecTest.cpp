@@ -111,6 +111,73 @@ std::optional<quint32> firstLayerTileCount(const QByteArray& nativeBytes) {
   return tileCount;
 }
 
+std::optional<quint32> selectionTileCount(const QByteArray& nativeBytes) {
+  QBuffer input;
+  input.setData(nativeBytes);
+  if (!input.open(QIODevice::ReadOnly)) {
+    return std::nullopt;
+  }
+  QDataStream stream(&input);
+  stream.setVersion(QDataStream::Qt_6_6);
+  stream.setByteOrder(QDataStream::LittleEndian);
+  QByteArray magic(8, '\0');
+  if (stream.readRawData(magic.data(), magic.size()) != magic.size() ||
+      magic != QByteArrayLiteral("CHRMDC01")) {
+    return std::nullopt;
+  }
+  quint32 version = 0;
+  int width = 0;
+  int height = 0;
+  quint32 layerCount = 0;
+  int activeLayer = -1;
+  stream >> version >> width >> height >> layerCount >> activeLayer;
+  if (version != 2 || width != 4 || height != 2 || layerCount != 1 ||
+      activeLayer != 0) {
+    return std::nullopt;
+  }
+  for (quint32 layerNumber = 0; layerNumber < layerCount; ++layerNumber) {
+    quint32 idSize = 0;
+    quint32 nameSize = 0;
+    stream >> idSize;
+    if (idSize != 16 ||
+        stream.skipRawData(idSize) != static_cast<int>(idSize)) {
+      return std::nullopt;
+    }
+    stream >> nameSize;
+    if (nameSize > 4096 ||
+        stream.skipRawData(nameSize) != static_cast<int>(nameSize)) {
+      return std::nullopt;
+    }
+    quint8 visible = 0;
+    quint8 locked = 0;
+    double opacity = 0.0;
+    quint32 pixelTileCount = 0;
+    stream >> visible >> locked >> opacity >> pixelTileCount;
+    if (stream.status() != QDataStream::Ok || visible != 1 || locked != 0 ||
+        opacity != 1.0 || pixelTileCount > 64) {
+      return std::nullopt;
+    }
+    for (quint32 tileNumber = 0; tileNumber < pixelTileCount; ++tileNumber) {
+      int x = 0;
+      int y = 0;
+      quint32 compressedSize = 0;
+      stream >> x >> y >> compressedSize;
+      if (compressedSize > 4096 ||
+          stream.skipRawData(compressedSize) !=
+              static_cast<int>(compressedSize)) {
+        return std::nullopt;
+      }
+    }
+  }
+  quint8 baseCoverage = 0;
+  quint32 count = 0;
+  stream >> baseCoverage >> count;
+  if (stream.status() != QDataStream::Ok) {
+    return std::nullopt;
+  }
+  return count;
+}
+
 }  // namespace
 
 class NativeDocumentCodecTest final : public QObject {
@@ -121,6 +188,7 @@ private slots:
   void loadsVersionOneWithoutSelection();
   void loadsFixedBaselineRgba8Fixtures();
   void canonicalizesLegacyZeroTilesWithoutChangingSource();
+  void canonicalizesLegacyBaseSelectionWithoutChangingSource();
   void rejectsInvalidPremultipliedNativeTile();
   void rejectsCorruptAndTruncatedDocuments();
   void rejectsNonFiniteLayerOpacity();
@@ -333,6 +401,55 @@ void NativeDocumentCodecTest::canonicalizesLegacyZeroTilesWithoutChangingSource(
   QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 0);
   QCOMPARE(reopened.document->composite().pixelColor(QPoint()),
            QColor(Qt::transparent));
+}
+
+void NativeDocumentCodecTest::canonicalizesLegacyBaseSelectionWithoutChangingSource() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/native-rgba8-baseline.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  const auto fixtureObject = QJsonDocument::fromJson(fixture.readAll()).object();
+  const auto sourceBytes = QByteArray::fromBase64(
+      fixtureObject["legacyBaseSelectionVersionTwoBase64"]
+          .toString()
+          .toLatin1());
+  QCOMPARE(QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256)
+               .toHex(),
+           fixtureObject["legacyBaseSelectionVersionTwoSha256"]
+               .toString()
+               .toLatin1());
+  QCOMPARE(selectionTileCount(sourceBytes), std::optional<quint32>(1));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto sourcePath =
+      directory.filePath(QStringLiteral("legacy-base-selection.chromarchy"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), sourceBytes.size());
+  source.close();
+
+  const auto loaded = NativeDocumentCodec::load(sourcePath);
+  QVERIFY2(loaded, qPrintable(loaded.error));
+  QCOMPARE(loaded.document->selection().baseCoverage(), 255);
+  QCOMPARE(loaded.document->selection().allocatedTileCount(), 0);
+  QCOMPARE(loaded.document->selection().coverage(QPoint(3, 1)), 255);
+  QVERIFY(source.open(QIODevice::ReadOnly));
+  QCOMPARE(source.readAll(), sourceBytes);
+  source.close();
+
+  const auto canonicalPath = directory.filePath(
+      QStringLiteral("canonical-base-selection.chromarchy"));
+  const auto saved = NativeDocumentCodec::save(*loaded.document, canonicalPath);
+  QVERIFY2(saved, qPrintable(saved.error));
+  QFile canonical(canonicalPath);
+  QVERIFY(canonical.open(QIODevice::ReadOnly));
+  QCOMPARE(selectionTileCount(canonical.readAll()),
+           std::optional<quint32>(0));
+  const auto reopened = NativeDocumentCodec::load(canonicalPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->selection().baseCoverage(), 255);
+  QCOMPARE(reopened.document->selection().allocatedTileCount(), 0);
+  QCOMPARE(reopened.document->selection().coverage(QPoint(3, 1)), 255);
 }
 
 void NativeDocumentCodecTest::rejectsInvalidPremultipliedNativeTile() {

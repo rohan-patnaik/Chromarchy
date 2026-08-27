@@ -434,7 +434,9 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
       QImage tile(TiledImage::tileExtent, TiledImage::tileExtent,
                   QImage::Format_Grayscale8);
       std::memcpy(tile.bits(), coverage.constData(), selectionTileByteCount);
-      document->selection_.tiles_.insert(index, std::move(tile));
+      if (!SelectionMask::isBaseTile(tile, baseCoverage)) {
+        document->selection_.tiles_.insert(index, std::move(tile));
+      }
     }
   }
 

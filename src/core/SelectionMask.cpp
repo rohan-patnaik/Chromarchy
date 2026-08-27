@@ -115,6 +115,9 @@ bool SelectionMask::setCoverage(QPoint position, quint8 newCoverage) {
   auto& tile = ensureTile(index);
   tile.scanLine(position.y() % TiledImage::tileExtent)
       [position.x() % TiledImage::tileExtent] = newCoverage;
+  if (newCoverage == baseCoverage_ && isBaseTile(tile, baseCoverage_)) {
+    tiles_.remove(index);
+  }
   dirtyRegion_ += QRect(position, QSize(1, 1));
   return true;
 }
@@ -157,6 +160,9 @@ bool SelectionMask::selectRectangle(QRect rectangle, quint8 newCoverage,
         painter.fillRect(local, QColor(newCoverage, newCoverage, newCoverage));
       }
       changed = changed || tile != before;
+      if (newCoverage == baseCoverage_ && isBaseTile(tile, baseCoverage_)) {
+        tiles_.remove(index);
+      }
     }
   }
   if (changed) {
@@ -220,6 +226,22 @@ TileIndex SelectionMask::tileIndex(QPoint position) noexcept {
 QPoint SelectionMask::tileOrigin(TileIndex index) noexcept {
   return {index.column * TiledImage::tileExtent,
           index.row * TiledImage::tileExtent};
+}
+
+bool SelectionMask::isBaseTile(const QImage& tile,
+                               quint8 baseCoverage) noexcept {
+  if (tile.isNull() || tile.format() != QImage::Format_Grayscale8) {
+    return false;
+  }
+  for (int y = 0; y < tile.height(); ++y) {
+    const auto* scanline = tile.constScanLine(y);
+    for (int x = 0; x < tile.width(); ++x) {
+      if (scanline[x] != baseCoverage) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 QImage& SelectionMask::ensureTile(TileIndex index) {

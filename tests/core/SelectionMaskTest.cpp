@@ -12,6 +12,7 @@ private slots:
   void identicalRectangleReportsNoChange();
   void selectAllAndInvertRemainSparse();
   void copiesDetachOnMutation();
+  void elidesTilesWhenCoverageReturnsToBase();
 };
 
 void SelectionMaskTest::rectangleCrossesSparseTileBoundaries() {
@@ -53,6 +54,32 @@ void SelectionMaskTest::copiesDetachOnMutation() {
   QCOMPARE(original.coverage(QPoint(10, 10)), 128);
   QCOMPARE(copy.coverage(QPoint(10, 10)), 200);
   QVERIFY(original.dirtyRegion().isEmpty());
+}
+
+void SelectionMaskTest::elidesTilesWhenCoverageReturnsToBase() {
+  SelectionMask emptyBase(QSize(512, 512));
+  QVERIFY(emptyBase.setCoverage(QPoint(10, 10), 128));
+  auto retainedCopy = emptyBase;
+  QVERIFY(emptyBase.setCoverage(QPoint(10, 10), 0));
+  QCOMPARE(emptyBase.allocatedTileCount(), 0);
+  QVERIFY(emptyBase.isEmpty());
+  QCOMPARE(retainedCopy.allocatedTileCount(), 1);
+  QCOMPARE(retainedCopy.coverage(QPoint(10, 10)), 128);
+
+  SelectionMask fullBase(QSize(512, 512));
+  QVERIFY(fullBase.selectAll());
+  QVERIFY(fullBase.setCoverage(QPoint(300, 300), 64));
+  QCOMPARE(fullBase.allocatedTileCount(), 1);
+  QVERIFY(fullBase.setCoverage(QPoint(300, 300), 255));
+  QCOMPARE(fullBase.allocatedTileCount(), 0);
+  QCOMPARE(fullBase.coverage(QPoint(300, 300)), 255);
+
+  const QRect rectangle(250, 250, 20, 20);
+  QVERIFY(emptyBase.selectRectangle(rectangle));
+  QCOMPARE(emptyBase.allocatedTileCount(), 4);
+  QVERIFY(emptyBase.selectRectangle(rectangle, 0, false));
+  QCOMPARE(emptyBase.allocatedTileCount(), 0);
+  QVERIFY(emptyBase.isEmpty());
 }
 
 QTEST_APPLESS_MAIN(SelectionMaskTest)

@@ -237,7 +237,9 @@ tiles. Merge, flatten, and native v1/v2 load now also omit byte-zero pixel
 tiles, so those live document boundaries retain the same canonical sparse
 representation. Declared native entries still count against all aggregate
 input budgets before decoding, and this changes neither the v1/v2 wire format
-nor selection-mask storage.
+nor the meaning of selection coverage. Sparse selection masks likewise remove
+a resident grayscale tile when every sample returns to the mask's base
+coverage, including after point/rectangle edits and native v2 load.
 
 This slice adds no profile or transfer-function interpretation and no
 color-library dependency.

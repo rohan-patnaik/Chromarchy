@@ -75,6 +75,12 @@ declared entry is still charged against aggregate tile, compressed-byte, and
 decoded-byte limits before decoding; the source is never rewritten, and a
 subsequent save emits no record for the absent tile. This is a sparse storage
 normalization, not a native wire-version change.
+Legacy v2 selection records whose complete grayscale payload equals the
+selection base coverage are handled the same way: the declared record is fully
+validated and charged to aggregate budgets, then represented by sparse absence
+in memory. The source remains unchanged and the next equivalent save emits no
+selection record. Both base 0 and base 255 remain semantic values rather than
+pixel colors.
 Per-tile compressed and decompressed
 sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and

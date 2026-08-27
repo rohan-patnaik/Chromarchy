@@ -26,3 +26,12 @@ tile. Its SHA-256 digest is fixed in the JSON. Tests prove the current reader
 accepts the legacy representation without modifying its source, canonicalizes
 the resident layer to zero allocated tiles, and writes and reopens an equivalent
 v2 document whose first layer declares zero tile records.
+
+The legacy-base-selection v2 fixture was generated independently from the
+public v2 wire contract using Qt 6.11.2. It is a 4 by 2 document with one empty
+pixel layer, selection base coverage 255, and one explicitly stored grayscale
+selection tile whose 65,536 samples are also 255. Its digest is fixed in the
+JSON. Tests prove the declared record is fully parsed and charged before the
+reader canonicalizes it to the absent base representation, leaves the source
+unchanged, and writes and reopens an equivalent v2 document with zero selection
+tile records.

@@ -48,6 +48,11 @@ APIs, and copied proprietary expressive material are excluded.
 
 Stop for independent high review and remediate findings before M1 closure.
 
+The live pixel quota and mutation-result boundary remain unapproved. The facts,
+options, recommendation, and required owner choices are recorded in
+[`docs/LIVE_TILE_STORAGE_DECISION.md`](docs/LIVE_TILE_STORAGE_DECISION.md);
+dependency-free work must not infer a quota or compatibility policy from it.
+
 The first item is in progress: dependency-free sample/channel/alpha/endian
 descriptors, checked row/tile/allocation arithmetic, and bounded RGBA8
 straight/premultiplied adapters exist. Bounded packed high-depth tiles now
@@ -77,6 +82,10 @@ after success. Undo/redo therefore returns to clean exactly at that state,
 failed saves remain dirty, and a new branch cannot inherit a discarded save
 point. These identities are dirty-state bookkeeping, not persisted document
 revisions.
+Sparse selection masks now canonicalize tiles that equal their base coverage
+after live point/rectangle edits and native v2 load. Declared legacy records
+remain charged against existing hostile-input budgets before elision, and the
+wire format is unchanged.
 
 ### Phase 2 — close M0/M1 local workflows
 
