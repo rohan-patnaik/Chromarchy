@@ -9,7 +9,9 @@ Chromarchy performance work is measured with reproducible workloads before relea
 - CPU compositing of a 1024×1024 document across eight fully populated tiled
   pixel layers;
 - copy-on-write mutation of one pixel in a shared 1024×1024 tiled layer;
-- inversion of a 512×512 sparse selection in a 300,000×300,000 mask.
+- inversion of a 512×512 sparse selection in a 300,000×300,000 mask; and
+- materialization of a 512×512 unsigned-16 straight-RGBA sparse region into
+  premultiplied RGBA8.
 
 ## Canvas benchmark workload
 
@@ -24,8 +26,9 @@ RGBA8 tiles remain 256×256 (262,144 payload bytes); the typed-format contract
 allocates high-depth tiles only in isolated tests under 1-MiB per-tile and
 16-MiB/64-tile store, region, and combined delta-payload bounds. Checked
 unsigned 8/16-bit channel conversion has a caller-bounded RGBA8 destination and
-never allocates an implicit full frame. It does not change the live RGBA8
-renderer or benchmark workloads in this slice.
+never allocates an implicit full frame. The typed-region benchmark exercises
+that conversion with one combined source-plus-destination cap; it does not
+change the live RGBA8 renderer.
 
 ## Run locally
 

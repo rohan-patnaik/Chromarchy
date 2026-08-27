@@ -309,6 +309,9 @@ public:
   [[nodiscard]] std::optional<PixelRegionBuffer> readRegion(
       QRect region, quint64 rowAlignment = 1,
       quint64 maximumAllocationBytes = hardMaximumRegionBytes) const;
+  [[nodiscard]] std::optional<Rgba8Buffer> readRgba8PremultipliedRegion(
+      QRect region, quint64 destinationRowAlignment = 1,
+      quint64 maximumWorkingBytes = hardMaximumRegionBytes) const;
   PixelTileWriteResult writeRegion(
       QRect region, std::span<const std::byte> source,
       quint64 sourceRowStrideBytes,

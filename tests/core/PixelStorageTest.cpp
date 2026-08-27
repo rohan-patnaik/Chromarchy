@@ -76,6 +76,8 @@ private slots:
   void roundTripsOwningSparseSnapshots();
   void rejectsHostileSparseSnapshotsAtomically();
   void readsExactSparseRegionsAcrossTileBoundaries();
+  void materializesSparseUnsignedRegionsDeterministically();
+  void rejectsHostileSparseRgba8RegionRequests();
   void writesAliasedSparseRegionsTransactionally();
   void elidesTilesAfterZeroRegionWrites();
   void rejectsHostileSparseRegionsAtomically();
@@ -992,6 +994,98 @@ void PixelStorageTest::readsExactSparseRegionsAcrossTileBoundaries() {
   QCOMPARE(reopened->format().byteOrder, ByteOrder::BigEndian);
 }
 
+void PixelStorageTest::materializesSparseUnsignedRegionsDeterministically() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/sparse-rgba8-regions.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  const auto document = QJsonDocument::fromJson(fixture.readAll());
+  QVERIFY(document.isArray());
+
+  for (const auto& value : document.array()) {
+    const auto object = value.toObject();
+    const auto dimensions = object["dimensions"].toArray();
+    const auto regionValues = object["region"].toArray();
+    const PixelFormat format{
+        static_cast<SampleFormat>(object["sample"].toInt()),
+        static_cast<ChannelLayout>(object["channels"].toInt()),
+        static_cast<AlphaMode>(object["alpha"].toInt()),
+        static_cast<ByteOrder>(object["byteOrder"].toInt())};
+    auto store = SparsePixelTileStore::create(
+        QSize(dimensions[0].toInt(), dimensions[1].toInt()), format);
+    QVERIFY2(store, qPrintable(object["name"].toString()));
+    for (const auto& sampleValue : object["samples"].toArray()) {
+      const auto sample = sampleValue.toObject();
+      const auto bytes =
+          QByteArray::fromHex(sample["hex"].toString().toLatin1());
+      QCOMPARE(store->setPixelBytes(
+                   QPoint(sample["x"].toInt(), sample["y"].toInt()),
+                   bytesOf(bytes)),
+               PixelTileWriteResult::Changed);
+    }
+
+    const QRect region(regionValues[0].toInt(), regionValues[1].toInt(),
+                       regionValues[2].toInt(), regionValues[3].toInt());
+    const auto rowAlignment =
+        static_cast<quint64>(object["destinationRowAlignment"].toInteger());
+    const auto workingBytes =
+        static_cast<quint64>(object["maximumWorkingBytes"].toInteger());
+    const auto expected =
+        QByteArray::fromHex(object["expectedHex"].toString().toLatin1());
+    const auto snapshots = store->tileSnapshots();
+    const auto converted = store->readRgba8PremultipliedRegion(
+        region, rowAlignment, workingBytes);
+    QVERIFY2(converted, qPrintable(object["name"].toString()));
+    QCOMPARE(converted->layout.dimensions(), region.size());
+    QCOMPARE(converted->layout.format(), PixelFormat::rgba8Premultiplied());
+    QCOMPARE(converted->bytes, expected);
+    QVERIFY(!store->readRgba8PremultipliedRegion(
+        region, rowAlignment, workingBytes - 1));
+    QVERIFY(store->tileSnapshots() == snapshots);
+
+    const auto reopened = SparsePixelTileStore::fromTileSnapshots(
+        store->dimensions(), store->format(), snapshots);
+    QVERIFY(reopened);
+    const auto reopenedConversion = reopened->readRgba8PremultipliedRegion(
+        region, rowAlignment, workingBytes);
+    QVERIFY(reopenedConversion);
+    QCOMPARE(reopenedConversion->bytes, expected);
+  }
+}
+
+void PixelStorageTest::rejectsHostileSparseRgba8RegionRequests() {
+  const PixelFormat gray16{SampleFormat::UnsignedInteger16,
+                           ChannelLayout::Gray, AlphaMode::None,
+                           ByteOrder::LittleEndian};
+  auto store = SparsePixelTileStore::create(QSize(512, 512), gray16);
+  QVERIFY(store);
+  QVERIFY(!store->readRgba8PremultipliedRegion(QRect(), 1, 1));
+  QVERIFY(!store->readRgba8PremultipliedRegion(QRect(-1, 0, 1, 1), 1, 6));
+  QVERIFY(!store->readRgba8PremultipliedRegion(QRect(511, 511, 2, 1), 1,
+                                               12));
+  QVERIFY(!store->readRgba8PremultipliedRegion(QRect(0, 0, 1, 1), 3, 6));
+  QVERIFY(!store->readRgba8PremultipliedRegion(QRect(0, 0, 1, 1), 1, 0));
+  QVERIFY(!store->readRgba8PremultipliedRegion(
+      QRect(0, 0, 1, 1), 1,
+      SparsePixelTileStore::hardMaximumRegionBytes + 1));
+
+  const PixelFormat float32{SampleFormat::Float32, ChannelLayout::Gray,
+                            AlphaMode::None, ByteOrder::LittleEndian};
+  auto floatStore = SparsePixelTileStore::create(QSize(1, 1), float32);
+  QVERIFY(floatStore);
+  QVERIFY(!floatStore->readRgba8PremultipliedRegion(QRect(0, 0, 1, 1), 1,
+                                                    8));
+
+  const PixelFormat gray8{SampleFormat::UnsignedInteger8,
+                          ChannelLayout::Gray, AlphaMode::None,
+                          ByteOrder::NotApplicable};
+  auto tooManyTiles =
+      SparsePixelTileStore::create(QSize(1, 65 * PixelTile::extent), gray8);
+  QVERIFY(tooManyTiles);
+  QVERIFY(!tooManyTiles->readRgba8PremultipliedRegion(
+      QRect(0, 0, 1, 65 * PixelTile::extent), 1,
+      SparsePixelTileStore::hardMaximumRegionBytes));
+}
+
 void PixelStorageTest::writesAliasedSparseRegionsTransactionally() {
   const PixelFormat format{SampleFormat::UnsignedInteger16,
                            ChannelLayout::Gray, AlphaMode::None,
@@ -1142,8 +1236,10 @@ void PixelStorageTest::rejectsHostileSparseRegionsAtomically() {
       QRect(std::numeric_limits<int>::max() - 1, 0, 1, 1), 1, 1);
   QVERIFY(finalPixel);
   QCOMPARE(finalPixel->bytes, QByteArray(1, '\0'));
-  QVERIFY(!maximumGeometry->readRegion(
-      QRect(std::numeric_limits<int>::max() - 1, 0, 2, 1), 1, 2));
+  QRect outsideMaximumGeometry;
+  outsideMaximumGeometry.setCoords(std::numeric_limits<int>::max() - 1, 0,
+                                   std::numeric_limits<int>::max(), 0);
+  QVERIFY(!maximumGeometry->readRegion(outsideMaximumGeometry, 1, 2));
 }
 
 void PixelStorageTest::createsDeterministicBoundedTileDeltas() {

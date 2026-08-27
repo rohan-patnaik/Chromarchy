@@ -19,6 +19,14 @@ bool checkedMultiply(quint64 left, quint64 right, quint64& result) noexcept {
   return true;
 }
 
+bool checkedAdd(quint64 left, quint64 right, quint64& result) noexcept {
+  if (right > std::numeric_limits<quint64>::max() - left) {
+    return false;
+  }
+  result = left + right;
+  return true;
+}
+
 bool checkedAlignUp(quint64 value, quint64 alignment, quint64& result) noexcept {
   if (alignment == 0 || (alignment & (alignment - 1)) != 0) {
     return false;
@@ -42,6 +50,14 @@ bool isSupportedRgba8(PixelFormat format) noexcept {
          format.byteOrder == ByteOrder::NotApplicable &&
          (format.alpha == AlphaMode::Straight ||
           format.alpha == AlphaMode::Premultiplied);
+}
+
+bool isSupportedUnsignedToRgba8(PixelFormat format) noexcept {
+  return format == PixelFormat::rgba8Premultiplied() ||
+         ((format.sample == SampleFormat::UnsignedInteger8 ||
+           format.sample == SampleFormat::UnsignedInteger16) &&
+          (format.alpha == AlphaMode::None ||
+           format.alpha == AlphaMode::Straight));
 }
 
 bool isSupportedTileFormat(PixelFormat format) noexcept {
@@ -635,6 +651,42 @@ std::optional<PixelRegionBuffer> SparsePixelTileStore::readRegion(
   return PixelRegionBuffer{*layout, std::move(output)};
 }
 
+std::optional<Rgba8Buffer>
+SparsePixelTileStore::readRgba8PremultipliedRegion(
+    QRect region, quint64 destinationRowAlignment,
+    quint64 maximumWorkingBytes) const {
+  const auto bounds = regionTileBounds(dimensions_, region);
+  if (!bounds || bounds->tileCount > hardMaximumRegionTiles ||
+      !isSupportedUnsignedToRgba8(format_) || maximumWorkingBytes == 0 ||
+      maximumWorkingBytes > hardMaximumRegionBytes) {
+    return std::nullopt;
+  }
+
+  const auto sourceLayout = PixelStorageLayout::create(
+      region.size(), format_, 1, maximumWorkingBytes);
+  const auto destinationLayout = PixelStorageLayout::create(
+      region.size(), PixelFormat::rgba8Premultiplied(),
+      destinationRowAlignment, maximumWorkingBytes);
+  quint64 combinedBytes = 0;
+  if (!sourceLayout || !destinationLayout ||
+      !checkedAdd(sourceLayout->allocationBytes(),
+                  destinationLayout->allocationBytes(), combinedBytes) ||
+      combinedBytes > maximumWorkingBytes) {
+    return std::nullopt;
+  }
+
+  const auto source = readRegion(region, 1, sourceLayout->allocationBytes());
+  if (!source) {
+    return std::nullopt;
+  }
+  return convertUnsignedToRgba8Premultiplied(
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(source->bytes.constData()),
+          static_cast<std::size_t>(source->bytes.size())),
+      source->layout, destinationRowAlignment,
+      destinationLayout->allocationBytes());
+}
+
 PixelTileWriteResult SparsePixelTileStore::writeRegion(
     QRect region, std::span<const std::byte> source,
     quint64 sourceRowStrideBytes, quint64 maximumAllocationBytes) {
@@ -1064,10 +1116,7 @@ std::optional<Rgba8Buffer> convertUnsignedToRgba8Premultiplied(
     return convertRgba8(source, sourceLayout, AlphaMode::Premultiplied,
                         destinationRowAlignment, maximumAllocationBytes);
   }
-  if ((sourceFormat.sample != SampleFormat::UnsignedInteger8 &&
-       sourceFormat.sample != SampleFormat::UnsignedInteger16) ||
-      (sourceFormat.alpha != AlphaMode::None &&
-       sourceFormat.alpha != AlphaMode::Straight) ||
+  if (!isSupportedUnsignedToRgba8(sourceFormat) ||
       source.size() != sourceLayout.allocationBytes()) {
     return std::nullopt;
   }

@@ -58,6 +58,8 @@ plus deterministic owning snapshot records with atomic bounded rebuild, but
 remains isolated from documents and defines no file format. Checked unsigned
 8/16-bit Gray, GrayAlpha, RGB, and straight RGBA conversion now reaches the
 existing RGBA8 premultiplied boundary with explicit endian and rounding policy.
+Sparse typed regions can be materialized deterministically at that boundary
+under one combined source-plus-destination working-set cap.
 Checked rectangular raw-byte access crosses sparse tile boundaries with atomic
 writes, alias-safe staging, and zero-tile elision. Deterministic bounded before/after tile records
 apply conflict-atomically in either direction as an isolated reversible-delta

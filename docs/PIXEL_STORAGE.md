@@ -160,6 +160,23 @@ input must own it or rely on the write's internal staging during that call.
 This boundary adds no native or raster persistence, document/render wiring,
 implicit numeric conversion, scaling, nonfinite policy, or color management.
 
+`readRgba8PremultipliedRegion()` is the explicit deterministic materialization
+seam from that sparse owner into the existing RGBA8 premultiplied boundary. It
+supports the same unsigned Gray, GrayAlpha, RGB, straight RGBA, and strict
+premultiplied RGBA8 formats as the checked numeric adapter. Missing samples keep
+their declared numeric meaning: an absent alpha-bearing pixel is transparent,
+while an absent Gray or RGB pixel without alpha becomes opaque black.
+
+The source region is first packed without row padding, then converted with the
+requested destination alignment. One caller limit hard-capped at 16 MiB covers
+the sum of both simultaneously live owning buffers; overflow, an invalid
+alignment or region, more than 64 touched tiles, unsupported float/high-depth
+premultiplication, or either buffer exceeding the combined cap is rejected
+before allocation. The store is not mutated and repeated reads, including from
+a snapshot-rebuilt equivalent store, produce identical bytes. This seam does
+not add scaling, caching, cancellation, a render node, document integration, or
+floating-point policy.
+
 ## Reversible typed-tile delta boundary
 
 `tileDeltaTo()` compares stores only when their logical dimensions and pixel
