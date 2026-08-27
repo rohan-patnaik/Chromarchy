@@ -1,10 +1,14 @@
 #include "core/ImageIO.h"
 
+#include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
 #include <QImageWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -17,6 +21,8 @@ class ImageIOTest final : public QObject {
 private slots:
   void opensImageIntoRealPixelTiles();
   void exportsCompositeAtomically();
+  void preservesImportedSourceAcrossEditAndExport();
+  void failedWriterPreservesExistingDestination();
   void rejectsUnknownOrDamagedInput();
   void roundTripsSupportedFormats_data();
   void roundTripsSupportedFormats();
@@ -65,6 +71,101 @@ void ImageIOTest::exportsCompositeAtomically() {
   QVERIFY(qAbs(pixel.red() - 100) <= 1);
   QVERIFY(qAbs(pixel.green() - 120) <= 1);
   QVERIFY(qAbs(pixel.blue() - 140) <= 1);
+}
+
+void ImageIOTest::preservesImportedSourceAcrossEditAndExport() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/raster-source-preservation.json"));
+  QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+  QJsonParseError parseError;
+  const auto fixtureDocument =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError);
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QVERIFY(fixtureDocument.isObject());
+  const auto fixtureObject = fixtureDocument.object();
+  QCOMPARE(fixtureObject["schemaVersion"].toInt(), 1);
+  QCOMPARE(fixtureObject["format"].toString(), QStringLiteral("png"));
+  const auto sourceBytes = QByteArray::fromBase64(
+      fixtureObject["base64"].toString().toLatin1());
+  QCOMPARE(sourceBytes.size(), 124);
+  QCOMPARE(QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256)
+               .toHex(),
+           fixtureObject["sha256"].toString().toLatin1());
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto sourcePath =
+      directory.filePath(QStringLiteral("independent-source.png"));
+  QFile sourceFile(sourcePath);
+  QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+  QCOMPARE(sourceFile.write(sourceBytes), sourceBytes.size());
+  sourceFile.close();
+
+  auto opened = ImageIO::open(sourcePath);
+  QVERIFY2(opened, qPrintable(opened.error));
+  QCOMPARE(opened.document->size(), QSize(3, 2));
+  QCOMPARE(opened.document->layerAt(0)->pixels().pixelColor(QPoint(0, 0)),
+           QColor(255, 0, 0, 255));
+  const auto partial =
+      opened.document->layerAt(0)->pixels().pixelColor(QPoint(1, 0));
+  QCOMPARE(partial.alpha(), 128);
+  QVERIFY(partial.green() >= 254);
+  QVERIFY(sourceBytes.contains(
+      QByteArrayLiteral("Author\0Independent Fixture")));
+
+  QVERIFY(opened.document->layerAt(0)->setPixelColor(QPoint(2, 1),
+                                                      QColor(Qt::yellow)));
+  const auto overlay = opened.document->addLayer(QStringLiteral("Local edit"));
+  QVERIFY(opened.document->layerAt(overlay)->setPixelColor(
+      QPoint(2, 1), QColor(20, 40, 200, 128)));
+  const auto exportPath =
+      directory.filePath(QStringLiteral("edited-export.png"));
+  const auto exported =
+      ImageIO::exportComposite(*opened.document, exportPath);
+  QVERIFY2(exported, qPrintable(exported.error));
+
+  QVERIFY(sourceFile.open(QIODevice::ReadOnly));
+  const auto sourceAfter = sourceFile.readAll();
+  sourceFile.close();
+  QCOMPARE(sourceAfter, sourceBytes);
+  QCOMPARE(QCryptographicHash::hash(sourceAfter, QCryptographicHash::Sha256)
+               .toHex(),
+           fixtureObject["sha256"].toString().toLatin1());
+  const QImage edited(exportPath);
+  QVERIFY(!edited.isNull());
+  QCOMPARE(edited.size(), QSize(3, 2));
+  QVERIFY(edited.pixelColor(QPoint(2, 1)) != QColor(Qt::transparent));
+}
+
+void ImageIOTest::failedWriterPreservesExistingDestination() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path =
+      directory.filePath(QStringLiteral("existing.definitely-unsupported"));
+  const QByteArray sentinel("existing destination bytes\n");
+  QFile destination(path);
+  QVERIFY(destination.open(QIODevice::WriteOnly));
+  QCOMPARE(destination.write(sentinel), sentinel.size());
+  destination.close();
+  QVERIFY(!QImageWriter::supportedImageFormats().contains(
+      QByteArrayLiteral("definitely-unsupported")));
+
+  auto document = Document::create(QSize(8, 8));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(4, 4), Qt::red));
+  const auto before = document->composite();
+  const auto result = ImageIO::exportComposite(*document, path);
+  QVERIFY(!result);
+  QVERIFY(!result.error.isEmpty());
+  QCOMPARE(document->composite(), before);
+
+  QVERIFY(destination.open(QIODevice::ReadOnly));
+  QCOMPARE(destination.readAll(), sentinel);
+  destination.close();
+  QCOMPARE(QDir(directory.path())
+               .entryList(QDir::Files | QDir::Hidden | QDir::System |
+                          QDir::NoDotAndDotDot),
+           QStringList{QStringLiteral("existing.definitely-unsupported")});
 }
 
 void ImageIOTest::rejectsUnknownOrDamagedInput() {

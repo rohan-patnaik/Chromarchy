@@ -87,6 +87,9 @@ if(BUILD_TESTING)
 
   qt_add_executable(chromarchy_image_io_tests tests/core/ImageIOTest.cpp)
   target_link_libraries(chromarchy_image_io_tests PRIVATE chromarchy_core Qt6::Test)
+  target_compile_definitions(chromarchy_image_io_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME chromarchy_image_io COMMAND chromarchy_image_io_tests)
 
   qt_add_executable(chromarchy_native_document_tests

@@ -41,6 +41,14 @@ Chromarchy uses the image codecs supplied by the installed Qt 6 image-format plu
 
 Metadata inspection and selective preservation controls are planned. Until those controls exist, users who require source metadata must retain the original file separately.
 
+Source preservation is anchored by an original fixed PNG assembled from the
+public chunk format rather than by the Qt writer. Import, in-memory edits, and
+export to a distinct path leave its complete SHA-256 source bytes unchanged.
+An unsupported-format writer failure after `QSaveFile` opens its temporary
+output also preserves an existing destination byte-for-byte and removes the
+temporary output. Atomic commit/power-loss failure injection is not yet
+available.
+
 ## Cataloged format decisions
 
 Codec availability is not a compatibility claim. BMP, still GIF, TGA, and the

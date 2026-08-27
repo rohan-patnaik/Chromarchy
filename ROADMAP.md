@@ -91,6 +91,10 @@ full-image golden across the x=255/256 tile boundary. Repeated full and bounded
 region rendering, the painter entry point, native save/reopen, flatten, and
 merge-down persistence are checked without changing the RGBA8 renderer or its
 color interpretation.
+An independently framed fixed PNG now anchors byte-preserving
+import/edit/export behavior. Export writer failure after atomic temporary-file
+open is exercised against an existing destination, which remains unchanged and
+leaves no temporary file; commit/power-loss injection remains incomplete.
 
 ### Phase 2 — close M0/M1 local workflows
 
