@@ -16,6 +16,9 @@ DocumentView::DocumentView(Document document, QString displayName,
       displayName_(std::move(displayName)),
       filePath_(std::move(filePath)),
       modified_(modified) {
+  setObjectName(QStringLiteral("documentView"));
+  setAccessibleName(QStringLiteral("Document %1").arg(displayName_));
+  setAccessibleDescription(QStringLiteral("Image document editing view"));
   if (!modified_) {
     savedStateId_ = history_.currentStateId();
   }
@@ -135,6 +138,7 @@ NativeDocumentWriteResult DocumentView::save(const QString& filePath) {
   if (result) {
     filePath_ = QFileInfo(filePath).absoluteFilePath();
     displayName_ = QFileInfo(filePath).fileName();
+    setAccessibleName(QStringLiteral("Document %1").arg(displayName_));
     savedStateId_ = history_.currentStateId();
     modified_ = false;
     emit titleChanged(tabTitle());

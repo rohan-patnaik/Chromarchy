@@ -35,6 +35,10 @@ QImage selectionOverlay(const QImage& coverage) {
 
 CanvasWidget::CanvasWidget(const Document* document, QWidget* parent)
     : QAbstractScrollArea(parent), document_(document) {
+  setObjectName(QStringLiteral("canvas"));
+  setAccessibleName(QStringLiteral("Image canvas"));
+  setAccessibleDescription(
+      QStringLiteral("Scrollable view of the current image document"));
   setFrameShape(QFrame::NoFrame);
   setFocusPolicy(Qt::StrongFocus);
   viewport()->setCursor(Qt::ArrowCursor);

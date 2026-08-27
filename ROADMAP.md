@@ -95,6 +95,11 @@ An independently framed fixed PNG now anchors byte-preserving
 import/edit/export behavior. Export writer failure after atomic temporary-file
 open is exercised against an existing destination, which remains unchanged and
 leaves no temporary file; commit/power-loss injection remains incomplete.
+The current document/layers workspace now exposes stable Qt accessibility
+names and descriptions, an explicit core layer-control tab order, and tested
+keyboard dispatch for selection, layer creation/duplication, undo, and redo.
+This is an offscreen-tested subset; complete dialog/action traversal and live
+AT-SPI/screen-reader verification remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 

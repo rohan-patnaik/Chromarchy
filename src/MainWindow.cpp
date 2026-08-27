@@ -31,11 +31,18 @@ using chromarchy::Document;
 using chromarchy::DocumentView;
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+  setObjectName(QStringLiteral("mainWindow"));
+  setAccessibleName(QStringLiteral("Chromarchy workspace"));
+  setAccessibleDescription(QStringLiteral("Local image editing workspace"));
   setWindowTitle(QStringLiteral("Chromarchy — local image studio"));
   resize(1280, 800);
   setDockOptions(AnimatedDocks | AllowNestedDocks | AllowTabbedDocks);
 
   tabs_ = new QTabWidget(this);
+  tabs_->setObjectName(QStringLiteral("documentTabs"));
+  tabs_->setAccessibleName(QStringLiteral("Open documents"));
+  tabs_->setAccessibleDescription(
+      QStringLiteral("Switch between open image documents"));
   tabs_->setDocumentMode(true);
   tabs_->setMovable(true);
   tabs_->setTabsClosable(true);
@@ -50,6 +57,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
   createActions();
   createLayersDock();
+  menuBar()->setObjectName(QStringLiteral("mainMenu"));
+  menuBar()->setAccessibleName(QStringLiteral("Application menu"));
+  statusBar()->setObjectName(QStringLiteral("statusBar"));
+  statusBar()->setAccessibleName(QStringLiteral("Workspace status"));
   statusBar()->showMessage(QStringLiteral("Ready"));
 
   QSettings settings;
@@ -101,8 +112,12 @@ void MainWindow::createActions() {
       view->redo();
     }
   });
-  redoAction_->setShortcuts({QKeySequence::Redo,
-                             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
+  auto redoShortcuts = QKeySequence::keyBindings(QKeySequence::Redo);
+  const QKeySequence conventionalRedo(Qt::CTRL | Qt::SHIFT | Qt::Key_Z);
+  if (!redoShortcuts.contains(conventionalRedo)) {
+    redoShortcuts.push_back(conventionalRedo);
+  }
+  redoAction_->setShortcuts(redoShortcuts);
 
   auto* selectMenu = menuBar()->addMenu(QStringLiteral("&Select"));
   auto* selectAll = selectMenu->addAction(QStringLiteral("Select &All"), this, [this] {
@@ -182,10 +197,18 @@ void MainWindow::createActions() {
 void MainWindow::createLayersDock() {
   auto* dock = new QDockWidget(QStringLiteral("Layers"), this);
   dock->setObjectName(QStringLiteral("layersDock"));
+  dock->setAccessibleName(QStringLiteral("Layers panel"));
+  dock->setAccessibleDescription(
+      QStringLiteral("Manage layers in the current document"));
   auto* panel = new QWidget(dock);
+  panel->setObjectName(QStringLiteral("layersPanel"));
   auto* layout = new QVBoxLayout(panel);
   layout->setContentsMargins(4, 4, 4, 4);
   auto* toolbar = new QToolBar(panel);
+  toolbar->setObjectName(QStringLiteral("layerActionsToolbar"));
+  toolbar->setAccessibleName(QStringLiteral("Layer actions"));
+  toolbar->setAccessibleDescription(
+      QStringLiteral("Create, duplicate, or remove the selected layer"));
   toolbar->setIconSize(QSize(16, 16));
   toolbar->addAction(addLayerAction_);
   toolbar->addAction(duplicateLayerAction_);
@@ -193,6 +216,10 @@ void MainWindow::createLayersDock() {
   layout->addWidget(toolbar);
 
   layers_ = new QListWidget(panel);
+  layers_->setObjectName(QStringLiteral("layersList"));
+  layers_->setAccessibleName(QStringLiteral("Document layers"));
+  layers_->setAccessibleDescription(QStringLiteral(
+      "Select, rename, and toggle visibility for document layers"));
   layers_->setSelectionMode(QAbstractItemView::SingleSelection);
   layout->addWidget(layers_);
   connect(layers_, &QListWidget::currentRowChanged, this,
@@ -202,6 +229,10 @@ void MainWindow::createLayersDock() {
 
   auto* properties = new QFormLayout;
   opacity_ = new QDoubleSpinBox(panel);
+  opacity_->setObjectName(QStringLiteral("layerOpacity"));
+  opacity_->setAccessibleName(QStringLiteral("Layer opacity"));
+  opacity_->setAccessibleDescription(
+      QStringLiteral("Set opacity for the selected layer as a percentage"));
   opacity_->setRange(0.0, 100.0);
   opacity_->setDecimals(1);
   opacity_->setSuffix(QStringLiteral(" %"));
@@ -210,10 +241,16 @@ void MainWindow::createLayersDock() {
           &MainWindow::commitLayerOpacity);
   properties->addRow(QStringLiteral("Opacity"), opacity_);
   layerLocked_ = new QCheckBox(QStringLiteral("Lock pixels"), panel);
+  layerLocked_->setObjectName(QStringLiteral("layerLock"));
+  layerLocked_->setAccessibleName(QStringLiteral("Lock layer pixels"));
+  layerLocked_->setAccessibleDescription(
+      QStringLiteral("Prevent pixel changes on the selected layer"));
   connect(layerLocked_, &QCheckBox::toggled, this,
           &MainWindow::setLayerLocked);
   properties->addRow(layerLocked_);
   layout->addLayout(properties);
+  QWidget::setTabOrder(layers_, opacity_);
+  QWidget::setTabOrder(opacity_, layerLocked_);
   dock->setWidget(panel);
   addDockWidget(Qt::RightDockWidgetArea, dock);
 }

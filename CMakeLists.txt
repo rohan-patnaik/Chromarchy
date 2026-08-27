@@ -139,6 +139,23 @@ if(BUILD_TESTING)
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
   )
 
+  qt_add_executable(chromarchy_main_window_tests
+    tests/ui/MainWindowTest.cpp
+    src/MainWindow.cpp
+    src/MainWindow.h
+    src/ui/CanvasWidget.cpp
+    src/ui/CanvasWidget.h
+    src/ui/DocumentView.cpp
+    src/ui/DocumentView.h
+  )
+  target_link_libraries(chromarchy_main_window_tests PRIVATE
+    chromarchy_core Qt6::Test Qt6::Widgets
+  )
+  add_test(NAME chromarchy_main_window COMMAND chromarchy_main_window_tests)
+  set_tests_properties(chromarchy_main_window PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+  )
+
   qt_add_executable(chromarchy_core_benchmarks benchmarks/CoreBenchmark.cpp)
   target_link_libraries(chromarchy_core_benchmarks PRIVATE
     chromarchy_core Qt6::Test
