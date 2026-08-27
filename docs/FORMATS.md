@@ -69,6 +69,12 @@ preservation across upgrade/reopen. Fixed v1/v2 documents produced and loaded
 at the published pre-adapter revision independently anchor the wire bytes; a
 fixed hostile document proves invalid premultiplied tile samples are rejected
 without changing the source.
+Legacy v1/v2 files containing an explicitly stored byte-zero pixel tile remain
+accepted, but the reader canonicalizes that tile to absence in memory. The
+declared entry is still charged against aggregate tile, compressed-byte, and
+decoded-byte limits before decoding; the source is never rewritten, and a
+subsequent save emits no record for the absent tile. This is a sparse storage
+normalization, not a native wire-version change.
 Per-tile compressed and decompressed
 sizes, layer count, name length, coordinates, duplicates, and trailing data are
 also checked before acceptance. Loading is currently synchronous and

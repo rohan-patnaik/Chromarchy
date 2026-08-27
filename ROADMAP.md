@@ -66,6 +66,10 @@ apply conflict-atomically in either direction as an isolated reversible-delta
 prerequisite; they do not yet replace document snapshot history or implement
 coalescing. Floating-point conversion, document integration, rendering, and
 native typed persistence remain future slices.
+The live RGBA8 document path now canonicalizes byte-zero pixel tiles produced
+by merge, flatten, and native v1/v2 load without changing the native wire
+format; declared legacy records continue to consume the existing hostile-input
+budgets before decode.
 
 ### Phase 2 — close M0/M1 local workflows
 

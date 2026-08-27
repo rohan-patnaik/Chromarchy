@@ -48,6 +48,7 @@ private slots:
   void matchesOriginalSourceOverReferenceVectors();
   void fullImageCompositeIsRepeatableAcrossTileBoundary();
   void mergeAndFlattenPreserveComposite();
+  void mergeAndFlattenElideTransparentTiles();
   void locksPreventDestructiveLayerOperations();
   void rejectsInvalidLayerState();
 };
@@ -198,6 +199,38 @@ void DocumentTest::mergeAndFlattenPreserveComposite() {
   QCOMPARE(document->layerAt(0)->name(), QStringLiteral("Flattened"));
   QVERIFY(colorsWithinRounding(
       document->composite().pixelColor(QPoint(300, 300)), beforeFlatten));
+}
+
+void DocumentTest::mergeAndFlattenElideTransparentTiles() {
+  auto mergeDocument = Document::create(QSize(512, 512));
+  QVERIFY(mergeDocument);
+  QVERIFY(mergeDocument->layerAt(0)->setPixelColor(QPoint(300, 300), Qt::red));
+  mergeDocument->layerAt(0)->setOpacity(0.0);
+  const auto top = mergeDocument->addLayer(QStringLiteral("Top"));
+  QVERIFY(mergeDocument->layerAt(top)->setPixelColor(QPoint(4, 5), Qt::blue));
+  mergeDocument->layerAt(top)->setOpacity(0.0);
+
+  QVERIFY(mergeDocument->mergeLayerDown(top));
+  QCOMPARE(mergeDocument->layerCount(), 1);
+  QCOMPARE(mergeDocument->layerAt(0)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(mergeDocument->composite().pixelColor(QPoint(300, 300)),
+           QColor(Qt::transparent));
+
+  auto flattenDocument = Document::create(QSize(512, 512));
+  QVERIFY(flattenDocument);
+  QVERIFY(flattenDocument->layerAt(0)->setPixelColor(QPoint(300, 300),
+                                                     Qt::green));
+  flattenDocument->layerAt(0)->setOpacity(0.0);
+  const auto second = flattenDocument->addLayer(QStringLiteral("Second"));
+  QVERIFY(flattenDocument->layerAt(second)->setPixelColor(QPoint(4, 5),
+                                                           Qt::yellow));
+  flattenDocument->layerAt(second)->setOpacity(0.0);
+
+  QVERIFY(flattenDocument->flatten());
+  QCOMPARE(flattenDocument->layerCount(), 1);
+  QCOMPARE(flattenDocument->layerAt(0)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(flattenDocument->composite().pixelColor(QPoint(4, 5)),
+           QColor(Qt::transparent));
 }
 
 void DocumentTest::locksPreventDestructiveLayerOperations() {

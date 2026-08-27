@@ -374,7 +374,9 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
       if (!tile) {
         return {.error = streamError(QStringLiteral("tile conversion"))};
       }
-      layer.pixels_.tiles_.insert(index, std::move(*tile));
+      if (!TiledImage::isZeroTile(*tile)) {
+        layer.pixels_.tiles_.insert(index, std::move(*tile));
+      }
     }
   }
 

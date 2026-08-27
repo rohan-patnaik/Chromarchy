@@ -233,8 +233,11 @@ and render-node wiring beyond the native RGBA8 tile adapter remain future work.
 RGBA8 pixel clears also reclaim a tile once its complete payload becomes zero.
 The check runs only after a transparent write and never removes a tile that
 still contains another nonzero pixel. Import already omits fully transparent
-tiles. Broader normalization of tiles produced by merge, flatten, or native-load
-paths remains future work.
+tiles. Merge, flatten, and native v1/v2 load now also omit byte-zero pixel
+tiles, so those live document boundaries retain the same canonical sparse
+representation. Declared native entries still count against all aggregate
+input budgets before decoding, and this changes neither the v1/v2 wire format
+nor selection-mask storage.
 
 This slice adds no profile or transfer-function interpretation and no
 color-library dependency.

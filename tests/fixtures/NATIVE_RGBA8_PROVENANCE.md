@@ -18,3 +18,11 @@ the first packed pixel from valid `[1, 1, 0, 1]` to invalid `[2, 1, 0, 1]` and
 recompressing only that tile. Its digest is fixed in the JSON. It is not a valid
 native document and exists solely to prove that malformed premultiplied samples
 are rejected without modifying the input file.
+
+The legacy-zero v2 fixture was generated independently from the public v2 wire
+contract using Qt 6.11.2. It is a 4 by 2 document with one visible layer named
+`Legacy Zero Tile` and one explicitly stored, compressed all-byte-zero RGBA8
+tile. Its SHA-256 digest is fixed in the JSON. Tests prove the current reader
+accepts the legacy representation without modifying its source, canonicalizes
+the resident layer to zero allocated tiles, and writes and reopens an equivalent
+v2 document whose first layer declares zero tile records.
