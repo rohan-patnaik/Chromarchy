@@ -89,9 +89,11 @@ validated and charged to aggregate budgets, then represented by sparse absence
 in memory. The source remains unchanged and the next equivalent save emits no
 selection record. Both base 0 and base 255 remain semantic values rather than
 pixel colors.
-Per-tile compressed and decompressed
-sizes, layer count, name length, coordinates, duplicates, and trailing data are
-also checked before acceptance. Loading is currently synchronous and
+Per-tile compressed and decompressed sizes, layer count, layer-name length and
+strict UTF-8 encoding, coordinates, duplicates, and trailing data are also
+checked before acceptance. Exact 4,096-byte valid names round-trip; 4,097-byte
+and malformed UTF-8 names are rejected without changing their source files.
+Loading is currently synchronous and
 in-process, so cancellation, wall-time enforcement, and helper isolation remain
 explicitly incomplete.
 

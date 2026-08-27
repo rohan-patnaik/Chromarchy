@@ -178,6 +178,35 @@ std::optional<quint32> selectionTileCount(const QByteArray& nativeBytes) {
   return count;
 }
 
+QByteArray minimalNativeWithLayerName(const QByteArray& nameBytes) {
+  QByteArray bytes;
+  QBuffer output(&bytes);
+  if (!output.open(QIODevice::WriteOnly)) {
+    return {};
+  }
+  QDataStream stream(&output);
+  stream.setVersion(QDataStream::Qt_6_6);
+  stream.setByteOrder(QDataStream::LittleEndian);
+  if (stream.writeRawData("CHRMDC01", 8) != 8) {
+    return {};
+  }
+  stream << NativeDocumentCodec::formatVersion << 1 << 1 << quint32{1} << 0;
+  const QByteArray idBytes(16, '\0');
+  stream << quint32{16};
+  if (stream.writeRawData(idBytes.constData(), idBytes.size()) !=
+      idBytes.size()) {
+    return {};
+  }
+  stream << static_cast<quint32>(nameBytes.size());
+  if (stream.writeRawData(nameBytes.constData(), nameBytes.size()) !=
+      nameBytes.size()) {
+    return {};
+  }
+  stream << quint8{1} << quint8{0} << 1.0 << quint32{0};
+  stream << quint8{0} << quint32{0};
+  return stream.status() == QDataStream::Ok ? bytes : QByteArray{};
+}
+
 }  // namespace
 
 class NativeDocumentCodecTest final : public QObject {
@@ -196,6 +225,7 @@ private slots:
   void rejectsAggregateTileStorageBeforePayloadDecode();
   void exactAggregateTileLimitRoundTripsWithinFileBound();
   void overLimitSavePreservesExistingDestination();
+  void validatesNativeLayerNameEncodingAndBounds();
 };
 
 void NativeDocumentCodecTest::preservesLayeredDocument() {
@@ -244,6 +274,53 @@ void NativeDocumentCodecTest::preservesLayeredDocument() {
   QCOMPARE(loaded.document->selection().coverage(QPoint(5, 6)), 32);
   QCOMPARE(loaded.document->selection().coverage(QPoint(600, 300)), 255);
   QCOMPARE(loaded.document->selection().allocatedTileCount(), 1);
+}
+
+void NativeDocumentCodecTest::validatesNativeLayerNameEncodingAndBounds() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QList<QPair<QString, QByteArray>> rejectedNames = {
+      {QStringLiteral("over-limit"),
+       QByteArray(NativeDocumentCodec::maximumLayerNameBytes + 1, 'a')},
+      {QStringLiteral("malformed"),
+       QByteArray(NativeDocumentCodec::maximumLayerNameBytes,
+                  static_cast<char>(0xff))}};
+  for (const auto& [label, nameBytes] : rejectedNames) {
+    const auto sourceBytes = minimalNativeWithLayerName(nameBytes);
+    QVERIFY(!sourceBytes.isEmpty());
+    const auto path = directory.filePath(label + QStringLiteral(".chromarchy"));
+    QFile source(path);
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    QCOMPARE(source.write(sourceBytes), sourceBytes.size());
+    source.close();
+
+    const auto loaded = NativeDocumentCodec::load(path);
+    QVERIFY2(!loaded, qPrintable(label));
+    QVERIFY(!loaded.error.isEmpty());
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QCOMPARE(source.readAll(), sourceBytes);
+    source.close();
+  }
+
+  const QByteArray exactName(NativeDocumentCodec::maximumLayerNameBytes, 'a');
+  const auto exactBytes = minimalNativeWithLayerName(exactName);
+  QVERIFY(!exactBytes.isEmpty());
+  const auto exactPath =
+      directory.filePath(QStringLiteral("exact-boundary.chromarchy"));
+  QFile exact(exactPath);
+  QVERIFY(exact.open(QIODevice::WriteOnly));
+  QCOMPARE(exact.write(exactBytes), exactBytes.size());
+  exact.close();
+  const auto loaded = NativeDocumentCodec::load(exactPath);
+  QVERIFY2(loaded, qPrintable(loaded.error));
+  QCOMPARE(loaded.document->layerAt(0)->name().toUtf8(), exactName);
+  const auto reopenedPath =
+      directory.filePath(QStringLiteral("exact-boundary-reopen.chromarchy"));
+  const auto saved = NativeDocumentCodec::save(*loaded.document, reopenedPath);
+  QVERIFY2(saved, qPrintable(saved.error));
+  const auto reopened = NativeDocumentCodec::load(reopenedPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerAt(0)->name().toUtf8(), exactName);
 }
 
 void NativeDocumentCodecTest::loadsVersionOneWithoutSelection() {

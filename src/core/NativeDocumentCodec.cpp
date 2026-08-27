@@ -3,6 +3,7 @@
 #include <QDataStream>
 #include <QFile>
 #include <QSaveFile>
+#include <QStringConverter>
 #include <QSet>
 #include <QtEndian>
 
@@ -308,6 +309,11 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
                    nameBytes)) {
       return {.error = streamError(QStringLiteral("layer identity"))};
     }
+    QStringDecoder nameDecoder(QStringDecoder::Utf8);
+    const QString layerName = nameDecoder.decode(nameBytes);
+    if (nameDecoder.hasError()) {
+      return {.error = streamError(QStringLiteral("layer name encoding"))};
+    }
 
     quint8 visible = 0;
     quint8 locked = 0;
@@ -329,7 +335,7 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     }
     aggregateDecodedBytes += layerDecodedBytes;
 
-    document->layers_.emplaceBack(QString::fromUtf8(nameBytes), document->size_);
+    document->layers_.emplaceBack(layerName, document->size_);
     auto& layer = document->layers_.back();
     layer.id_ = QUuid::fromRfc4122(idBytes);
     layer.visible_ = visible != 0;
