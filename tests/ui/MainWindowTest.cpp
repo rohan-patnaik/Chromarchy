@@ -14,7 +14,9 @@
 #include <QDoubleSpinBox>
 #include <QImage>
 #include <QListWidget>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -76,6 +78,7 @@ private slots:
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
+  void renamesLayerByKeyboardAndPersistsUnicode();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -427,6 +430,158 @@ void MainWindowTest::savesDirtyDocumentBeforeCloseByKeyboard() {
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
   QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
+}
+
+void MainWindowTest::renamesLayerByKeyboardAndPersistsUnicode() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("rename-layer.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Initial layer"));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* renameAction = requiredChild<QAction>(window, "renameLayerAction");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(canvas);
+  QVERIFY(renameAction);
+  QVERIFY(renameAction->isEnabled());
+  QCOMPARE(renameAction->shortcut(), QKeySequence(Qt::Key_F2));
+  QVERIFY(document);
+  QVERIFY(!document->isModified());
+
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    if (!dialog || dialog->objectName() != QStringLiteral("renameLayerDialog") ||
+        !hasAccessibleMetadata(dialog)) {
+      dialogError = QStringLiteral("Rename dialog metadata is incomplete");
+      if (dialog) {
+        dialog->reject();
+      }
+      return;
+    }
+    auto* editor = dialog->findChild<QLineEdit*>(QStringLiteral("layerNameEditor"));
+    auto* buttons = dialog->findChild<QDialogButtonBox*>(
+        QStringLiteral("renameLayerButtons"));
+    if (!editor || !buttons || !hasAccessibleMetadata(editor) ||
+        !hasAccessibleMetadata(buttons) || dialog->focusWidget() != editor ||
+        editor->maxLength() != static_cast<int>(
+                                   chromarchy::NativeDocumentCodec::maximumLayerNameBytes)) {
+      dialogError = QStringLiteral("Rename controls are incomplete");
+      dialog->reject();
+      return;
+    }
+    QTest::keyClick(editor, Qt::Key_Escape);
+  });
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_F2);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Initial layer"));
+  QVERIFY(!document->isModified());
+
+  const QString overBudgetName(2'049, QChar(0x0800));
+  QVERIFY(overBudgetName.toUtf8().size() >
+          chromarchy::NativeDocumentCodec::maximumLayerNameBytes);
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTimer::singleShot(0, &window, [&dialogError, overBudgetName] {
+    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    auto* editor = dialog ? dialog->findChild<QLineEdit*>(
+                                QStringLiteral("layerNameEditor"))
+                          : nullptr;
+    auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>(
+                                 QStringLiteral("renameLayerButtons"))
+                           : nullptr;
+    auto* rename = buttons ? buttons->button(QDialogButtonBox::Ok) : nullptr;
+    if (!dialog || !editor || !rename) {
+      dialogError = QStringLiteral("Bounded rename editor was not modal");
+      if (dialog) {
+        dialog->reject();
+      }
+      return;
+    }
+    editor->setText(overBudgetName);
+    rename->click();
+  });
+  QTest::keyClick(canvas, Qt::Key_F2);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Initial layer"));
+  QVERIFY(!document->isModified());
+
+  const auto renamed = QStringLiteral("Σ local layer");
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTimer::singleShot(0, &window, [&dialogError, renamed] {
+    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    auto* editor = dialog ? dialog->findChild<QLineEdit*>(
+                                QStringLiteral("layerNameEditor"))
+                          : nullptr;
+    auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>(
+                                 QStringLiteral("renameLayerButtons"))
+                           : nullptr;
+    auto* rename = buttons ? buttons->button(QDialogButtonBox::Ok) : nullptr;
+    if (!dialog || !editor || !rename) {
+      dialogError = QStringLiteral("Rename editor was not modal");
+      if (dialog) {
+        dialog->reject();
+      }
+      return;
+    }
+    editor->selectAll();
+    editor->setText(renamed);
+    if (editor->text() != renamed) {
+      dialogError = QStringLiteral("Rename editor did not retain Unicode");
+      dialog->reject();
+      return;
+    }
+    QTimer::singleShot(500, dialog, [dialog, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Rename action did not close dialog");
+      }
+      dialog->reject();
+    });
+    rename->click();
+    if (dialog->result() != QDialog::Accepted) {
+      dialogError = QStringLiteral("Rename action did not accept dialog");
+      dialog->reject();
+    }
+  });
+  QTest::keyClick(canvas, Qt::Key_F2);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(document->document().layerAt(0)->name(), renamed);
+  QVERIFY(document->isModified());
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Initial layer"));
+  QVERIFY(!document->isModified());
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerAt(0)->name(), renamed);
+  QVERIFY(document->isModified());
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerAt(0)->name(), renamed);
 }
 
 QTEST_MAIN(MainWindowTest)

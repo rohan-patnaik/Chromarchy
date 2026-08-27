@@ -42,6 +42,7 @@ private:
   void layerItemChanged(QListWidgetItem* item);
   void addLayer();
   void duplicateLayer();
+  void renameLayer();
   void removeLayer();
   void mergeLayerDown();
   void flattenDocument();
@@ -62,6 +63,7 @@ private:
   QAction* redoAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
+  QAction* renameLayerAction_ = nullptr;
   QAction* removeLayerAction_ = nullptr;
   QAction* mergeDownAction_ = nullptr;
   QAction* flattenAction_ = nullptr;

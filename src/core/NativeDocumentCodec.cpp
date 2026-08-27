@@ -15,7 +15,6 @@ namespace chromarchy {
 namespace {
 
 constexpr char magic[] = {'C', 'H', 'R', 'M', 'D', 'C', '0', '1'};
-constexpr quint32 maximumNameBytes = 4'096;
 constexpr qsizetype tileByteCount =
     TiledImage::tileExtent * TiledImage::tileExtent * 4;
 constexpr quint32 maximumCompressedTileBytes =
@@ -155,7 +154,7 @@ NativeDocumentWriteResult NativeDocumentCodec::save(const Document& document,
     }
     const auto id = layer.id_.toRfc4122();
     const auto name = layer.name_.toUtf8();
-    if (name.size() > maximumNameBytes) {
+    if (name.size() > NativeDocumentCodec::maximumLayerNameBytes) {
       output.cancelWriting();
       return {.error = QStringLiteral("A layer name is too long to save.")};
     }
@@ -305,7 +304,8 @@ NativeDocumentLoadResult NativeDocumentCodec::load(const QString& filePath) {
     QByteArray idBytes;
     QByteArray nameBytes;
     if (!readBytes(stream, 16, idBytes) || idBytes.size() != 16 ||
-        !readBytes(stream, maximumNameBytes, nameBytes)) {
+        !readBytes(stream, NativeDocumentCodec::maximumLayerNameBytes,
+                   nameBytes)) {
       return {.error = streamError(QStringLiteral("layer identity"))};
     }
 

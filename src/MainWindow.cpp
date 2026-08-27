@@ -16,9 +16,11 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
 #include <QStatusBar>
@@ -157,6 +159,10 @@ void MainWindow::createActions() {
   duplicateLayerAction_ = layerMenu->addAction(QStringLiteral("&Duplicate Layer"), this,
                                                &MainWindow::duplicateLayer);
   duplicateLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
+  renameLayerAction_ = layerMenu->addAction(QStringLiteral("&Rename Layer…"), this,
+                                            &MainWindow::renameLayer);
+  renameLayerAction_->setObjectName(QStringLiteral("renameLayerAction"));
+  renameLayerAction_->setShortcut(QKeySequence(Qt::Key_F2));
   removeLayerAction_ = layerMenu->addAction(QStringLiteral("&Remove Layer"), this,
                                             &MainWindow::removeLayer);
   removeLayerAction_->setShortcut(QKeySequence::Delete);
@@ -538,6 +544,18 @@ void MainWindow::layerItemChanged(QListWidgetItem* item) {
       return;
     }
     const auto name = item->text().trimmed();
+    if (layer && (name.isEmpty() ||
+                  name.toUtf8().size() >
+                      chromarchy::NativeDocumentCodec::maximumLayerNameBytes)) {
+      updatingLayers_ = true;
+      item->setText(layer->name());
+      updatingLayers_ = false;
+      statusBar()->showMessage(
+          QStringLiteral("Layer names must use 1 to %1 UTF-8 bytes.")
+              .arg(chromarchy::NativeDocumentCodec::maximumLayerNameBytes),
+          5000);
+      return;
+    }
     if (layer && !name.isEmpty() && layer->name() != name) {
       view->performCommand(QStringLiteral("Rename layer"),
                            [index, name](Document& document) {
@@ -572,6 +590,75 @@ void MainWindow::duplicateLayer() {
                            return document.duplicateLayer(index);
                          });
   }
+}
+
+void MainWindow::renameLayer() {
+  auto* view = currentDocument();
+  if (!view) {
+    return;
+  }
+  const auto index = view->document().activeLayerIndex();
+  const auto* layer = view->document().layerAt(index);
+  if (!layer) {
+    return;
+  }
+  const auto originalName = layer->name();
+
+  QDialog dialog(this);
+  dialog.setObjectName(QStringLiteral("renameLayerDialog"));
+  dialog.setAccessibleName(QStringLiteral("Rename selected layer"));
+  dialog.setAccessibleDescription(
+      QStringLiteral("Enter a bounded name for the selected layer"));
+  dialog.setWindowTitle(QStringLiteral("Rename Layer"));
+  auto* layout = new QFormLayout(&dialog);
+  auto* editor = new QLineEdit(originalName, &dialog);
+  editor->setObjectName(QStringLiteral("layerNameEditor"));
+  editor->setAccessibleName(QStringLiteral("Layer name"));
+  editor->setAccessibleDescription(
+      QStringLiteral("Name stored with the selected layer"));
+  editor->setMaxLength(
+      static_cast<int>(
+          chromarchy::NativeDocumentCodec::maximumLayerNameBytes));
+  layout->addRow(QStringLiteral("Layer name"), editor);
+  auto* buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Rename"));
+  buttons->setObjectName(QStringLiteral("renameLayerButtons"));
+  buttons->setAccessibleName(QStringLiteral("Rename layer actions"));
+  buttons->setAccessibleDescription(
+      QStringLiteral("Apply the new name or cancel without changes"));
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  layout->addRow(buttons);
+  QWidget::setTabOrder(editor, buttons);
+  editor->selectAll();
+  editor->setFocus();
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  const auto name = editor->text().trimmed();
+  if (name.isEmpty() ||
+      name.toUtf8().size() >
+          chromarchy::NativeDocumentCodec::maximumLayerNameBytes) {
+    statusBar()->showMessage(
+        QStringLiteral("Layer names must use 1 to %1 UTF-8 bytes.")
+            .arg(chromarchy::NativeDocumentCodec::maximumLayerNameBytes),
+        5000);
+    return;
+  }
+  if (name == originalName) {
+    return;
+  }
+  view->performCommand(QStringLiteral("Rename layer"),
+                       [index, name](Document& document) {
+                         auto* changed = document.layerAt(index);
+                         if (!changed) {
+                           return false;
+                         }
+                         changed->setName(name);
+                         return true;
+                       });
 }
 
 void MainWindow::removeLayer() {
@@ -686,6 +773,7 @@ void MainWindow::updateActions() {
                            : QStringLiteral("&Redo"));
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
+  renameLayerAction_->setEnabled(hasDocument);
   removeLayerAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
   mergeDownAction_->setEnabled(
       hasDocument && view->document().activeLayerIndex() > 0);

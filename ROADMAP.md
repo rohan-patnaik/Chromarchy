@@ -104,6 +104,9 @@ dialog/action traversal and live AT-SPI/screen-reader verification remain open.
 The single-document Unsaved Changes prompt now exposes named Save, Discard, and
 Cancel actions with deterministic focus/default/escape behavior; keyboard
 tests cover all three choices and reopen the native Save result.
+Layer rename now has an explicit F2 action and accessible bounded dialog;
+offscreen tests cover cancel, over-budget rejection, Unicode rename,
+undo/redo dirty-state identity, and native save/reopen equivalence.
 
 ### Phase 2 — close M0/M1 local workflows
 

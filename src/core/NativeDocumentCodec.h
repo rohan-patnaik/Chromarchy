@@ -31,6 +31,7 @@ public:
   static constexpr quint32 formatVersion = 2;
   static constexpr auto extension = ".chromarchy";
   static constexpr quint32 maximumLayerCount = 10'000;
+  static constexpr quint32 maximumLayerNameBytes = 4'096;
   static constexpr quint64 maximumNativeFileBytes = 64ULL * 1024ULL * 1024ULL;
   static constexpr quint64 maximumCompressedStorageBytes =
       32ULL * 1024ULL * 1024ULL;

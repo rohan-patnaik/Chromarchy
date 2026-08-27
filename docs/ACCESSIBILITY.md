@@ -9,6 +9,9 @@ height, and action controls, with explicit dimension focus order.
 The Unsaved Changes prompt has stable dialog and action metadata, explicit
 Save-to-Discard-to-Cancel focus order, Save as the default action, and Cancel
 as the Escape action.
+The Rename Layer dialog exposes a named, described text editor and action
+group, bounds editor input, and is reachable with F2 without moving focus to
+the layers panel.
 
 `MainWindowTest` queries Qt's accessibility interfaces offscreen and verifies
 that the core workspace objects have non-empty roles, stable names, and
@@ -21,6 +24,9 @@ Enter, and verifies that Escape cancels without adding another document.
 Close-prompt tests drive Escape/Cancel, tab-and-Space/Discard, and
 Return/Save from the focused controls; the save path is reopened to verify that
 the edit persisted before the tab closed.
+The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
+an over-budget UTF-8 name without dirtying the document, Unicode rename,
+undo/redo dirty-state identity, and save/reopen persistence.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
