@@ -154,6 +154,7 @@ if(BUILD_TESTING)
   add_test(NAME chromarchy_main_window COMMAND chromarchy_main_window_tests)
   set_tests_properties(chromarchy_main_window PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30
   )
 
   qt_add_executable(chromarchy_core_benchmarks benchmarks/CoreBenchmark.cpp)

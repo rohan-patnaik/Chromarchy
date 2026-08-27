@@ -163,7 +163,6 @@ void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
         qobject_cast<QDialog*>(QApplication::activeModalWidget());
     if (!dialog) {
       dialogError = QStringLiteral("New Document dialog was not modal");
-      QApplication::closeAllWindows();
       return;
     }
     if (dialog->objectName() != QStringLiteral("newDocumentDialog") ||
@@ -194,7 +193,13 @@ void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
     }
     height->selectAll();
     QTest::keyClicks(height, QStringLiteral("240"));
-    QTest::keyClick(dialog, Qt::Key_Return);
+    QTimer::singleShot(500, dialog, [dialog, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Return did not close New Document");
+      }
+      dialog->reject();
+    });
+    QTest::keyClick(dialog->focusWidget(), Qt::Key_Return);
   });
 
   QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
@@ -206,15 +211,27 @@ void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
   QVERIFY(document->isModified());
   QCOMPARE(document->accessibleName(), QStringLiteral("Document Untitled 1"));
 
+  dialogError.clear();
   QTimer::singleShot(0, &window, [&dialogError] {
     auto* dialog =
         qobject_cast<QDialog*>(QApplication::activeModalWidget());
     if (!dialog) {
       dialogError = QStringLiteral("Cancel dialog was not modal");
-      QApplication::closeAllWindows();
       return;
     }
-    QTest::keyClick(dialog, Qt::Key_Escape);
+    auto* width = requiredChild<QSpinBox>(*dialog, "newDocumentWidth");
+    if (!width || dialog->focusWidget() != width) {
+      dialogError = QStringLiteral("Width was not initially focused");
+      dialog->reject();
+      return;
+    }
+    QTimer::singleShot(500, dialog, [dialog, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Escape did not close New Document");
+      }
+      dialog->reject();
+    });
+    QTest::keyClick(dialog->focusWidget(), Qt::Key_Escape);
   });
   QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
   QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
