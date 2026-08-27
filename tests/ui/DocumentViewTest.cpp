@@ -16,6 +16,8 @@ class DocumentViewTest final : public QObject {
 private slots:
   void noOpSelectionsPreserveSavedState();
   void transparentMergeElisionSurvivesUndoRedoAndSave();
+  void tracksSavedRevisionAcrossUndoRedoAndBranching();
+  void evictedSavedRevisionNeverAppearsClean();
 };
 
 void DocumentViewTest::noOpSelectionsPreserveSavedState() {
@@ -102,6 +104,89 @@ void DocumentViewTest::transparentMergeElisionSurvivesUndoRedoAndSave() {
   QCOMPARE(loaded.document->layerAt(0)->pixels().allocatedTileCount(), 0);
   QCOMPARE(loaded.document->composite().pixelColor(QPoint(4, 5)),
            QColor(Qt::transparent));
+}
+
+void DocumentViewTest::tracksSavedRevisionAcrossUndoRedoAndBranching() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto document = Document::create(QSize(64, 64));
+  QVERIFY(document);
+  DocumentView view(std::move(*document), QStringLiteral("Revision"), {}, true);
+  QVERIFY(view.isModified());
+  const auto path = directory.filePath(QStringLiteral("revision.chromarchy"));
+  QVERIFY(view.save(path));
+  QVERIFY(!view.isModified());
+
+  QVERIFY(view.performCommand(QStringLiteral("Select all"), [](Document& changed) {
+    return changed.selection().selectAll();
+  }));
+  QVERIFY(view.isModified());
+  QVERIFY(view.undo());
+  QVERIFY(!view.isModified());
+  QVERIFY(view.redo());
+  QVERIFY(view.isModified());
+
+  QVERIFY(view.save(path));
+  QVERIFY(!view.isModified());
+  QVERIFY(view.undo());
+  QVERIFY(view.isModified());
+  QVERIFY(view.redo());
+  QVERIFY(!view.isModified());
+
+  QVERIFY(view.undo());
+  QVERIFY(view.performCommand(QStringLiteral("Select rectangle"),
+                              [](Document& changed) {
+                                return changed.selection().selectRectangle(
+                                    QRect(2, 3, 10, 11));
+                              }));
+  QVERIFY(view.isModified());
+  QVERIFY(!view.history().canRedo());
+
+  const auto missingPath =
+      directory.filePath(QStringLiteral("missing/revision.chromarchy"));
+  QVERIFY(!view.save(missingPath));
+  QVERIFY(view.isModified());
+
+  auto cleanDocument = Document::create(QSize(64, 64));
+  QVERIFY(cleanDocument);
+  DocumentView cleanView(std::move(*cleanDocument), QStringLiteral("Clean"), {},
+                         false);
+  QVERIFY(!cleanView.isModified());
+  QVERIFY(cleanView.performCommand(QStringLiteral("Select all"),
+                                   [](Document& changed) {
+                                     return changed.selection().selectAll();
+                                   }));
+  QVERIFY(cleanView.isModified());
+  QVERIFY(cleanView.undo());
+  QVERIFY(!cleanView.isModified());
+}
+
+void DocumentViewTest::evictedSavedRevisionNeverAppearsClean() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto document = Document::create(QSize(64, 64));
+  QVERIFY(document);
+  DocumentView view(std::move(*document), QStringLiteral("Evicted"), {}, true);
+  const auto path = directory.filePath(QStringLiteral("evicted.chromarchy"));
+  QVERIFY(view.save(path));
+
+  for (int index = 0;
+       index <= chromarchy::DocumentHistory::defaultCommandLimit; ++index) {
+    const QPoint position(index % 64, index / 64);
+    QVERIFY(view.performCommand(QStringLiteral("Move selection"),
+                                [position](Document& changed) {
+                                  return changed.selection().selectRectangle(
+                                      QRect(position, QSize(1, 1)));
+                                }));
+  }
+  QCOMPARE(view.history().size(),
+           chromarchy::DocumentHistory::defaultCommandLimit);
+  QVERIFY(view.isModified());
+
+  while (view.undo()) {
+    QVERIFY(view.isModified());
+  }
+  QVERIFY(view.isModified());
 }
 
 QTEST_MAIN(DocumentViewTest)

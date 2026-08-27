@@ -7,6 +7,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <optional>
 
 namespace chromarchy {
 
@@ -40,12 +41,15 @@ signals:
   void commandFailed(const QString& detail);
 
 private:
+  void refreshModifiedFromHistory();
+
   Document document_;
   DocumentHistory history_;
   CanvasWidget* canvas_ = nullptr;  // Owned by QObject parent.
   QString displayName_;
   QString filePath_;
   bool modified_ = false;
+  std::optional<quint64> savedStateId_;
 };
 
 }  // namespace chromarchy

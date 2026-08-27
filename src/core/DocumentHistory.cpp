@@ -75,6 +75,7 @@ bool DocumentHistory::execute(std::unique_ptr<DocumentCommand> command,
 
   discardRedo();
   commands_.push_back(std::move(command));
+  stateIds_.push_back(nextStateId_++);
   cursor_ = static_cast<qsizetype>(commands_.size());
   recalculateEstimatedBytes(document);
   trimToLimits(document);
@@ -104,7 +105,9 @@ bool DocumentHistory::redo(Document& document) {
 }
 
 void DocumentHistory::clear() {
+  const auto retainedStateId = currentStateId();
   commands_.clear();
+  stateIds_ = {retainedStateId};
   cursor_ = 0;
   estimatedBytes_ = 0;
 }
@@ -135,10 +138,15 @@ quint64 DocumentHistory::estimatedBytes() const noexcept {
   return estimatedBytes_;
 }
 
+quint64 DocumentHistory::currentStateId() const noexcept {
+  return stateIds_[static_cast<size_t>(cursor_)];
+}
+
 void DocumentHistory::discardRedo() {
   while (static_cast<qsizetype>(commands_.size()) > cursor_) {
     commands_.pop_back();
   }
+  stateIds_.resize(static_cast<size_t>(cursor_ + 1));
 }
 
 void DocumentHistory::recalculateEstimatedBytes(const Document& document) {
@@ -166,11 +174,14 @@ void DocumentHistory::trimToLimits(const Document& document) {
          (static_cast<qsizetype>(commands_.size()) > commandLimit_ ||
           estimatedBytes_ > byteBudget_)) {
     if (cursor_ == 0) {
+      const auto retainedStateId = currentStateId();
       commands_.clear();
+      stateIds_ = {retainedStateId};
       estimatedBytes_ = 0;
       return;
     }
     commands_.erase(commands_.begin());
+    stateIds_.erase(stateIds_.begin());
     --cursor_;
     recalculateEstimatedBytes(document);
   }

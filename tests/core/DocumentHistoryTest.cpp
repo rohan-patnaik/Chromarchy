@@ -19,6 +19,14 @@ std::unique_ptr<SnapshotCommand> pixelCommand(const Document& document,
                                            std::move(after));
 }
 
+std::unique_ptr<SnapshotCommand> renameCommand(const Document& document,
+                                               QString name) {
+  auto after = document;
+  after.layerAt(0)->setName(name);
+  return std::make_unique<SnapshotCommand>(QStringLiteral("Rename"), document,
+                                           std::move(after));
+}
+
 }  // namespace
 
 class DocumentHistoryTest final : public QObject {
@@ -30,6 +38,7 @@ private slots:
   void enforcesMemoryAndCountBounds();
   void largePixelStorageDoesNotBlockMetadataUndo();
   void undoEvictsRedoStorageOverBudget();
+  void assignsStableStateIdsAcrossHistoryNavigation();
 };
 
 void DocumentHistoryTest::executesUndoAndRedo() {
@@ -128,6 +137,69 @@ void DocumentHistoryTest::undoEvictsRedoStorageOverBudget() {
   QVERIFY(history.estimatedBytes() <= budget);
   QCOMPARE(history.size(), 0);
   QVERIFY(!history.canRedo());
+}
+
+void DocumentHistoryTest::assignsStableStateIdsAcrossHistoryNavigation() {
+  auto document = Document::create(QSize(32, 32));
+  QVERIFY(document);
+  DocumentHistory history(DocumentHistory::defaultByteBudget, 2);
+  const auto initialState = history.currentStateId();
+
+  QVERIFY(history.execute(pixelCommand(*document, QPoint(1, 1), Qt::red,
+                                       QStringLiteral("Red")),
+                          *document));
+  const auto redState = history.currentStateId();
+  QVERIFY(redState != initialState);
+  QVERIFY(history.undo(*document));
+  QCOMPARE(history.currentStateId(), initialState);
+  QVERIFY(history.redo(*document));
+  QCOMPARE(history.currentStateId(), redState);
+
+  QVERIFY(history.undo(*document));
+  QVERIFY(history.execute(pixelCommand(*document, QPoint(1, 1), Qt::blue,
+                                       QStringLiteral("Blue")),
+                          *document));
+  const auto blueState = history.currentStateId();
+  QVERIFY(blueState != initialState);
+  QVERIFY(blueState != redState);
+  QVERIFY(!history.canRedo());
+
+  QVERIFY(history.execute(pixelCommand(*document, QPoint(2, 2), Qt::green,
+                                       QStringLiteral("Green")),
+                          *document));
+  const auto greenState = history.currentStateId();
+  QVERIFY(history.execute(pixelCommand(*document, QPoint(3, 3), Qt::yellow,
+                                       QStringLiteral("Yellow")),
+                          *document));
+  QCOMPARE(history.size(), 2);
+  const auto currentState = history.currentStateId();
+  QVERIFY(history.undo(*document));
+  QCOMPARE(history.currentStateId(), greenState);
+  QVERIFY(history.redo(*document));
+  QCOMPARE(history.currentStateId(), currentState);
+  history.clear();
+  QCOMPARE(history.currentStateId(), currentState);
+
+  auto probeDocument = Document::create(QSize(32, 32));
+  QVERIFY(probeDocument);
+  DocumentHistory probe;
+  QVERIFY(probe.execute(renameCommand(*probeDocument, QStringLiteral("One")),
+                        *probeDocument));
+  const auto oneCommandBytes = probe.estimatedBytes();
+  QVERIFY(oneCommandBytes > 0);
+
+  auto budgetDocument = Document::create(QSize(32, 32));
+  QVERIFY(budgetDocument);
+  DocumentHistory byteBounded(oneCommandBytes + oneCommandBytes / 2, 10);
+  QVERIFY(byteBounded.execute(
+      renameCommand(*budgetDocument, QStringLiteral("One")), *budgetDocument));
+  const auto retainedByteBoundedState = byteBounded.currentStateId();
+  QVERIFY(byteBounded.execute(
+      renameCommand(*budgetDocument, QStringLiteral("Two")), *budgetDocument));
+  QCOMPARE(byteBounded.size(), 1);
+  QVERIFY(byteBounded.undo(*budgetDocument));
+  QCOMPARE(byteBounded.currentStateId(), retainedByteBoundedState);
+  QCOMPARE(budgetDocument->layerAt(0)->name(), QStringLiteral("One"));
 }
 
 QTEST_APPLESS_MAIN(DocumentHistoryTest)

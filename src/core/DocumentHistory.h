@@ -57,6 +57,7 @@ public:
   [[nodiscard]] QString redoDescription() const;
   [[nodiscard]] qsizetype size() const noexcept;
   [[nodiscard]] quint64 estimatedBytes() const noexcept;
+  [[nodiscard]] quint64 currentStateId() const noexcept;
 
 private:
   void discardRedo();
@@ -64,7 +65,9 @@ private:
   void trimToLimits(const Document& document);
 
   std::vector<std::unique_ptr<DocumentCommand>> commands_;
+  std::vector<quint64> stateIds_{0};
   qsizetype cursor_ = 0;
+  quint64 nextStateId_ = 1;
   quint64 estimatedBytes_ = 0;
   quint64 byteBudget_;
   qsizetype commandLimit_;

@@ -70,6 +70,13 @@ The live RGBA8 document path now canonicalizes byte-zero pixel tiles produced
 by merge, flatten, and native v1/v2 load without changing the native wire
 format; declared legacy records continue to consume the existing hostile-input
 budgets before decode.
+Bounded snapshot history assigns a stable in-process identity to each retained
+document state. The document view associates that identity with an initially
+clean or explicitly established clean state; a native save establishes it only
+after success. Undo/redo therefore returns to clean exactly at that state,
+failed saves remain dirty, and a new branch cannot inherit a discarded save
+point. These identities are dirty-state bookkeeping, not persisted document
+revisions.
 
 ### Phase 2 — close M0/M1 local workflows
 

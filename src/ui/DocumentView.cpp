@@ -16,6 +16,9 @@ DocumentView::DocumentView(Document document, QString displayName,
       displayName_(std::move(displayName)),
       filePath_(std::move(filePath)),
       modified_(modified) {
+  if (!modified_) {
+    savedStateId_ = history_.currentStateId();
+  }
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   canvas_ = new CanvasWidget(&document_, this);
@@ -55,6 +58,21 @@ bool DocumentView::isModified() const noexcept {
 }
 
 void DocumentView::setModified(bool modified) {
+  if (modified) {
+    savedStateId_.reset();
+  } else {
+    savedStateId_ = history_.currentStateId();
+  }
+  if (modified_ == modified) {
+    return;
+  }
+  modified_ = modified;
+  emit titleChanged(tabTitle());
+}
+
+void DocumentView::refreshModifiedFromHistory() {
+  const bool modified =
+      !savedStateId_ || *savedStateId_ != history_.currentStateId();
   if (modified_ == modified) {
     return;
   }
@@ -78,7 +96,7 @@ bool DocumentView::performCommand(
             .arg(description));
     return false;
   }
-  setModified(true);
+  refreshModifiedFromHistory();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -88,7 +106,7 @@ bool DocumentView::undo() {
   if (!history_.undo(document_)) {
     return false;
   }
-  setModified(true);
+  refreshModifiedFromHistory();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -98,7 +116,7 @@ bool DocumentView::redo() {
   if (!history_.redo(document_)) {
     return false;
   }
-  setModified(true);
+  refreshModifiedFromHistory();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -117,6 +135,7 @@ NativeDocumentWriteResult DocumentView::save(const QString& filePath) {
   if (result) {
     filePath_ = QFileInfo(filePath).absoluteFilePath();
     displayName_ = QFileInfo(filePath).fileName();
+    savedStateId_ = history_.currentStateId();
     modified_ = false;
     emit titleChanged(tabTitle());
   }
