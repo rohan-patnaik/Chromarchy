@@ -101,6 +101,9 @@ keyboard dispatch for selection, layer creation/duplication, undo, and redo.
 The bounded New Document dialog additionally has named controls and tested
 keyboard create/cancel paths. This is an offscreen-tested subset; remaining
 dialog/action traversal and live AT-SPI/screen-reader verification remain open.
+The single-document Unsaved Changes prompt now exposes named Save, Discard, and
+Cancel actions with deterministic focus/default/escape behavior; keyboard
+tests cover all three choices and reopen the native Save result.
 
 ### Phase 2 — close M0/M1 local workflows
 

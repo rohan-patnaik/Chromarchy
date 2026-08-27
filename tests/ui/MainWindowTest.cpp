@@ -1,9 +1,12 @@
 #include "MainWindow.h"
 
+#include "core/NativeDocumentCodec.h"
 #include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
 
+#include <QAbstractButton>
 #include <QAccessible>
+#include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QDialog>
@@ -11,6 +14,7 @@
 #include <QDoubleSpinBox>
 #include <QImage>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -41,6 +45,17 @@ bool hasAccessibleMetadata(QWidget* widget) {
          interface->role() != QAccessible::NoRole;
 }
 
+bool hasStandardShortcut(const QAction* action,
+                         QKeySequence::StandardKey standardKey) {
+  const auto bindings = QKeySequence::keyBindings(standardKey);
+  for (const auto& shortcut : action->shortcuts()) {
+    if (bindings.contains(shortcut)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 class MainWindowTest final : public QObject {
@@ -51,6 +66,8 @@ private slots:
   void exposesCoreWorkspaceAccessibility();
   void supportsCoreKeyboardWorkflow();
   void createsAndCancelsNewDocumentByKeyboard();
+  void cancelsAndDiscardsClosePromptByKeyboard();
+  void savesDirtyDocumentBeforeCloseByKeyboard();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -236,6 +253,167 @@ void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
   QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
   QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
   QCOMPARE(tabs->count(), 1);
+}
+
+void MainWindowTest::cancelsAndDiscardsClosePromptByKeyboard() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto imagePath = directory.filePath(QStringLiteral("dirty.png"));
+  QImage image(QSize(8, 6), QImage::Format_RGBA8888);
+  image.fill(QColor(12, 34, 56, 200));
+  QVERIFY(image.save(imagePath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(imagePath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* closeAction =
+      requiredChild<QAction>(window, "closeDocumentAction");
+  QVERIFY(tabs);
+  QVERIFY(closeAction);
+  QVERIFY(closeAction->isEnabled());
+  QVERIFY(hasStandardShortcut(closeAction, QKeySequence::Close));
+  QCOMPARE(tabs->count(), 1);
+
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* prompt =
+        qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+    if (!prompt) {
+      dialogError = QStringLiteral("Unsaved Changes prompt was not modal");
+      return;
+    }
+    auto* save = prompt->button(QMessageBox::Save);
+    auto* discard = prompt->button(QMessageBox::Discard);
+    auto* cancel = prompt->button(QMessageBox::Cancel);
+    if (prompt->objectName() != QStringLiteral("unsavedChangesDialog") ||
+        !hasAccessibleMetadata(prompt) || !save || !discard || !cancel ||
+        !hasAccessibleMetadata(save) || !hasAccessibleMetadata(discard) ||
+        !hasAccessibleMetadata(cancel) ||
+        save->objectName() != QStringLiteral("saveChangesButton") ||
+        discard->objectName() != QStringLiteral("discardChangesButton") ||
+        cancel->objectName() != QStringLiteral("cancelCloseButton")) {
+      dialogError = QStringLiteral("Unsaved Changes metadata is incomplete");
+      prompt->reject();
+      return;
+    }
+    if (prompt->focusWidget() != save) {
+      dialogError = QStringLiteral("Save was not initially focused");
+      prompt->reject();
+      return;
+    }
+    QTimer::singleShot(500, prompt, [prompt, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Escape did not cancel close");
+      }
+      prompt->reject();
+    });
+    QTest::keyClick(prompt->focusWidget(), Qt::Key_Escape);
+  });
+  closeAction->trigger();
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(tabs->count(), 1);
+
+  dialogError.clear();
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* prompt =
+        qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+    if (!prompt) {
+      dialogError = QStringLiteral("Discard prompt was not modal");
+      return;
+    }
+    auto* save = prompt->button(QMessageBox::Save);
+    auto* discard = prompt->button(QMessageBox::Discard);
+    if (!save || !discard || prompt->focusWidget() != save) {
+      dialogError = QStringLiteral("Discard prompt focus was incomplete");
+      prompt->reject();
+      return;
+    }
+    QTest::keyClick(prompt->focusWidget(), Qt::Key_Tab);
+    if (prompt->focusWidget() != discard) {
+      dialogError = QStringLiteral("Save does not tab to Discard");
+      prompt->reject();
+      return;
+    }
+    QTimer::singleShot(500, prompt, [prompt, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Space did not discard changes");
+      }
+      prompt->reject();
+    });
+    QTest::keyClick(prompt->focusWidget(), Qt::Key_Space);
+    if (prompt->clickedButton() != discard) {
+      dialogError = QStringLiteral("Space did not activate Discard");
+      prompt->reject();
+    }
+  });
+  closeAction->trigger();
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(tabs->count(), 0);
+}
+
+void MainWindowTest::savesDirtyDocumentBeforeCloseByKeyboard() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("close-save.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* closeAction =
+      requiredChild<QAction>(window, "closeDocumentAction");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(tabs);
+  QVERIFY(canvas);
+  QVERIFY(closeAction);
+  QVERIFY(closeAction->isEnabled());
+  QVERIFY(hasStandardShortcut(closeAction, QKeySequence::Close));
+  QVERIFY(document);
+  QVERIFY(!document->isModified());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_A, Qt::ControlModifier);
+  QVERIFY(document->isModified());
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{255});
+
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* prompt =
+        qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+    if (!prompt) {
+      dialogError = QStringLiteral("Save prompt was not modal");
+      return;
+    }
+    auto* save = prompt->button(QMessageBox::Save);
+    if (!save || prompt->focusWidget() != save) {
+      dialogError = QStringLiteral("Save prompt focus was incomplete");
+      prompt->reject();
+      return;
+    }
+    QTimer::singleShot(500, prompt, [prompt, &dialogError] {
+      if (dialogError.isEmpty()) {
+        dialogError = QStringLiteral("Return did not save before close");
+      }
+      prompt->reject();
+    });
+    QTest::keyClick(prompt->focusWidget(), Qt::Key_Return);
+  });
+  closeAction->trigger();
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QCOMPARE(tabs->count(), 0);
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
 }
 
 QTEST_MAIN(MainWindowTest)

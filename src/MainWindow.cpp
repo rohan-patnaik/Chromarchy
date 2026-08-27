@@ -5,6 +5,7 @@
 #include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QCloseEvent>
 #include <QCheckBox>
@@ -95,6 +96,7 @@ void MainWindow::createActions() {
   closeAction_ = fileMenu->addAction(QStringLiteral("&Close Document"), this, [this] {
     closeDocumentTab(tabs_->currentIndex());
   });
+  closeAction_->setObjectName(QStringLiteral("closeDocumentAction"));
   closeAction_->setShortcut(QKeySequence::Close);
   fileMenu->addSeparator();
   fileMenu->addAction(QStringLiteral("E&xit"), this, &QWidget::close,
@@ -433,11 +435,35 @@ bool MainWindow::canClose(DocumentView* view) {
   if (!view->isModified()) {
     return true;
   }
-  const auto choice = QMessageBox::warning(
-      this, QStringLiteral("Unsaved Changes"),
+  QMessageBox prompt(
+      QMessageBox::Warning, QStringLiteral("Unsaved Changes"),
       QStringLiteral("Save changes to %1?").arg(view->displayName()),
-      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-      QMessageBox::Save);
+      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, this);
+  prompt.setObjectName(QStringLiteral("unsavedChangesDialog"));
+  prompt.setAccessibleName(QStringLiteral("Unsaved document changes"));
+  prompt.setAccessibleDescription(
+      QStringLiteral("Choose whether to save changes before closing"));
+  auto* saveButton = prompt.button(QMessageBox::Save);
+  auto* discardButton = prompt.button(QMessageBox::Discard);
+  auto* cancelButton = prompt.button(QMessageBox::Cancel);
+  saveButton->setObjectName(QStringLiteral("saveChangesButton"));
+  saveButton->setAccessibleName(QStringLiteral("Save changes"));
+  saveButton->setAccessibleDescription(
+      QStringLiteral("Save changes and close the document"));
+  discardButton->setObjectName(QStringLiteral("discardChangesButton"));
+  discardButton->setAccessibleName(QStringLiteral("Discard changes"));
+  discardButton->setAccessibleDescription(
+      QStringLiteral("Close the document without saving changes"));
+  cancelButton->setObjectName(QStringLiteral("cancelCloseButton"));
+  cancelButton->setAccessibleName(QStringLiteral("Cancel close"));
+  cancelButton->setAccessibleDescription(
+      QStringLiteral("Keep the document open"));
+  QWidget::setTabOrder(saveButton, discardButton);
+  QWidget::setTabOrder(discardButton, cancelButton);
+  prompt.setDefaultButton(QMessageBox::Save);
+  prompt.setEscapeButton(QMessageBox::Cancel);
+  prompt.exec();
+  const auto choice = prompt.standardButton(prompt.clickedButton());
   if (choice == QMessageBox::Cancel) {
     return false;
   }
