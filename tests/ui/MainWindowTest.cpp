@@ -1371,7 +1371,24 @@ void MainWindowTest::flattensByKeyboardAndPersistsComposite() {
   QTest::keyClick(lock, Qt::Key_Space);
   QVERIFY(document->document().layerAt(middleIndex)->isLocked());
   QVERIFY(document->isModified());
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Up);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QVERIFY(!document->document().layerAt(topIndex)->isLocked());
   QVERIFY(!flattenAction->isEnabled());
+  const auto lockedHistorySize = document->history().size();
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_L, Qt::AltModifier);
+  QTRY_VERIFY(QApplication::activePopupWidget());
+  auto* lockedLayerMenu =
+      qobject_cast<QMenu*>(QApplication::activePopupWidget());
+  QVERIFY(lockedLayerMenu);
+  QTest::keyClick(lockedLayerMenu, Qt::Key_F);
+  QCOMPARE(document->document().layerCount(), 3);
+  QCOMPARE(document->history().size(), lockedHistorySize);
+  if (QApplication::activePopupWidget()) {
+    QTest::keyClick(QApplication::activePopupWidget(), Qt::Key_Escape);
+  }
   canvas->setFocus();
   QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
   QVERIFY(!document->document().layerAt(middleIndex)->isLocked());
