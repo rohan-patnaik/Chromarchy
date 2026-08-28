@@ -74,6 +74,12 @@ identity, and native save/reopen for partial-inverted and full selections.
 Equivalent full-rectangle and empty-inverse tile representations are classified
 by semantic canvas coverage rather than by base coverage or tile count alone.
 
+The File → Open Recent menu has a stable accessible name and description. Its
+first nine bounded local entries expose Ctrl+Alt+1 through Ctrl+Alt+9, and
+Ctrl+Alt+Shift+Delete clears stored paths without closing open documents. An
+offscreen keyboard test opens a native recent document, removes an entry that
+disappeared after menu construction without decoding it, and clears the list.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

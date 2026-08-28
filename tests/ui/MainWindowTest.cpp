@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include "RecentDocuments.h"
 #include "core/NativeDocumentCodec.h"
 #include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
@@ -108,6 +109,7 @@ private slots:
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
+  void opensAndClearsRecentDocumentsByKeyboard();
   void renamesLayerByKeyboardAndPersistsUnicode();
   void togglesLayerVisibilityByKeyboardAndPersistsComposite();
   void editsLayerOpacityByKeyboardAndPersistsComposite();
@@ -470,6 +472,76 @@ void MainWindowTest::savesDirtyDocumentBeforeCloseByKeyboard() {
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
   QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
+}
+
+void MainWindowTest::opensAndClearsRecentDocumentsByKeyboard() {
+  QSettings settings;
+  settings.clear();
+  settings.sync();
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto firstPath =
+      directory.filePath(QStringLiteral("first-recent.chromarchy"));
+  const auto secondPath =
+      directory.filePath(QStringLiteral("second-recent.chromarchy"));
+  auto first = chromarchy::Document::create(QSize(8, 6));
+  auto second = chromarchy::Document::create(QSize(9, 7));
+  QVERIFY(first);
+  QVERIFY(second);
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*first, firstPath));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*second, secondPath));
+
+  RecentDocuments recents;
+  recents.add(firstPath);
+  recents.add(secondPath);
+  QCOMPARE(recents.paths(), QStringList({secondPath, firstPath}));
+
+  MainWindow window;
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* recentMenu = requiredChild<QMenu>(window, "openRecentMenu");
+  auto* mostRecent = requiredChild<QAction>(window, "recentDocumentAction0");
+  auto* older = requiredChild<QAction>(window, "recentDocumentAction1");
+  QVERIFY(tabs);
+  QVERIFY(recentMenu);
+  QVERIFY(mostRecent);
+  QVERIFY(older);
+  verifyAccessibleWidget(recentMenu, QStringLiteral("Open recent document"));
+  QCOMPARE(mostRecent->toolTip(), secondPath);
+  QCOMPARE(older->toolTip(), firstPath);
+  QCOMPARE(mostRecent->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_1));
+
+  QVERIFY(QFile::remove(firstPath));
+  older->trigger();
+  QTRY_COMPARE(tabs->count(), 0);
+  QCOMPARE(recents.paths(), QStringList({secondPath}));
+  QTRY_VERIFY(!requiredChild<QAction>(window, "recentDocumentAction1"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  QTest::keyClick(&window, Qt::Key_1,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_COMPARE(tabs->count(), 1);
+  auto* opened = qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(opened);
+  QCOMPARE(opened->filePath(), QFileInfo(secondPath).absoluteFilePath());
+  QCOMPARE(opened->document().size(), QSize(9, 7));
+  QVERIFY(!opened->isModified());
+
+  QTest::keyClick(&window, Qt::Key_Delete,
+                  Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier);
+  QTRY_VERIFY(recents.paths().isEmpty());
+  QTRY_VERIFY(requiredChild<QAction>(window, "noRecentDocumentsAction"));
+  auto* empty = requiredChild<QAction>(window, "noRecentDocumentsAction");
+  auto* clear = requiredChild<QAction>(window, "clearRecentDocumentsAction");
+  QVERIFY(empty);
+  QVERIFY(clear);
+  QVERIFY(!empty->isEnabled());
+  QVERIFY(!clear->isEnabled());
+  QCOMPARE(tabs->count(), 1);
 }
 
 void MainWindowTest::renamesLayerByKeyboardAndPersistsUnicode() {

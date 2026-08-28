@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RecentDocuments.h"
+
 #include <QMainWindow>
 
 class QAction;
@@ -8,6 +10,7 @@ class QCheckBox;
 class QDoubleSpinBox;
 class QListWidget;
 class QListWidgetItem;
+class QMenu;
 class QTabWidget;
 
 namespace chromarchy {
@@ -31,6 +34,11 @@ private:
   void createLayersDock();
   void newDocument();
   void chooseAndOpenFile();
+  void refreshRecentDocumentsMenu();
+  void scheduleRecentDocumentsMenuRefresh();
+  void openRecentDocument(const QString& filePath);
+  void clearRecentDocuments();
+  void recordRecentDocument(const QString& filePath);
   bool saveDocument(chromarchy::DocumentView* view, bool choosePath);
   void exportDocument();
   void addDocumentTab(chromarchy::DocumentView* view);
@@ -55,6 +63,7 @@ private:
 
   QTabWidget* tabs_ = nullptr;       // Owned by QObject parent.
   QListWidget* layers_ = nullptr;    // Owned by QObject parent.
+  QMenu* recentDocumentsMenu_ = nullptr;  // Owned by QObject parent.
   QAction* saveAction_ = nullptr;    // Owned by QObject parent.
   QAction* saveAsAction_ = nullptr;  // Owned by QObject parent.
   QAction* exportAction_ = nullptr;  // Owned by QObject parent.
@@ -76,4 +85,5 @@ private:
   QCheckBox* layerLocked_ = nullptr;   // Owned by QObject parent.
   bool updatingLayers_ = false;
   int untitledCounter_ = 1;
+  RecentDocuments recentDocuments_;
 };

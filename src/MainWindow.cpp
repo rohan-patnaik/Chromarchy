@@ -18,6 +18,7 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
@@ -25,6 +26,7 @@
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 
@@ -76,12 +78,21 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::createActions() {
   auto* fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
+  fileMenu->setObjectName(QStringLiteral("fileMenu"));
   auto* newAction = fileMenu->addAction(QStringLiteral("&New…"), this,
                                         &MainWindow::newDocument);
   newAction->setShortcut(QKeySequence::New);
   auto* openAction = fileMenu->addAction(QStringLiteral("&Open…"), this,
                                          &MainWindow::chooseAndOpenFile);
   openAction->setShortcut(QKeySequence::Open);
+  recentDocumentsMenu_ = fileMenu->addMenu(QStringLiteral("Open &Recent"));
+  recentDocumentsMenu_->setObjectName(QStringLiteral("openRecentMenu"));
+  recentDocumentsMenu_->setAccessibleName(QStringLiteral("Open recent document"));
+  recentDocumentsMenu_->setAccessibleDescription(
+      QStringLiteral("Open or clear the bounded private local file list"));
+  connect(recentDocumentsMenu_, &QMenu::aboutToShow, this,
+          &MainWindow::refreshRecentDocumentsMenu);
+  refreshRecentDocumentsMenu();
   fileMenu->addSeparator();
   saveAction_ = fileMenu->addAction(QStringLiteral("&Save"), this, [this] {
     saveDocument(currentDocument(), false);
@@ -350,6 +361,7 @@ bool MainWindow::openFile(const QString& filePath) {
     }
     addDocumentTab(new DocumentView(std::move(*result.document), info.fileName(),
                                     info.absoluteFilePath(), false, tabs_));
+    recordRecentDocument(info.absoluteFilePath());
     return true;
   }
 
@@ -360,7 +372,73 @@ bool MainWindow::openFile(const QString& filePath) {
   }
   addDocumentTab(new DocumentView(std::move(*result.document), info.fileName(), {},
                                   true, tabs_));
+  recordRecentDocument(info.absoluteFilePath());
   return true;
+}
+
+void MainWindow::refreshRecentDocumentsMenu() {
+  recentDocumentsMenu_->clear();
+  const auto paths = recentDocuments_.paths();
+  for (int index = 0; index < paths.size(); ++index) {
+    const auto& path = paths.at(index);
+    auto name = QFileInfo(path).fileName();
+    name.replace(QLatin1Char('&'), QStringLiteral("&&"));
+    const auto label = index < 9
+                           ? QStringLiteral("&%1 %2").arg(index + 1).arg(name)
+                           : QStringLiteral("%1 %2").arg(index + 1).arg(name);
+    auto* action = recentDocumentsMenu_->addAction(label, this, [this, path] {
+      openRecentDocument(path);
+    });
+    action->setObjectName(QStringLiteral("recentDocumentAction%1").arg(index));
+    action->setToolTip(path);
+    action->setStatusTip(QStringLiteral("Open local file %1").arg(path));
+    if (index < 9) {
+      action->setShortcut(QKeySequence(
+          Qt::CTRL | Qt::ALT | static_cast<Qt::Key>(Qt::Key_1 + index)));
+    }
+  }
+
+  if (paths.isEmpty()) {
+    auto* empty = recentDocumentsMenu_->addAction(
+        QStringLiteral("No Recent Documents"));
+    empty->setObjectName(QStringLiteral("noRecentDocumentsAction"));
+    empty->setEnabled(false);
+  }
+  recentDocumentsMenu_->addSeparator();
+  auto* clear = recentDocumentsMenu_->addAction(
+      QStringLiteral("Clear Recent &Documents"), this,
+      &MainWindow::clearRecentDocuments);
+  clear->setObjectName(QStringLiteral("clearRecentDocumentsAction"));
+  clear->setEnabled(!paths.isEmpty());
+  clear->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT |
+                                  Qt::Key_Delete));
+  clear->setStatusTip(QStringLiteral("Forget all recent file paths"));
+}
+
+void MainWindow::scheduleRecentDocumentsMenuRefresh() {
+  QTimer::singleShot(0, this, &MainWindow::refreshRecentDocumentsMenu);
+}
+
+void MainWindow::openRecentDocument(const QString& filePath) {
+  if (!QFileInfo(filePath).isFile()) {
+    recentDocuments_.remove(filePath);
+    scheduleRecentDocumentsMenuRefresh();
+    statusBar()->showMessage(QStringLiteral("Removed missing recent document"),
+                             3000);
+    return;
+  }
+  openFile(filePath);
+}
+
+void MainWindow::clearRecentDocuments() {
+  recentDocuments_.clear();
+  scheduleRecentDocumentsMenuRefresh();
+  statusBar()->showMessage(QStringLiteral("Recent documents cleared"), 3000);
+}
+
+void MainWindow::recordRecentDocument(const QString& filePath) {
+  recentDocuments_.add(filePath);
+  scheduleRecentDocumentsMenuRefresh();
 }
 
 bool MainWindow::saveDocument(DocumentView* view, bool choosePath) {
@@ -385,6 +463,7 @@ bool MainWindow::saveDocument(DocumentView* view, bool choosePath) {
     showError(QStringLiteral("Could Not Save Document"), result.error);
     return false;
   }
+  recordRecentDocument(QFileInfo(path).absoluteFilePath());
   statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()),
                            3000);
   return true;

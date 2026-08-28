@@ -68,4 +68,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/FORMATS.md"
   install -Dm644 Chromarchy/docs/PIXEL_STORAGE.md \
     "$pkgdir/usr/share/doc/$pkgname/PIXEL_STORAGE.md"
+  install -Dm644 Chromarchy/docs/RECENT_DOCUMENTS.md \
+    "$pkgdir/usr/share/doc/$pkgname/RECENT_DOCUMENTS.md"
 }

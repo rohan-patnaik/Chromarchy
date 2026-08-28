@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "maximumEntries": 20,
+  "maximumPathUtf8Bytes": 4096,
+  "hostileKinds": [
+    "empty",
+    "relative",
+    "missing",
+    "duplicate",
+    "overlong"
+  ],
+  "privacyRule": "Store normalized local paths only; never file content or thumbnails."
+}

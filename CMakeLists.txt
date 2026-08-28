@@ -36,6 +36,8 @@ qt_add_executable(chromarchy
   src/main.cpp
   src/MainWindow.cpp
   src/MainWindow.h
+  src/RecentDocuments.cpp
+  src/RecentDocuments.h
   src/ui/CanvasWidget.cpp
   src/ui/CanvasWidget.h
   src/ui/DocumentView.cpp
@@ -143,6 +145,8 @@ if(BUILD_TESTING)
     tests/ui/MainWindowTest.cpp
     src/MainWindow.cpp
     src/MainWindow.h
+    src/RecentDocuments.cpp
+    src/RecentDocuments.h
     src/ui/CanvasWidget.cpp
     src/ui/CanvasWidget.h
     src/ui/DocumentView.cpp
@@ -156,6 +160,19 @@ if(BUILD_TESTING)
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 30
   )
+
+  qt_add_executable(chromarchy_recent_documents_tests
+    tests/RecentDocumentsTest.cpp
+    src/RecentDocuments.cpp
+    src/RecentDocuments.h
+  )
+  target_link_libraries(chromarchy_recent_documents_tests PRIVATE Qt6::Test)
+  target_include_directories(chromarchy_recent_documents_tests PRIVATE src)
+  target_compile_definitions(chromarchy_recent_documents_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  add_test(NAME chromarchy_recent_documents
+    COMMAND chromarchy_recent_documents_tests)
 
   qt_add_executable(chromarchy_core_benchmarks benchmarks/CoreBenchmark.cpp)
   target_link_libraries(chromarchy_core_benchmarks PRIVATE

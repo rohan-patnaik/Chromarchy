@@ -143,6 +143,12 @@ composite output, sparse storage, undo/redo identity, and native save/reopen.
 Flat pixel-layer removal now has Delete-key and accessible row-remapping
 evidence through sparse payload release/restoration, single-layer no-op action
 state, undo/redo clean identity, and native save/reopen.
+The local recent-document path list now uses the established Qt settings store
+with most-recent ordering, deduplication, missing-file pruning, privacy clear,
+and hard 20-entry/4096-byte path bounds. Open Recent supplies keyboard shortcuts
+for the first nine entries and a keyboard clear action; hostile settings and a
+file disappearing after menu construction are handled without decoding or
+retaining document content.
 
 ### Phase 2 — close M0/M1 local workflows
 

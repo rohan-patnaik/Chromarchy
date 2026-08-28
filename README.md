@@ -26,6 +26,8 @@ ctest --test-dir build --output-on-failure
 
 Core performance workloads and their exact commands are documented in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 Raster codec behavior and the default metadata policy are documented in [docs/FORMATS.md](docs/FORMATS.md).
+Recent-file privacy and resource bounds are documented in
+[docs/RECENT_DOCUMENTS.md](docs/RECENT_DOCUMENTS.md).
 The first Phase 1 typed-pixel and checked byte-layout contracts are documented
 in [docs/PIXEL_STORAGE.md](docs/PIXEL_STORAGE.md).
 
