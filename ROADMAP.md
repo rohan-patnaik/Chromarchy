@@ -111,6 +111,10 @@ Flat layer visibility now exposes stable accessible row names/descriptions and
 checked state across metadata refreshes. A keyboard-only Space toggle is
 covered through composite output, undo/redo clean-state identity, and native
 save/reopen persistence.
+Flat layer opacity now has keyboard-entry evidence for a bounded fractional
+percentage, including the standard accessible value interface, deterministic
+composite output, undo/redo clean-state identity, and native save/reopen
+persistence.
 
 ### Phase 2 — close M0/M1 local workflows
 

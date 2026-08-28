@@ -34,6 +34,10 @@ undo/redo dirty-state identity, and save/reopen persistence.
 The visibility path focuses the layer list, toggles the selected row with
 Space, verifies the accessible checked state and deterministic composite before
 and after undo/redo, then saves and reopens the hidden-layer result.
+The opacity path reaches the bounded percentage spin box by keyboard, enters a
+fractional value, and verifies its standard accessible value range and current
+value. It also covers deterministic composite output, undo/redo saved-state
+identity, retained accessibility state, and native save/reopen equivalence.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

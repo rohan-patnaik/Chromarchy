@@ -97,6 +97,7 @@ private slots:
   void savesDirtyDocumentBeforeCloseByKeyboard();
   void renamesLayerByKeyboardAndPersistsUnicode();
   void togglesLayerVisibilityByKeyboardAndPersistsComposite();
+  void editsLayerOpacityByKeyboardAndPersistsComposite();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -683,6 +684,83 @@ void MainWindowTest::togglesLayerVisibilityByKeyboardAndPersistsComposite() {
   QVERIFY(!reopened.document->layerAt(topIndex)->isVisible());
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
            QColor(220, 10, 20, 255));
+}
+
+void MainWindowTest::editsLayerOpacityByKeyboardAndPersistsComposite() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-opacity.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Base red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Top blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(2, 3), QColor(10, 20, 230, 255)));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* opacity = requiredChild<QDoubleSpinBox>(window, "layerOpacity");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(opacity);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QCOMPARE(opacity->value(), 100.0);
+  QVERIFY(!document->isModified());
+
+  auto* retainedOpacityInterface =
+      QAccessible::queryAccessibleInterface(opacity);
+  QVERIFY(retainedOpacityInterface);
+  auto* retainedValueInterface = retainedOpacityInterface->valueInterface();
+  QVERIFY(retainedValueInterface);
+  QCOMPARE(retainedValueInterface->minimumValue().toDouble(), 0.0);
+  QCOMPARE(retainedValueInterface->maximumValue().toDouble(), 100.0);
+  QCOMPARE(retainedValueInterface->currentValue().toDouble(), 100.0);
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  opacity->setFocus();
+  QCOMPARE(QApplication::focusWidget(), opacity);
+  opacity->selectAll();
+  QTest::keyClicks(opacity, QStringLiteral("37.5"));
+  QTest::keyClick(opacity, Qt::Key_Return);
+  QCOMPARE(document->document().layerAt(topIndex)->opacity(), 0.375);
+  QVERIFY(document->isModified());
+  QCOMPARE(QAccessible::queryAccessibleInterface(opacity),
+           retainedOpacityInterface);
+  QCOMPARE(retainedOpacityInterface->valueInterface(), retainedValueInterface);
+  QCOMPARE(retainedValueInterface->currentValue().toDouble(), 37.5);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(142, 13, 99, 255));
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerAt(topIndex)->opacity(), 1.0);
+  QVERIFY(!document->isModified());
+  QCOMPARE(retainedValueInterface->currentValue().toDouble(), 100.0);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerAt(topIndex)->opacity(), 0.375);
+  QVERIFY(document->isModified());
+  QCOMPARE(retainedValueInterface->currentValue().toDouble(), 37.5);
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerAt(topIndex)->opacity(), 0.375);
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
+           QColor(142, 13, 99, 255));
 }
 
 QTEST_MAIN(MainWindowTest)
