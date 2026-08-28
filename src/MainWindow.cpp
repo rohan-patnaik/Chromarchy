@@ -177,6 +177,7 @@ void MainWindow::createActions() {
   layerMenu->addSeparator();
   mergeDownAction_ = layerMenu->addAction(QStringLiteral("Merge &Down"), this,
                                           &MainWindow::mergeLayerDown);
+  mergeDownAction_->setObjectName(QStringLiteral("mergeDownAction"));
   mergeDownAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
   flattenAction_ = layerMenu->addAction(QStringLiteral("&Flatten Document"), this,
                                         &MainWindow::flattenDocument);
@@ -790,8 +791,14 @@ void MainWindow::updateActions() {
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);
   removeLayerAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
-  mergeDownAction_->setEnabled(
-      hasDocument && view->document().activeLayerIndex() > 0);
+  const auto activeLayer = hasDocument ? view->document().activeLayerIndex() : -1;
+  const auto* mergeUpper =
+      hasDocument ? view->document().layerAt(activeLayer) : nullptr;
+  const auto* mergeLower =
+      hasDocument ? view->document().layerAt(activeLayer - 1) : nullptr;
+  mergeDownAction_->setEnabled(mergeUpper && mergeLower &&
+                               !mergeUpper->isLocked() &&
+                               !mergeLower->isLocked());
   flattenAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
   moveLayerUpAction_->setEnabled(
       hasDocument && view->document().activeLayerIndex() <

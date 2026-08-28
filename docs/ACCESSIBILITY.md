@@ -54,6 +54,10 @@ The duplicate path invokes the documented keyboard shortcut and verifies the
 generated copy name, active accessible row, and retained surviving interface
 through duplicate/undo/redo. Both live layers reference the same COW pixel
 block until mutation, and native save/reopen preserves both pixel payloads.
+The merge-down path invokes Ctrl+E and verifies that the surviving active row
+keeps its accessible interface and name through merge/undo/redo count changes.
+The action exposes correct locked/single-layer enablement, while deterministic
+composite output, sparse storage, dirty identity, and native reopen are checked.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

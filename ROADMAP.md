@@ -128,6 +128,9 @@ refreshes preserve surviving row interfaces instead of clearing the list.
 Pixel-layer duplication now has keyboard and accessible active-row evidence
 through shared COW block identity, unchanged composite output, undo/redo
 clean-state identity, and native save/reopen persistence of both layers.
+Flat merge-down now has Ctrl+E and accessible surviving-row evidence through
+correct lock/single-layer action enablement, deterministic composite output,
+sparse storage, undo/redo clean-state identity, and native save/reopen.
 
 ### Phase 2 — close M0/M1 local workflows
 

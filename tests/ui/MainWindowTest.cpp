@@ -114,6 +114,7 @@ private slots:
   void reordersLayerByKeyboardAndPersistsComposite();
   void createsSparseLayerByKeyboardAndPersists();
   void duplicatesLayerByKeyboardWithCowAndPersists();
+  void mergesLayerByKeyboardAndPersistsComposite();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -1168,6 +1169,147 @@ void MainWindowTest::duplicatesLayerByKeyboardWithCowAndPersists() {
            QColor(220, 10, 20, 255));
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
            QColor(220, 10, 20, 255));
+}
+
+void MainWindowTest::mergesLayerByKeyboardAndPersistsComposite() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-merge.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Lower red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Upper blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(2, 3), QColor(20, 40, 220, 160)));
+  QVERIFY(source->layerAt(topIndex)->setOpacity(0.5));
+  const auto expectedComposite = source->composite();
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* lock = requiredChild<QCheckBox>(window, "layerLock");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  auto* mergeAction = requiredChild<QAction>(window, "mergeDownAction");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(lock);
+  QVERIFY(document);
+  QVERIFY(mergeAction);
+  QCOMPARE(mergeAction->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_E));
+  QVERIFY(mergeAction->isEnabled());
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(originalBlocks.size(), 2);
+  QVERIFY(!document->isModified());
+
+  auto* retainedListInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedListInterface);
+  auto* retainedFirstRowInterface = retainedListInterface->child(0);
+  QVERIFY(retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  lock->setFocus();
+  QTest::keyClick(lock, Qt::Key_Space);
+  QVERIFY(document->document().layerAt(topIndex)->isLocked());
+  QVERIFY(document->isModified());
+  QVERIFY(!mergeAction->isEnabled());
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_E, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QVERIFY(!document->document().layerAt(topIndex)->isLocked());
+  QVERIFY(!document->isModified());
+  QVERIFY(mergeAction->isEnabled());
+
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Down);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  lock->setFocus();
+  QTest::keyClick(lock, Qt::Key_Space);
+  QVERIFY(document->document().layerAt(0)->isLocked());
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Up);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QVERIFY(!mergeAction->isEnabled());
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_E, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QVERIFY(!document->document().layerAt(0)->isLocked());
+  QVERIFY(!document->isModified());
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Up);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QVERIFY(mergeAction->isEnabled());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_E, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(document->document().layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(sortedStorageBlocks(document->document()).size(), 1);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers),
+           retainedListInterface);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QVERIFY(!mergeAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(retainedListInterface->child(1)->text(QAccessible::Name),
+           QStringLiteral("Lower red"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(!document->isModified());
+  QVERIFY(mergeAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QVERIFY(document->isModified());
+  QVERIFY(!mergeAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerCount(), 1);
+  QCOMPARE(reopened.document->activeLayerIndex(), 0);
+  QCOMPARE(reopened.document->layerAt(0)->name(),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->composite(), expectedComposite);
 }
 
 QTEST_MAIN(MainWindowTest)
