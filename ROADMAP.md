@@ -186,8 +186,14 @@ makes each document current before its accessible Unsaved Changes prompt. A
 three-document keyboard fixture covers Save followed by Cancel, retained tabs
 and canceled-tab context, then a retry that skips the clean document, Discards
 the second source-preservingly, Saves the third, and closes. Background jobs,
-save-failure sequencing, pointer tab-close behavior, and a shutdown deadline
-remain open.
+save-failure sequencing, and a shutdown deadline remain open.
+Background tab close buttons now expose document-specific accessible metadata
+and make the clicked dirty document current before prompting. A three-document
+maximum-dimension sparse fixture covers actual pointer Cancel/Discard,
+source-preserving discard, deterministic successor/canvas focus, hostile tab
+indices, and zero pixel tiles. Save-failure sequencing, background jobs, large
+tab populations, live Wayland/assistive-technology behavior, middle-click
+conventions, and an end-to-end user-decision deadline remain open.
 The Window menu now navigates next and previous documents by keyboard in the
 current visual tab order, wraps in both directions, and focuses the destination
 canvas. Zero/one-tab action state, reordered tabs, and 1,025 switches across

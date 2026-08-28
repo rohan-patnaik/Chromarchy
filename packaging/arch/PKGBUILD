@@ -82,6 +82,8 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/KEYBOARD_PAN.md"
   install -Dm644 Chromarchy/docs/MULTI_TAB_QUIT.md \
     "$pkgdir/usr/share/doc/$pkgname/MULTI_TAB_QUIT.md"
+  install -Dm644 Chromarchy/docs/TAB_CLOSE_POINTER.md \
+    "$pkgdir/usr/share/doc/$pkgname/TAB_CLOSE_POINTER.md"
   install -Dm644 Chromarchy/docs/DOCUMENT_TAB_NAVIGATION.md \
     "$pkgdir/usr/share/doc/$pkgname/DOCUMENT_TAB_NAVIGATION.md"
   install -Dm644 Chromarchy/docs/LAYERS_PANEL_FOCUS.md \

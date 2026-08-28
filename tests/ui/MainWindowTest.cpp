@@ -124,6 +124,7 @@ private slots:
   void navigatesReorderedDocumentsByKeyboardWithinBounds();
   void togglesAndFocusesLayersPanelByKeyboardWithinBounds();
   void createsAndCancelsNewDocumentByKeyboard();
+  void closesBackgroundTabByPointerWithAccessiblePromptContext();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
   void resolvesMultipleDirtyTabsInOrderByKeyboard();
@@ -1043,6 +1044,166 @@ void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {
   QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
   QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
   QCOMPARE(tabs->count(), 1);
+}
+
+void MainWindowTest::closesBackgroundTabByPointerWithAccessiblePromptContext() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/tab-close-pointer-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  const auto documentNames = root.value(QStringLiteral("documents")).toArray();
+  QCOMPARE(documentNames.size(), 3);
+  const auto targetIndex = root.value(QStringLiteral("targetIndex")).toInt();
+  QCOMPARE(targetIndex, 1);
+  const auto dimension = root.value(QStringLiteral("sparseDimension")).toInt();
+  QCOMPARE(dimension, chromarchy::Document::maximumDimension);
+  const auto maximumCloseMilliseconds =
+      root.value(QStringLiteral("maximumCloseMilliseconds")).toInt();
+  QVERIFY(maximumCloseMilliseconds > 0);
+  QCOMPARE(root.value(QStringLiteral("cancelKeepsTargetCurrent")).toBool(),
+           true);
+  QCOMPARE(root.value(QStringLiteral("discardPreservesSource")).toBool(),
+           true);
+  QCOMPARE(root.value(QStringLiteral("documentPixelMutation")).toString(),
+           QStringLiteral("none"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QStringList paths;
+  for (const auto& name : documentNames) {
+    const auto path = directory.filePath(name.toString());
+    auto document = chromarchy::Document::create(QSize(dimension, dimension));
+    QVERIFY(document);
+    QCOMPARE(document->layerAt(0)->pixels().allocatedTileCount(), 0);
+    QVERIFY(chromarchy::NativeDocumentCodec::save(*document, path));
+    paths.push_back(path);
+  }
+  QFile targetSource(paths.at(targetIndex));
+  QVERIFY(targetSource.open(QIODevice::ReadOnly));
+  const auto targetSourceBytes = targetSource.readAll();
+  targetSource.close();
+
+  MainWindow window;
+  for (const auto& path : paths) {
+    QVERIFY(window.openFile(path));
+  }
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  QVERIFY(tabs);
+  auto* tabBar = tabs->tabBar();
+  QVERIFY(tabBar);
+  QCOMPARE(tabs->count(), documentNames.size());
+
+  auto* targetView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->widget(targetIndex));
+  auto* thirdView = qobject_cast<chromarchy::DocumentView*>(tabs->widget(2));
+  QVERIFY(targetView);
+  QVERIFY(thirdView);
+  auto* targetCanvas = targetView->canvas();
+  auto* thirdCanvas = thirdView->canvas();
+  tabs->setCurrentIndex(targetIndex);
+  targetCanvas->setFocus();
+  QTest::keyClick(targetCanvas, Qt::Key_A, Qt::ControlModifier);
+  QVERIFY(targetView->isModified());
+  QVERIFY(targetView->history().canUndo());
+  QCOMPARE(targetView->document().selection().baseCoverage(), quint8{255});
+  QCOMPARE(targetView->document().layerAt(0)->pixels().allocatedTileCount(), 0);
+
+  auto* closeButton =
+      tabBar->tabButton(targetIndex, QTabBar::RightSide);
+  if (!closeButton) {
+    closeButton = tabBar->tabButton(targetIndex, QTabBar::LeftSide);
+  }
+  QVERIFY(closeButton);
+  QCOMPARE(closeButton->objectName(), QStringLiteral("closeDocumentTabButton"));
+  verifyAccessibleWidget(closeButton,
+                         QStringLiteral("Close target.chromarchy"));
+  QVERIFY(closeButton->accessibleDescription().contains(
+      QStringLiteral("modified"), Qt::CaseInsensitive));
+
+  QVERIFY(QMetaObject::invokeMethod(tabs, "tabCloseRequested",
+                                    Qt::DirectConnection, Q_ARG(int, -1)));
+  QVERIFY(QMetaObject::invokeMethod(
+      tabs, "tabCloseRequested", Qt::DirectConnection,
+      Q_ARG(int, tabs->count())));
+  QCOMPARE(tabs->count(), documentNames.size());
+
+  tabs->setCurrentIndex(2);
+  thirdCanvas->setFocus();
+  QCOMPARE(tabs->currentWidget(), thirdView);
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError, tabs, targetView] {
+    auto* prompt =
+        qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+    auto* cancel = prompt ? prompt->button(QMessageBox::Cancel) : nullptr;
+    if (!prompt || !cancel || tabs->currentWidget() != targetView ||
+        !hasAccessibleMetadata(prompt) || !hasAccessibleMetadata(cancel)) {
+      dialogError = QStringLiteral(
+          "Pointer close did not expose the target Cancel prompt context");
+      if (prompt) {
+        cancelPrompt(prompt);
+      }
+      return;
+    }
+    QTest::mouseClick(cancel, Qt::LeftButton);
+  });
+  QElapsedTimer closeTimer;
+  closeTimer.start();
+  QTest::mouseClick(closeButton, Qt::LeftButton);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QVERIFY2(closeTimer.elapsed() < maximumCloseMilliseconds,
+           qPrintable(QStringLiteral("Pointer Cancel dispatch took %1 ms")
+                          .arg(closeTimer.elapsed())));
+  QCOMPARE(tabs->count(), documentNames.size());
+  QCOMPARE(tabs->currentWidget(), targetView);
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  QTRY_VERIFY(targetCanvas->hasFocus());
+
+  tabs->setCurrentIndex(2);
+  thirdCanvas->setFocus();
+  dialogError.clear();
+  QTimer::singleShot(0, &window, [&dialogError, tabs, targetView] {
+    auto* prompt =
+        qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+    auto* discard = prompt ? prompt->button(QMessageBox::Discard) : nullptr;
+    if (!prompt || !discard || tabs->currentWidget() != targetView ||
+        !hasAccessibleMetadata(discard)) {
+      dialogError = QStringLiteral(
+          "Pointer close did not expose the target Discard prompt context");
+      if (prompt) {
+        cancelPrompt(prompt);
+      }
+      return;
+    }
+    QTest::mouseClick(discard, Qt::LeftButton);
+  });
+  closeTimer.restart();
+  QTest::mouseClick(closeButton, Qt::LeftButton);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QVERIFY2(closeTimer.elapsed() < maximumCloseMilliseconds,
+           qPrintable(QStringLiteral("Pointer Discard dispatch took %1 ms")
+                          .arg(closeTimer.elapsed())));
+  QCOMPARE(tabs->count(), 2);
+  QCOMPARE(tabs->currentIndex(), targetIndex);
+  QCOMPARE(tabs->currentWidget(), thirdView);
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  QTRY_VERIFY(thirdCanvas->hasFocus());
+  for (int index = 0; index < tabs->count(); ++index) {
+    auto* view = qobject_cast<chromarchy::DocumentView*>(tabs->widget(index));
+    QVERIFY(view);
+    QCOMPARE(view->document().layerAt(0)->pixels().allocatedTileCount(), 0);
+    QVERIFY(!view->isModified());
+    QVERIFY(!view->history().canUndo());
+  }
+  QVERIFY(targetSource.open(QIODevice::ReadOnly));
+  QCOMPARE(targetSource.readAll(), targetSourceBytes);
 }
 
 void MainWindowTest::cancelsAndDiscardsClosePromptByKeyboard() {

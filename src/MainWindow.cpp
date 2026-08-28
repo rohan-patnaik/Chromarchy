@@ -28,6 +28,7 @@
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -675,11 +676,13 @@ void MainWindow::exportDocument() {
 void MainWindow::addDocumentTab(DocumentView* view) {
   const auto index = tabs_->addTab(view, view->tabTitle());
   tabs_->setCurrentIndex(index);
+  updateTabCloseButton(view);
   connect(view, &DocumentView::titleChanged, this,
           [this, view](const QString& title) {
             const auto tab = tabs_->indexOf(view);
             if (tab >= 0) {
               tabs_->setTabText(tab, title);
+              updateTabCloseButton(view);
             }
           });
   connect(view->canvas(), &chromarchy::CanvasWidget::zoomChanged, this,
@@ -714,17 +717,53 @@ void MainWindow::addDocumentTab(DocumentView* view) {
   updateActions();
 }
 
-void MainWindow::closeDocumentTab(int index) {
+void MainWindow::updateTabCloseButton(DocumentView* view) {
+  const auto index = tabs_->indexOf(view);
   if (index < 0) {
     return;
   }
+  auto* button = tabs_->tabBar()->tabButton(index, QTabBar::RightSide);
+  if (!button) {
+    button = tabs_->tabBar()->tabButton(index, QTabBar::LeftSide);
+  }
+  if (!button) {
+    return;
+  }
+  button->setObjectName(QStringLiteral("closeDocumentTabButton"));
+  button->setAccessibleName(
+      QStringLiteral("Close %1").arg(view->displayName()));
+  button->setAccessibleDescription(
+      view->isModified()
+          ? QStringLiteral(
+                "Close this modified document tab after confirming unsaved changes")
+          : QStringLiteral("Close this document tab"));
+}
+
+void MainWindow::closeDocumentTab(int index) {
+  if (index < 0 || index >= tabs_->count()) {
+    return;
+  }
   auto* view = qobject_cast<DocumentView*>(tabs_->widget(index));
-  if (!view || !canClose(view)) {
+  if (!view) {
+    return;
+  }
+  tabs_->setCurrentIndex(index);
+  if (!canClose(view)) {
+    auto* canvas = view->canvas();
+    QTimer::singleShot(0, canvas, [canvas] {
+      canvas->setFocus(Qt::OtherFocusReason);
+    });
     return;
   }
   tabs_->removeTab(index);
   view->deleteLater();
   updateActions();
+  if (auto* remaining = currentDocument()) {
+    auto* canvas = remaining->canvas();
+    QTimer::singleShot(0, canvas, [canvas] {
+      canvas->setFocus(Qt::OtherFocusReason);
+    });
+  }
 }
 
 bool MainWindow::canClose(DocumentView* view) {

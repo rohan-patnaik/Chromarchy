@@ -28,6 +28,11 @@ Enter, and verifies that Escape cancels without adding another document.
 Close-prompt tests drive Escape/Cancel, tab-and-Space/Discard, and
 Return/Save from the focused controls; the save path is reopened to verify that
 the edit persisted before the tab closed.
+Document tab close buttons have document-specific names and descriptions.
+Offscreen pointer coverage closes a non-current dirty tab, verifies that the
+target becomes the active accessible prompt context, then checks Cancel focus
+restoration and source-preserving Discard with deterministic successor-canvas
+focus. Live pointer/assistive-technology announcements remain unverified.
 The multi-tab quit path invokes Ctrl+Q from the canvas, makes each modified
 document current before prompting, and verifies the prompt's document name and
 accessible metadata. Cancel retains every tab with the canceled document

@@ -40,6 +40,8 @@ Bounded per-tab arrow-key canvas navigation is documented in
 [docs/KEYBOARD_PAN.md](docs/KEYBOARD_PAN.md).
 Deterministic keyboard resolution of modified documents during multi-tab quit
 is documented in [docs/MULTI_TAB_QUIT.md](docs/MULTI_TAB_QUIT.md).
+Accessible background tab-close pointer semantics are documented in
+[docs/TAB_CLOSE_POINTER.md](docs/TAB_CLOSE_POINTER.md).
 Bounded next/previous keyboard navigation in current visual document-tab order
 is documented in
 [docs/DOCUMENT_TAB_NAVIGATION.md](docs/DOCUMENT_TAB_NAVIGATION.md).

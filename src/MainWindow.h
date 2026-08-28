@@ -45,6 +45,7 @@ private:
   bool saveDocument(chromarchy::DocumentView* view, bool choosePath);
   void exportDocument();
   void addDocumentTab(chromarchy::DocumentView* view);
+  void updateTabCloseButton(chromarchy::DocumentView* view);
   void closeDocumentTab(int index);
   [[nodiscard]] bool canClose(chromarchy::DocumentView* view);
   [[nodiscard]] chromarchy::DocumentView* currentDocument() const;

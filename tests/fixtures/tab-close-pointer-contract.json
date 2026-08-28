@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    "first.chromarchy",
+    "target.chromarchy",
+    "third.chromarchy"
+  ],
+  "targetIndex": 1,
+  "sparseDimension": 300000,
+  "maximumCloseMilliseconds": 100,
+  "cancelKeepsTargetCurrent": true,
+  "discardPreservesSource": true,
+  "documentPixelMutation": "none"
+}
