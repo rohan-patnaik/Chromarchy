@@ -115,6 +115,7 @@ private slots:
   void supportsCoreKeyboardWorkflow();
   void rotatesAndResetsViewByKeyboardWithoutEditingDocument();
   void opensBoundedOfflineHelpAndAboutByKeyboard();
+  void togglesPixelGridByKeyboardWithoutEditingDocument();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -445,6 +446,80 @@ void MainWindowTest::rotatesAndResetsViewByKeyboardWithoutEditingDocument() {
   QCOMPARE(document->document().size(), QSize(3, 2));
   QVERIFY(!document->isModified());
   QVERIFY(!document->history().canUndo());
+}
+
+void MainWindowTest::togglesPixelGridByKeyboardWithoutEditingDocument() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto firstPath =
+      directory.filePath(QStringLiteral("pixel-grid-first.chromarchy"));
+  const auto secondPath =
+      directory.filePath(QStringLiteral("pixel-grid-second.chromarchy"));
+  auto first = chromarchy::Document::create(QSize(4, 3));
+  auto second = chromarchy::Document::create(QSize(5, 2));
+  QVERIFY(first);
+  QVERIFY(second);
+  QVERIFY(first->layerAt(0)->setPixelColor(QPoint(1, 1), Qt::green));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*first, firstPath));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*second, secondPath));
+
+  MainWindow window;
+  auto* viewMenu = requiredChild<QMenu>(window, "viewMenu");
+  auto* action = requiredChild<QAction>(window, "pixelGridAction");
+  verifyAccessibleWidget(viewMenu, QStringLiteral("View"));
+  QVERIFY(action);
+  QVERIFY(action->isCheckable());
+  QVERIFY(!action->isEnabled());
+  QVERIFY(!action->isChecked());
+  QCOMPARE(action->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_G));
+
+  QVERIFY(window.openFile(firstPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* firstView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(firstView);
+  auto* canvas = firstView->canvas();
+  canvas->setZoom(chromarchy::CanvasWidget::pixelGridMinimumZoom);
+  const auto originalBlocks = sortedStorageBlocks(firstView->document());
+  const auto originalComposite = firstView->document().composite();
+  QVERIFY(action->isEnabled());
+  QVERIFY(!action->isChecked());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_G,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_VERIFY(action->isChecked());
+  QVERIFY(canvas->pixelGridEnabled());
+  QVERIFY(canvas->pixelGridVisible());
+  QVERIFY(canvas->accessibleDescription().contains(
+      QStringLiteral("Pixel grid enabled and visible")));
+  QCOMPARE(sortedStorageBlocks(firstView->document()), originalBlocks);
+  QCOMPARE(firstView->document().composite(), originalComposite);
+  QVERIFY(!firstView->isModified());
+  QVERIFY(!firstView->history().canUndo());
+
+  QVERIFY(window.openFile(secondPath));
+  QCOMPARE(tabs->count(), 2);
+  QVERIFY(!action->isChecked());
+  auto* secondView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(secondView);
+  QVERIFY(!secondView->canvas()->pixelGridEnabled());
+  tabs->setCurrentWidget(firstView);
+  QTRY_VERIFY(action->isChecked());
+  QVERIFY(firstView->canvas()->pixelGridEnabled());
+  QCOMPARE(sortedStorageBlocks(firstView->document()), originalBlocks);
+  QCOMPARE(firstView->document().composite(), originalComposite);
+
+  QTest::keyClick(firstView->canvas(), Qt::Key_G,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_VERIFY(!action->isChecked());
+  QVERIFY(!firstView->canvas()->pixelGridEnabled());
+  QVERIFY(!firstView->isModified());
+  QVERIFY(!firstView->history().canUndo());
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

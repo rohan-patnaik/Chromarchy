@@ -23,6 +23,8 @@ private slots:
   void rendersIndependentQuarterTurnWithoutChangingDocument();
   void rotationAndZoomPreserveDocumentCenter();
   void keepsRepeatedRotationAndHugeSparsePaintBounded();
+  void rendersIndependentPixelGridContract();
+  void keepsHugeSparsePixelGridViewportBounded();
 };
 
 void CanvasWidgetTest::clampsZoomAndTracksVisibleRegion() {
@@ -230,6 +232,134 @@ void CanvasWidgetTest::keepsRepeatedRotationAndHugeSparsePaintBounded() {
   canvas.resetRotation();
   QCOMPARE(canvas.rotationDegreesClockwise(), 0);
   QCOMPARE(document->storageBlocks(), originalBlocks);
+}
+
+void CanvasWidgetTest::rendersIndependentPixelGridContract() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/pixel-grid-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  QCOMPARE(root.value(QStringLiteral("minimumZoom")).toDouble(),
+           CanvasWidget::pixelGridMinimumZoom);
+  QCOMPARE(root.value(QStringLiteral("lineOpacity")).toInt(),
+           CanvasWidget::pixelGridOpacity);
+
+  const auto size = root.value(QStringLiteral("documentSize")).toArray();
+  auto document = Document::create(QSize(size.at(0).toInt(), size.at(1).toInt()));
+  QVERIFY(document);
+  const QColor pixelColor(
+      root.value(QStringLiteral("documentPixelColor")).toString());
+  for (int y = 0; y < document->size().height(); ++y) {
+    for (int x = 0; x < document->size().width(); ++x) {
+      QVERIFY(document->layerAt(0)->setPixelColor(QPoint(x, y), pixelColor));
+    }
+  }
+  const auto originalBlocks = document->storageBlocks();
+  const auto originalComposite = document->composite();
+
+  CanvasWidget canvas(&*document);
+  canvas.resize(180, 140);
+  canvas.show();
+  canvas.setPixelGridEnabled(true);
+  QCOMPARE(canvas.pixelGridEnabled(), true);
+  QCOMPARE(canvas.pixelGridVisible(), false);
+  QVERIFY(canvas.accessibleDescription().contains(
+      QStringLiteral("visible from 800% zoom")));
+  QImage hiddenFrame(canvas.viewport()->size(),
+                     QImage::Format_RGBA8888_Premultiplied);
+  hiddenFrame.fill(Qt::transparent);
+  canvas.viewport()->render(&hiddenFrame);
+  canvas.setPixelGridEnabled(false);
+  QImage disabledFrame(canvas.viewport()->size(),
+                       QImage::Format_RGBA8888_Premultiplied);
+  disabledFrame.fill(Qt::transparent);
+  canvas.viewport()->render(&disabledFrame);
+  QCOMPARE(hiddenFrame, disabledFrame);
+  canvas.setPixelGridEnabled(true);
+  canvas.setZoom(root.value(QStringLiteral("renderZoom")).toDouble());
+  QCOMPARE(canvas.pixelGridVisible(), true);
+  QVERIFY(canvas.accessibleDescription().contains(
+      QStringLiteral("enabled and visible")));
+
+  QImage gridFrame(canvas.viewport()->size(),
+                   QImage::Format_RGBA8888_Premultiplied);
+  gridFrame.fill(Qt::transparent);
+  canvas.viewport()->render(&gridFrame);
+  const QPoint origin(
+      qRound((canvas.viewport()->width() -
+              document->size().width() * canvas.zoom()) /
+             2.0),
+      qRound((canvas.viewport()->height() -
+              document->size().height() * canvas.zoom()) /
+             2.0));
+  const QPoint interior =
+      origin + QPoint(qRound(canvas.zoom() * 0.5),
+                      qRound(canvas.zoom() * 0.5));
+  const QPoint boundary =
+      origin + QPoint(qRound(canvas.zoom()), qRound(canvas.zoom() * 0.5));
+  QCOMPARE(gridFrame.pixelColor(interior), pixelColor);
+  QCOMPARE(gridFrame.pixelColor(boundary),
+           QColor(root.value(QStringLiteral("expectedBoundaryColor"))
+                      .toString()));
+
+  canvas.rotateClockwise();
+  QVERIFY(canvas.pixelGridVisible());
+  QImage rotatedFrame(canvas.viewport()->size(),
+                      QImage::Format_RGBA8888_Premultiplied);
+  rotatedFrame.fill(Qt::transparent);
+  canvas.viewport()->render(&rotatedFrame);
+  const QSize rotatedSize(document->size().height(), document->size().width());
+  const QPoint rotatedOrigin(
+      qRound((canvas.viewport()->width() -
+              rotatedSize.width() * canvas.zoom()) /
+             2.0),
+      qRound((canvas.viewport()->height() -
+              rotatedSize.height() * canvas.zoom()) /
+             2.0));
+  const QPoint rotatedBoundary =
+      rotatedOrigin
+      + QPoint(qRound(canvas.zoom()), qRound(canvas.zoom() * 0.5));
+  QCOMPARE(rotatedFrame.pixelColor(rotatedBoundary),
+           QColor(root.value(QStringLiteral("expectedBoundaryColor"))
+                      .toString()));
+  QCOMPARE(document->storageBlocks(), originalBlocks);
+  QCOMPARE(document->composite(), originalComposite);
+}
+
+void CanvasWidgetTest::keepsHugeSparsePixelGridViewportBounded() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(299'999, 299'999),
+                                               Qt::red));
+  const auto originalBlocks = document->storageBlocks();
+  CanvasWidget canvas(&*document);
+  canvas.resize(640, 480);
+  canvas.show();
+  canvas.setZoom(32.0);
+  QSignalSpy changes(&canvas, &CanvasWidget::pixelGridChanged);
+  for (int iteration = 0; iteration < 1025; ++iteration) {
+    canvas.setPixelGridEnabled(iteration % 2 == 0);
+  }
+  QCOMPARE(changes.size(), 1025);
+  QVERIFY(canvas.pixelGridVisible());
+  const auto visible = canvas.visibleDocumentRect();
+  QVERIFY(visible.width() <= qCeil(canvas.viewport()->width() / canvas.zoom()) +
+                                 1);
+  QVERIFY(visible.height() <=
+          qCeil(canvas.viewport()->height() / canvas.zoom()) + 1);
+  const auto maximumGridLines = visible.width() + visible.height() + 2;
+  QVERIFY(maximumGridLines <= 40);
+  QImage frame(canvas.viewport()->size(),
+               QImage::Format_RGBA8888_Premultiplied);
+  frame.fill(Qt::transparent);
+  canvas.viewport()->render(&frame);
+  QCOMPARE(frame.size(), canvas.viewport()->size());
+  QCOMPARE(document->storageBlocks(), originalBlocks);
+  QCOMPARE(document->size(), QSize(300'000, 300'000));
 }
 
 QTEST_MAIN(CanvasWidgetTest)

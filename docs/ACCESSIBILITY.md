@@ -94,6 +94,12 @@ action opens the same bounded dialog directly on its named About topic. The
 offscreen test verifies all topic controls and content bounds, but does not
 replace live AT-SPI announcement or screen-reader traversal evidence.
 
+The View menu has a stable accessible name and description. Ctrl+Alt+G toggles
+the current tab's pixel grid without requiring pointer focus, and the canvas
+description distinguishes disabled, enabled-below-threshold, and enabled-and-
+visible state. Offscreen keyboard tests cover action checked state and per-tab
+isolation; live assistive-technology state-change announcements remain open.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

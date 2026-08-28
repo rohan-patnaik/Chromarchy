@@ -78,6 +78,7 @@ private:
   QAction* rotateViewClockwiseAction_ = nullptr;
   QAction* rotateViewCounterclockwiseAction_ = nullptr;
   QAction* resetViewRotationAction_ = nullptr;
+  QAction* pixelGridAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;

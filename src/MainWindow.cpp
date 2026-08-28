@@ -207,6 +207,10 @@ void MainWindow::createActions() {
   flattenAction_->setObjectName(QStringLiteral("flattenAction"));
 
   auto* viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
+  viewMenu->setObjectName(QStringLiteral("viewMenu"));
+  viewMenu->setAccessibleName(QStringLiteral("View"));
+  viewMenu->setAccessibleDescription(
+      QStringLiteral("Control local canvas display and navigation"));
   auto zoomAction = [this, viewMenu](const QString& text,
                                      const QKeySequence& shortcut,
                                      double factor) {
@@ -262,6 +266,19 @@ void MainWindow::createActions() {
       QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_0));
   resetViewRotationAction_->setStatusTip(
       QStringLiteral("Reset the canvas view to zero degrees"));
+  viewMenu->addSeparator();
+  pixelGridAction_ = viewMenu->addAction(QStringLiteral("Show &Pixel Grid"));
+  pixelGridAction_->setObjectName(QStringLiteral("pixelGridAction"));
+  pixelGridAction_->setCheckable(true);
+  pixelGridAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_G));
+  pixelGridAction_->setStatusTip(QStringLiteral(
+      "Overlay pixel boundaries at 800% zoom and above"));
+  connect(pixelGridAction_, &QAction::triggered, this, [this](bool enabled) {
+    if (auto* view = currentDocument()) {
+      view->canvas()->setPixelGridEnabled(enabled);
+    }
+  });
 
   auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
   helpMenu->setObjectName(QStringLiteral("helpMenu"));
@@ -581,6 +598,14 @@ void MainWindow::addDocumentTab(DocumentView* view) {
             statusBar()->showMessage(
                 QStringLiteral("View rotation %1° clockwise")
                     .arg(degreesClockwise));
+            updateActions();
+          });
+  connect(view->canvas(), &chromarchy::CanvasWidget::pixelGridChanged, this,
+          [this](bool enabled) {
+            statusBar()->showMessage(
+                enabled ? QStringLiteral("Pixel grid enabled; visible at 800% zoom")
+                        : QStringLiteral("Pixel grid disabled"),
+                3000);
             updateActions();
           });
   connect(view, &DocumentView::historyChanged, this, [this] {
@@ -963,6 +988,9 @@ void MainWindow::updateActions() {
   rotateViewCounterclockwiseAction_->setEnabled(hasDocument);
   resetViewRotationAction_->setEnabled(
       hasDocument && view->canvas()->rotationDegreesClockwise() != 0);
+  pixelGridAction_->setEnabled(hasDocument);
+  pixelGridAction_->setChecked(hasDocument &&
+                               view->canvas()->pixelGridEnabled());
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);

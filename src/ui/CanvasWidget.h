@@ -12,6 +12,9 @@ class CanvasWidget final : public QAbstractScrollArea {
   Q_OBJECT
 
 public:
+  static constexpr double pixelGridMinimumZoom = 8.0;
+  static constexpr int pixelGridOpacity = 112;
+
   explicit CanvasWidget(const Document* document, QWidget* parent = nullptr);
 
   [[nodiscard]] double zoom() const noexcept;
@@ -20,12 +23,16 @@ public:
   void rotateClockwise();
   void rotateCounterclockwise();
   void resetRotation();
+  [[nodiscard]] bool pixelGridEnabled() const noexcept;
+  [[nodiscard]] bool pixelGridVisible() const noexcept;
+  void setPixelGridEnabled(bool enabled);
   [[nodiscard]] QRect visibleDocumentRect() const;
   void documentChanged();
 
 signals:
   void zoomChanged(double zoom);
   void rotationChanged(int degreesClockwise);
+  void pixelGridChanged(bool enabled);
   void selectionRequested(QRect rectangle);
 
 protected:
@@ -50,6 +57,7 @@ private:
   const Document* document_ = nullptr;  // Non-owning; parent DocumentView owns it.
   double zoom_ = 1.0;
   int rotationQuarterTurns_ = 0;
+  bool pixelGridEnabled_ = false;
   bool panning_ = false;
   QPoint panStart_;
   QPoint scrollStart_;

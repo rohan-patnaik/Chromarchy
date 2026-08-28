@@ -17,7 +17,9 @@ Chromarchy performance work is measured with reproducible workloads before relea
 
 `chromarchy_canvas_benchmarks` measures viewport-bounded painting of a sparse
 300,000×300,000 document at 1% zoom into a 640×480 widget at both zero and 90
-degrees of non-destructive view rotation.
+degrees of non-destructive view rotation. It also measures the display-only
+pixel grid at 3200% zoom on the same sparse extent; the 640×480 fixture submits
+at most 40 visible horizontal-plus-vertical boundary lines.
 
 The large canvas and selection workloads intentionally verify that cost follows
 allocated or visible tiles rather than total canvas area.

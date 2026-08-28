@@ -74,4 +74,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/VIEW_ROTATION.md"
   install -Dm644 Chromarchy/docs/OFFLINE_HELP.md \
     "$pkgdir/usr/share/doc/$pkgname/OFFLINE_HELP.md"
+  install -Dm644 Chromarchy/docs/PIXEL_GRID.md \
+    "$pkgdir/usr/share/doc/$pkgname/PIXEL_GRID.md"
 }

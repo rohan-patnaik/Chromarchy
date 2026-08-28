@@ -60,6 +60,7 @@ void CanvasWidget::setZoom(double zoom) {
   zoom_ = zoom;
   updateScrollBars();
   centerDocumentPosition(documentCenter);
+  refreshAccessibleDescription();
   viewport()->update();
   emit zoomChanged(zoom_);
 }
@@ -78,6 +79,24 @@ void CanvasWidget::rotateCounterclockwise() {
 
 void CanvasWidget::resetRotation() {
   setRotationQuarterTurns(0);
+}
+
+bool CanvasWidget::pixelGridEnabled() const noexcept {
+  return pixelGridEnabled_;
+}
+
+bool CanvasWidget::pixelGridVisible() const noexcept {
+  return pixelGridEnabled_ && zoom_ >= pixelGridMinimumZoom;
+}
+
+void CanvasWidget::setPixelGridEnabled(bool enabled) {
+  if (pixelGridEnabled_ == enabled) {
+    return;
+  }
+  pixelGridEnabled_ = enabled;
+  refreshAccessibleDescription();
+  viewport()->update();
+  emit pixelGridChanged(enabled);
 }
 
 QRect CanvasWidget::visibleDocumentRect() const {
@@ -161,6 +180,19 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
   }
   for (const auto& tile : selectionTiles) {
     painter.drawImage(tile.origin, selectionOverlay(tile.pixels));
+  }
+
+  if (pixelGridVisible()) {
+    painter.setPen(
+        QPen(QColor(0, 0, 0, pixelGridOpacity), 0.0, Qt::SolidLine));
+    const int right = sourceRect.x() + sourceRect.width();
+    const int bottom = sourceRect.y() + sourceRect.height();
+    for (int x = sourceRect.x(); x <= right; ++x) {
+      painter.drawLine(QPointF(x, sourceRect.y()), QPointF(x, bottom));
+    }
+    for (int y = sourceRect.y(); y <= bottom; ++y) {
+      painter.drawLine(QPointF(sourceRect.x(), y), QPointF(right, y));
+    }
   }
   painter.restore();
 
@@ -346,8 +378,13 @@ void CanvasWidget::centerDocumentPosition(QPointF documentPosition) {
 void CanvasWidget::refreshAccessibleDescription() {
   setAccessibleDescription(
       QStringLiteral("Scrollable view of the current image document. View "
-                     "rotation %1 degrees clockwise.")
-          .arg(rotationDegreesClockwise()));
+                     "rotation %1 degrees clockwise. Pixel grid %2.")
+          .arg(rotationDegreesClockwise())
+          .arg(pixelGridEnabled_
+                   ? (pixelGridVisible()
+                          ? QStringLiteral("enabled and visible")
+                          : QStringLiteral("enabled; visible from 800% zoom"))
+                   : QStringLiteral("disabled")));
 }
 
 void CanvasWidget::updateScrollBars() {

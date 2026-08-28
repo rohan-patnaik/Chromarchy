@@ -13,6 +13,7 @@ class CanvasBenchmark final : public QObject {
 private slots:
   void paintSparseDocumentAtMinimumZoom();
   void paintRotatedSparseDocumentAtMinimumZoom();
+  void paintPixelGridOnHugeSparseDocument();
 };
 
 void CanvasBenchmark::paintSparseDocumentAtMinimumZoom() {
@@ -48,6 +49,28 @@ void CanvasBenchmark::paintRotatedSparseDocumentAtMinimumZoom() {
   canvas.setZoom(0.01);
   canvas.rotateClockwise();
   QTest::qWait(1);
+  QImage frame(canvas.size(), QImage::Format_RGBA8888_Premultiplied);
+
+  QBENCHMARK {
+    frame.fill(Qt::transparent);
+    canvas.render(&frame);
+  }
+}
+
+void CanvasBenchmark::paintPixelGridOnHugeSparseDocument() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(150'000, 150'000),
+                                               Qt::green));
+  CanvasWidget canvas(&*document);
+  canvas.resize(640, 480);
+  canvas.show();
+  canvas.setZoom(32.0);
+  canvas.setPixelGridEnabled(true);
+  QTest::qWait(1);
+  QVERIFY(canvas.pixelGridVisible());
+  const auto visible = canvas.visibleDocumentRect();
+  QVERIFY(visible.width() + visible.height() + 2 <= 40);
   QImage frame(canvas.size(), QImage::Format_RGBA8888_Premultiplied);
 
   QBENCHMARK {

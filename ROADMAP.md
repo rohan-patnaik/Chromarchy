@@ -161,6 +161,13 @@ format/resource/diagnostic content, a 500-ms opening budget, and hard per-page
 and combined text caps without shell, filesystem-enumeration, or network work.
 Full third-party license inventory, localization, live AT-SPI behavior, and
 complete dialog traversal remain later release-quality work.
+The canvas now offers an ephemeral pixel grid through Ctrl+Alt+G. It becomes
+visible at 800% zoom, follows all four view-rotation states, and draws only the
+pixel boundaries intersecting the visible document rectangle. Independent
+overlay color, keyboard/per-tab state, accessible description, 1,025-toggle,
+300k sparse-canvas, and benchmark evidence leaves document pixels, history,
+selection, native persistence, and storage untouched. Configurable grids,
+guides, snapping, persisted view state, and live Wayland latency remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 

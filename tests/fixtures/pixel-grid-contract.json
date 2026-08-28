@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "minimumZoom": 8.0,
+  "lineOpacity": 112,
+  "documentSize": [4, 3],
+  "documentPixelColor": "#ffffffff",
+  "renderZoom": 16.0,
+  "expectedBoundaryColor": "#ff8f8f8f"
+}
