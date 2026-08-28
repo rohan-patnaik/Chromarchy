@@ -30,20 +30,11 @@ qsizetype SelectionMask::allocatedTileCount() const noexcept {
 }
 
 bool SelectionMask::isEmpty() const noexcept {
-  if (baseCoverage_ != 0) {
-    return false;
-  }
-  for (const auto& tile : tiles_) {
-    for (int y = 0; y < tile.height(); ++y) {
-      const auto* scanline = tile.constScanLine(y);
-      for (int x = 0; x < tile.width(); ++x) {
-        if (scanline[x] != 0) {
-          return false;
-        }
-      }
-    }
-  }
-  return true;
+  return hasUniformCoverage(0);
+}
+
+bool SelectionMask::isFull() const noexcept {
+  return hasUniformCoverage(255);
 }
 
 quint8 SelectionMask::baseCoverage() const noexcept {
@@ -182,7 +173,7 @@ bool SelectionMask::clear() {
 }
 
 bool SelectionMask::selectAll() {
-  if (baseCoverage_ == 255 && tiles_.isEmpty()) {
+  if (isFull()) {
     return false;
   }
   baseCoverage_ = 255;
@@ -238,6 +229,43 @@ bool SelectionMask::isBaseTile(const QImage& tile,
     for (int x = 0; x < tile.width(); ++x) {
       if (scanline[x] != baseCoverage) {
         return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool SelectionMask::hasUniformCoverage(quint8 expectedCoverage) const noexcept {
+  if (size_.isEmpty()) {
+    return expectedCoverage == 0;
+  }
+  if (baseCoverage_ != expectedCoverage) {
+    const auto columns =
+        (static_cast<qsizetype>(size_.width()) + TiledImage::tileExtent - 1) /
+        TiledImage::tileExtent;
+    const auto rows =
+        (static_cast<qsizetype>(size_.height()) + TiledImage::tileExtent - 1) /
+        TiledImage::tileExtent;
+    if (tiles_.size() != columns * rows) {
+      return false;
+    }
+  }
+  for (auto tile = tiles_.cbegin(); tile != tiles_.cend(); ++tile) {
+    const auto origin = tileOrigin(tile.key());
+    const auto validWidth =
+        qMin(tile->width(), size_.width() - origin.x());
+    const auto validHeight =
+        qMin(tile->height(), size_.height() - origin.y());
+    if (validWidth <= 0 || validHeight <= 0 ||
+        tile->format() != QImage::Format_Grayscale8) {
+      return false;
+    }
+    for (int y = 0; y < validHeight; ++y) {
+      const auto* scanline = tile->constScanLine(y);
+      for (int x = 0; x < validWidth; ++x) {
+        if (scanline[x] != expectedCoverage) {
+          return false;
+        }
       }
     }
   }

@@ -134,11 +134,10 @@ const DocumentHistory& DocumentView::history() const noexcept {
 
 void DocumentView::refreshAccessibleDescription() {
   const auto& selection = document_.selection();
-  const bool hasExceptions = selection.allocatedTileCount() != 0;
   QString selectionState;
-  if (!hasExceptions && selection.baseCoverage() == 0) {
+  if (selection.isEmpty()) {
     selectionState = QStringLiteral("No pixels selected");
-  } else if (!hasExceptions && selection.baseCoverage() == 255) {
+  } else if (selection.isFull()) {
     selectionState = QStringLiteral("Entire canvas selected");
   } else {
     selectionState = QStringLiteral("Partial pixel selection active");

@@ -71,6 +71,8 @@ pixel selection is active. Select All, Invert, and Deselect expose stable
 shortcuts and are disabled without a document. A keyboard-only 300k-canvas
 workflow verifies sparse selection state, description updates, undo/redo clean
 identity, and native save/reopen for partial-inverted and full selections.
+Equivalent full-rectangle and empty-inverse tile representations are classified
+by semantic canvas coverage rather than by base coverage or tile count alone.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

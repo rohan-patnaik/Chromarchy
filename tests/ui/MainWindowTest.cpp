@@ -1738,6 +1738,23 @@ void MainWindowTest::editsSparseSelectionByKeyboardAndPersists() {
   QCOMPARE(fullReopen.document->selection().allocatedTileCount(), 0);
   QCOMPARE(fullReopen.document->selection().coverage(QPoint(299'999, 299'999)),
            quint8{255});
+
+  auto semanticFull = chromarchy::Document::create(QSize(64, 64));
+  QVERIFY(semanticFull);
+  QVERIFY(semanticFull->selection().selectRectangle(
+      QRect(QPoint(), semanticFull->size())));
+  chromarchy::DocumentView fullView(std::move(*semanticFull),
+                                    QStringLiteral("Full rectangle"), {}, false);
+  QCOMPARE(fullView.accessibleDescription(),
+           QStringLiteral(
+               "Image document editing view. Entire canvas selected."));
+  QVERIFY(fullView.performCommand(
+      QStringLiteral("Invert selection"), [](chromarchy::Document& changed) {
+        changed.selection().invert();
+        return true;
+      }));
+  QCOMPARE(fullView.accessibleDescription(),
+           QStringLiteral("Image document editing view. No pixels selected."));
 }
 
 QTEST_MAIN(MainWindowTest)

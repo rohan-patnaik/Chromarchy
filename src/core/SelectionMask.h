@@ -19,6 +19,7 @@ public:
   [[nodiscard]] quint8 coverage(QPoint position) const noexcept;
   [[nodiscard]] qsizetype allocatedTileCount() const noexcept;
   [[nodiscard]] bool isEmpty() const noexcept;
+  [[nodiscard]] bool isFull() const noexcept;
   [[nodiscard]] quint8 baseCoverage() const noexcept;
   [[nodiscard]] QVector<TileSnapshot> tileSnapshots(QRect region) const;
   [[nodiscard]] QVector<StorageBlock> storageBlocks() const;
@@ -42,6 +43,7 @@ private:
   [[nodiscard]] static QPoint tileOrigin(TileIndex index) noexcept;
   [[nodiscard]] static bool isBaseTile(const QImage& tile,
                                        quint8 baseCoverage) noexcept;
+  [[nodiscard]] bool hasUniformCoverage(quint8 coverage) const noexcept;
   QImage& ensureTile(TileIndex index);
 
   QSize size_;
