@@ -50,6 +50,10 @@ The create path invokes the documented keyboard shortcut, keeps the surviving
 row interface valid across create/undo/redo count changes, and verifies the new
 active row metadata. The empty layer allocates no tiles, preserves existing
 pixel payload sharing and composite output, and survives native save/reopen.
+The duplicate path invokes the documented keyboard shortcut and verifies the
+generated copy name, active accessible row, and retained surviving interface
+through duplicate/undo/redo. Both live layers reference the same COW pixel
+block until mutation, and native save/reopen preserves both pixel payloads.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

@@ -113,6 +113,7 @@ private slots:
   void togglesLayerLockByKeyboardAndPersistsEnforcement();
   void reordersLayerByKeyboardAndPersistsComposite();
   void createsSparseLayerByKeyboardAndPersists();
+  void duplicatesLayerByKeyboardWithCowAndPersists();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -1056,6 +1057,115 @@ void MainWindowTest::createsSparseLayerByKeyboardAndPersists() {
   QCOMPARE(reopened.document->activeLayerIndex(), 1);
   QCOMPARE(reopened.document->layerAt(1)->name(), QStringLiteral("Layer 2"));
   QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+}
+
+void MainWindowTest::duplicatesLayerByKeyboardWithCowAndPersists() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-duplicate.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Original pixels"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QCOMPARE(document->document().layerCount(), 1);
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(originalBlocks.size(), 1);
+  QVERIFY(!document->isModified());
+
+  auto* retainedListInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedListInterface);
+  auto* retainedFirstRowInterface = retainedListInterface->child(0);
+  QVERIFY(retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Original pixels"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_J, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QCOMPARE(document->document().layerAt(1)->name(),
+           QStringLiteral("Original pixels copy"));
+  QCOMPARE(document->document().layerAt(1)->pixels().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+  const auto duplicatedBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(duplicatedBlocks.size(), 2);
+  QCOMPARE(duplicatedBlocks[0], originalBlocks[0]);
+  QCOMPARE(duplicatedBlocks[1], originalBlocks[0]);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers),
+           retainedListInterface);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Original pixels copy"));
+  QCOMPARE(retainedListInterface->child(1)->text(QAccessible::Name),
+           QStringLiteral("Original pixels"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Original pixels"));
+  QVERIFY(!document->isModified());
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  const auto redoneBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(redoneBlocks.size(), 2);
+  QCOMPARE(redoneBlocks[0], originalBlocks[0]);
+  QCOMPARE(redoneBlocks[1], originalBlocks[0]);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Original pixels copy"));
+  QVERIFY(document->isModified());
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerCount(), 2);
+  QCOMPARE(reopened.document->activeLayerIndex(), 1);
+  QCOMPARE(reopened.document->layerAt(0)->name(),
+           QStringLiteral("Original pixels"));
+  QCOMPARE(reopened.document->layerAt(1)->name(),
+           QStringLiteral("Original pixels copy"));
+  QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->layerAt(0)->pixels().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+  QCOMPARE(reopened.document->layerAt(1)->pixels().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
            QColor(220, 10, 20, 255));
 }
