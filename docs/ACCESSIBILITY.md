@@ -66,6 +66,11 @@ The remove path invokes Delete from the canvas and verifies active-row remapping
 when a middle layer is removed. Surviving row interfaces expose their rewritten
 names through remove/undo/redo, while released storage, single-layer action
 disablement, dirty identity, and native reopen are checked.
+The document view describes whether no pixels, the entire canvas, or a partial
+pixel selection is active. Select All, Invert, and Deselect expose stable
+shortcuts and are disabled without a document. A keyboard-only 300k-canvas
+workflow verifies sparse selection state, description updates, undo/redo clean
+identity, and native save/reopen for partial-inverted and full selections.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

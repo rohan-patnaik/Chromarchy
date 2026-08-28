@@ -118,6 +118,7 @@ private slots:
   void mergesLayerByKeyboardAndPersistsComposite();
   void flattensByKeyboardAndPersistsComposite();
   void removesLayerByKeyboardAndPersists();
+  void editsSparseSelectionByKeyboardAndPersists();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -1616,6 +1617,127 @@ void MainWindowTest::removesLayerByKeyboardAndPersists() {
   QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
   QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 1);
   QCOMPARE(reopened.document->composite(), savedComposite);
+}
+
+void MainWindowTest::editsSparseSelectionByKeyboardAndPersists() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("sparse-selection.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(300'000, 300'000));
+  QVERIFY(source);
+  QVERIFY(source->selection().selectRectangle(QRect(255, 255, 2, 2)));
+  QCOMPARE(source->selection().baseCoverage(), quint8{0});
+  QCOMPARE(source->selection().allocatedTileCount(), 4);
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow emptyWindow;
+  auto* emptySelectAll =
+      requiredChild<QAction>(emptyWindow, "selectAllAction");
+  auto* emptyDeselect = requiredChild<QAction>(emptyWindow, "deselectAction");
+  auto* emptyInvert =
+      requiredChild<QAction>(emptyWindow, "invertSelectionAction");
+  QVERIFY(emptySelectAll);
+  QVERIFY(emptyDeselect);
+  QVERIFY(emptyInvert);
+  QVERIFY(!emptySelectAll->isEnabled());
+  QVERIFY(!emptyDeselect->isEnabled());
+  QVERIFY(!emptyInvert->isEnabled());
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  auto* selectAll = requiredChild<QAction>(window, "selectAllAction");
+  auto* deselect = requiredChild<QAction>(window, "deselectAction");
+  auto* invert = requiredChild<QAction>(window, "invertSelectionAction");
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QVERIFY(selectAll);
+  QVERIFY(deselect);
+  QVERIFY(invert);
+  QVERIFY(hasStandardShortcut(selectAll, QKeySequence::SelectAll));
+  QCOMPARE(deselect->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+  QCOMPARE(invert->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
+  QVERIFY(selectAll->isEnabled());
+  QVERIFY(deselect->isEnabled());
+  QVERIFY(invert->isEnabled());
+  QCOMPARE(document->accessibleDescription(),
+           QStringLiteral(
+               "Image document editing view. Partial pixel selection active."));
+  QVERIFY(!document->isModified());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_I,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{255});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 4);
+  QCOMPARE(document->document().selection().coverage(QPoint(255, 255)),
+           quint8{0});
+  QCOMPARE(document->document().selection().coverage(QPoint(0, 0)),
+           quint8{255});
+  QCOMPARE(document->accessibleDescription(),
+           QStringLiteral(
+               "Image document editing view. Partial pixel selection active."));
+  QVERIFY(document->isModified());
+
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{0});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 4);
+  QCOMPARE(document->document().selection().coverage(QPoint(255, 255)),
+           quint8{255});
+  QVERIFY(!document->isModified());
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{255});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 4);
+  QVERIFY(document->isModified());
+
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  const auto invertedReopen =
+      chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(invertedReopen, qPrintable(invertedReopen.error));
+  QCOMPARE(invertedReopen.document->selection().baseCoverage(), quint8{255});
+  QCOMPARE(invertedReopen.document->selection().allocatedTileCount(), 4);
+  QCOMPARE(invertedReopen.document->selection().coverage(QPoint(255, 255)),
+           quint8{0});
+
+  QTest::keyClick(canvas, Qt::Key_A,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{0});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 0);
+  QCOMPARE(document->accessibleDescription(),
+           QStringLiteral("Image document editing view. No pixels selected."));
+  QVERIFY(document->isModified());
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{255});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 4);
+  QVERIFY(!document->isModified());
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{0});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 0);
+
+  QTest::keyClick(canvas, Qt::Key_A, Qt::ControlModifier);
+  QCOMPARE(document->document().selection().baseCoverage(), quint8{255});
+  QCOMPARE(document->document().selection().allocatedTileCount(), 0);
+  QCOMPARE(document->accessibleDescription(),
+           QStringLiteral(
+               "Image document editing view. Entire canvas selected."));
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  const auto fullReopen = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(fullReopen, qPrintable(fullReopen.error));
+  QCOMPARE(fullReopen.document->selection().baseCoverage(), quint8{255});
+  QCOMPARE(fullReopen.document->selection().allocatedTileCount(), 0);
+  QCOMPARE(fullReopen.document->selection().coverage(QPoint(299'999, 299'999)),
+           quint8{255});
 }
 
 QTEST_MAIN(MainWindowTest)

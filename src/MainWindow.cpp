@@ -124,24 +124,31 @@ void MainWindow::createActions() {
   redoAction_->setShortcuts(redoShortcuts);
 
   auto* selectMenu = menuBar()->addMenu(QStringLiteral("&Select"));
-  auto* selectAll = selectMenu->addAction(QStringLiteral("Select &All"), this, [this] {
-    if (auto* view = currentDocument()) {
-      view->performCommand(QStringLiteral("Select all"), [](Document& document) {
-        return document.selection().selectAll();
+  selectAllAction_ =
+      selectMenu->addAction(QStringLiteral("Select &All"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->performCommand(QStringLiteral("Select all"),
+                               [](Document& document) {
+                                 return document.selection().selectAll();
+                               });
+        }
       });
-    }
-  });
-  selectAll->setShortcut(QKeySequence::SelectAll);
-  auto* deselect = selectMenu->addAction(QStringLiteral("&Deselect"), this, [this] {
-    if (auto* view = currentDocument()) {
-      view->performCommand(QStringLiteral("Deselect"), [](Document& document) {
-        return document.selection().clear();
+  selectAllAction_->setObjectName(QStringLiteral("selectAllAction"));
+  selectAllAction_->setShortcut(QKeySequence::SelectAll);
+  deselectAction_ =
+      selectMenu->addAction(QStringLiteral("&Deselect"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->performCommand(QStringLiteral("Deselect"),
+                               [](Document& document) {
+                                 return document.selection().clear();
+                               });
+        }
       });
-    }
-  });
-  deselect->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
-  auto* invertSelection =
-      selectMenu->addAction(QStringLiteral("&Invert Selection"), this, [this] {
+  deselectAction_->setObjectName(QStringLiteral("deselectAction"));
+  deselectAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+  invertSelectionAction_ = selectMenu->addAction(
+      QStringLiteral("&Invert Selection"), this, [this] {
         if (auto* view = currentDocument()) {
           view->performCommand(QStringLiteral("Invert selection"),
                                [](Document& document) {
@@ -150,7 +157,10 @@ void MainWindow::createActions() {
                                });
         }
       });
-  invertSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
+  invertSelectionAction_->setObjectName(
+      QStringLiteral("invertSelectionAction"));
+  invertSelectionAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
 
   auto* layerMenu = menuBar()->addMenu(QStringLiteral("&Layer"));
   addLayerAction_ = layerMenu->addAction(QStringLiteral("&New Pixel Layer"), this,
@@ -789,6 +799,9 @@ void MainWindow::updateActions() {
                            ? QStringLiteral("&Redo %1").arg(
                                  view->history().redoDescription())
                            : QStringLiteral("&Redo"));
+  selectAllAction_->setEnabled(hasDocument);
+  deselectAction_->setEnabled(hasDocument);
+  invertSelectionAction_->setEnabled(hasDocument);
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);

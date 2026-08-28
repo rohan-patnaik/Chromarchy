@@ -18,7 +18,7 @@ DocumentView::DocumentView(Document document, QString displayName,
       modified_(modified) {
   setObjectName(QStringLiteral("documentView"));
   setAccessibleName(QStringLiteral("Document %1").arg(displayName_));
-  setAccessibleDescription(QStringLiteral("Image document editing view"));
+  refreshAccessibleDescription();
   if (!modified_) {
     savedStateId_ = history_.currentStateId();
   }
@@ -100,6 +100,7 @@ bool DocumentView::performCommand(
     return false;
   }
   refreshModifiedFromHistory();
+  refreshAccessibleDescription();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -110,6 +111,7 @@ bool DocumentView::undo() {
     return false;
   }
   refreshModifiedFromHistory();
+  refreshAccessibleDescription();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -120,6 +122,7 @@ bool DocumentView::redo() {
     return false;
   }
   refreshModifiedFromHistory();
+  refreshAccessibleDescription();
   canvas_->documentChanged();
   emit historyChanged();
   return true;
@@ -127,6 +130,21 @@ bool DocumentView::redo() {
 
 const DocumentHistory& DocumentView::history() const noexcept {
   return history_;
+}
+
+void DocumentView::refreshAccessibleDescription() {
+  const auto& selection = document_.selection();
+  const bool hasExceptions = selection.allocatedTileCount() != 0;
+  QString selectionState;
+  if (!hasExceptions && selection.baseCoverage() == 0) {
+    selectionState = QStringLiteral("No pixels selected");
+  } else if (!hasExceptions && selection.baseCoverage() == 255) {
+    selectionState = QStringLiteral("Entire canvas selected");
+  } else {
+    selectionState = QStringLiteral("Partial pixel selection active");
+  }
+  setAccessibleDescription(
+      QStringLiteral("Image document editing view. %1.").arg(selectionState));
 }
 
 QString DocumentView::tabTitle() const {

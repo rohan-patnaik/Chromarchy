@@ -86,6 +86,10 @@ Sparse selection masks now canonicalize tiles that equal their base coverage
 after live point/rectangle edits and native v2 load. Declared legacy records
 remain charged against existing hostile-input budgets before elision, and the
 wire format is unchanged.
+Select All, Invert, and Deselect now expose document-level accessible selection
+state and correct no-document action enablement. Keyboard tests cover sparse
+300k-canvas transitions, undo/redo clean-state identity, and native save/reopen
+without changing selection storage or persistence limits.
 The CPU source-over path is anchored by an original, independently calculated
 full-image golden across the x=255/256 tile boundary. Repeated full and bounded
 region rendering, the painter entry point, native save/reopen, flatten, and

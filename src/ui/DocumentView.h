@@ -41,6 +41,7 @@ signals:
   void commandFailed(const QString& detail);
 
 private:
+  void refreshAccessibleDescription();
   void refreshModifiedFromHistory();
 
   Document document_;

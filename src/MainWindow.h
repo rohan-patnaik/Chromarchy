@@ -61,6 +61,9 @@ private:
   QAction* closeAction_ = nullptr;   // Owned by QObject parent.
   QAction* undoAction_ = nullptr;
   QAction* redoAction_ = nullptr;
+  QAction* selectAllAction_ = nullptr;
+  QAction* deselectAction_ = nullptr;
+  QAction* invertSelectionAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;
