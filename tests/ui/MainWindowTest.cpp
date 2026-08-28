@@ -67,7 +67,9 @@ void verifyAccessibleLayerItem(QListWidget* layers, int row,
   const auto* itemInterface = listInterface->child(row);
   QVERIFY(itemInterface);
   QCOMPARE(itemInterface->text(QAccessible::Name), name);
-  QVERIFY(!itemInterface->text(QAccessible::Description).isEmpty());
+  QCOMPARE(itemInterface->text(QAccessible::Description),
+           checked ? QStringLiteral("Visible pixel layer; press Space to hide")
+                   : QStringLiteral("Hidden pixel layer; press Space to show"));
   const auto state = itemInterface->state();
   QVERIFY(state.checkable);
   QCOMPARE(state.checked, checked);
@@ -628,6 +630,13 @@ void MainWindowTest::togglesLayerVisibilityByKeyboardAndPersistsComposite() {
   QCOMPARE(layers->currentRow(), 0);
   QVERIFY(!document->isModified());
   verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), true);
+  auto* retainedItem = layers->item(0);
+  const auto* retainedListInterface =
+      QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedItem);
+  QVERIFY(retainedListInterface);
+  const auto* retainedItemInterface = retainedListInterface->child(0);
+  QVERIFY(retainedItemInterface);
   QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
            QColor(10, 20, 230, 255));
 
@@ -639,6 +648,12 @@ void MainWindowTest::togglesLayerVisibilityByKeyboardAndPersistsComposite() {
   QVERIFY(!document->document().layerAt(topIndex)->isVisible());
   QVERIFY(document->isModified());
   verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), false);
+  QCOMPARE(layers->item(0), retainedItem);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers)->child(0),
+           retainedItemInterface);
+  QCOMPARE(retainedItemInterface->text(QAccessible::Description),
+           QStringLiteral("Hidden pixel layer; press Space to show"));
+  QVERIFY(!retainedItemInterface->state().checked);
   QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
            QColor(220, 10, 20, 255));
 
@@ -646,6 +661,12 @@ void MainWindowTest::togglesLayerVisibilityByKeyboardAndPersistsComposite() {
   QVERIFY(document->document().layerAt(topIndex)->isVisible());
   QVERIFY(!document->isModified());
   verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), true);
+  QCOMPARE(layers->item(0), retainedItem);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers)->child(0),
+           retainedItemInterface);
+  QCOMPARE(retainedItemInterface->text(QAccessible::Description),
+           QStringLiteral("Visible pixel layer; press Space to hide"));
+  QVERIFY(retainedItemInterface->state().checked);
   QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
            QColor(10, 20, 230, 255));
 
