@@ -2,6 +2,7 @@
 
 #include "core/Document.h"
 
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
@@ -42,6 +43,10 @@ CanvasWidget::CanvasWidget(const Document* document, QWidget* parent)
   setFocusPolicy(Qt::StrongFocus);
   viewport()->setCursor(Qt::ArrowCursor);
   viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
+  connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
+          [this] { refreshAccessibleDescription(); });
+  connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+          [this] { refreshAccessibleDescription(); });
   updateScrollBars();
 }
 
@@ -231,6 +236,44 @@ void CanvasWidget::resizeEvent(QResizeEvent* event) {
   updateScrollBars();
 }
 
+void CanvasWidget::keyPressEvent(QKeyEvent* event) {
+  if (!event->modifiers().testAnyFlags(Qt::ControlModifier |
+                                       Qt::AltModifier | Qt::MetaModifier)) {
+    const int step = keyboardPanStep *
+                     (event->modifiers().testFlag(Qt::ShiftModifier)
+                          ? keyboardPanFastMultiplier
+                          : 1);
+    QScrollBar* scrollBar = nullptr;
+    int delta = 0;
+    switch (event->key()) {
+      case Qt::Key_Left:
+        scrollBar = horizontalScrollBar();
+        delta = -step;
+        break;
+      case Qt::Key_Right:
+        scrollBar = horizontalScrollBar();
+        delta = step;
+        break;
+      case Qt::Key_Up:
+        scrollBar = verticalScrollBar();
+        delta = -step;
+        break;
+      case Qt::Key_Down:
+        scrollBar = verticalScrollBar();
+        delta = step;
+        break;
+      default:
+        break;
+    }
+    if (scrollBar) {
+      scrollBar->setValue(scrollBar->value() + delta);
+      event->accept();
+      return;
+    }
+  }
+  QAbstractScrollArea::keyPressEvent(event);
+}
+
 void CanvasWidget::wheelEvent(QWheelEvent* event) {
   if (event->modifiers().testFlag(Qt::ControlModifier)) {
     setZoom(zoom_ * std::pow(1.0015, event->angleDelta().y()));
@@ -392,20 +435,26 @@ void CanvasWidget::refreshAccessibleDescription() {
   setAccessibleDescription(
       QStringLiteral("Scrollable view of the current image document. View "
                      "zoom %1 percent; rotation %2 degrees clockwise. Pixel "
-                     "grid %3.")
+                     "grid %3. Pan %4 of %5 horizontally and %6 of %7 "
+                     "vertically.")
           .arg(qRound(zoom_ * 100.0))
           .arg(rotationDegreesClockwise())
           .arg(pixelGridEnabled_
                    ? (pixelGridVisible()
                           ? QStringLiteral("enabled and visible")
                           : QStringLiteral("enabled; visible from 800% zoom"))
-                   : QStringLiteral("disabled")));
+                   : QStringLiteral("disabled"))
+          .arg(horizontalScrollBar()->value())
+          .arg(horizontalScrollBar()->maximum())
+          .arg(verticalScrollBar()->value())
+          .arg(verticalScrollBar()->maximum()));
 }
 
 void CanvasWidget::updateScrollBars() {
   if (!document_) {
     horizontalScrollBar()->setRange(0, 0);
     verticalScrollBar()->setRange(0, 0);
+    refreshAccessibleDescription();
     return;
   }
   const auto content = QSizeF(rotatedDocumentSize()) * zoom_;
@@ -415,6 +464,7 @@ void CanvasWidget::updateScrollBars() {
       0, qMax(0, qCeil(content.width()) - viewport()->width()));
   verticalScrollBar()->setRange(
       0, qMax(0, qCeil(content.height()) - viewport()->height()));
+  refreshAccessibleDescription();
 }
 
 }  // namespace chromarchy

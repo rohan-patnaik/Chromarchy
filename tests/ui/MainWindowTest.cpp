@@ -27,6 +27,7 @@
 #include <QPushButton>
 #include <QPlainTextEdit>
 #include <QSettings>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTemporaryDir>
@@ -117,6 +118,7 @@ private slots:
   void opensBoundedOfflineHelpAndAboutByKeyboard();
   void togglesPixelGridByKeyboardWithoutEditingDocument();
   void fitsCanvasByKeyboardWithoutEditingDocument();
+  void pansCanvasByKeyboardWithoutEditingDocument();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -570,6 +572,76 @@ void MainWindowTest::fitsCanvasByKeyboardWithoutEditingDocument() {
   QCOMPARE(canvas->rotationDegreesClockwise(), 90);
   QCOMPARE(sortedStorageBlocks(view->document()), originalBlocks);
   QVERIFY(!view->isModified());
+}
+
+void MainWindowTest::pansCanvasByKeyboardWithoutEditingDocument() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto firstPath =
+      directory.filePath(QStringLiteral("keyboard-pan-first.chromarchy"));
+  const auto secondPath =
+      directory.filePath(QStringLiteral("keyboard-pan-second.chromarchy"));
+  auto first = chromarchy::Document::create(QSize(100, 80));
+  auto second = chromarchy::Document::create(QSize(120, 90));
+  QVERIFY(first);
+  QVERIFY(second);
+  QVERIFY(first->layerAt(0)->setPixelColor(QPoint(99, 79), Qt::cyan));
+  QVERIFY(second->layerAt(0)->setPixelColor(QPoint(119, 89), Qt::magenta));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*first, firstPath));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*second, secondPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(firstPath));
+  window.resize(640, 480);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  QVERIFY(tabs);
+  auto* firstView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(firstView);
+  auto* firstCanvas = firstView->canvas();
+  firstCanvas->setZoom(8.0);
+  QTest::qWait(1);
+  QVERIFY(firstCanvas->horizontalScrollBar()->maximum() >
+          chromarchy::CanvasWidget::keyboardPanStep);
+  firstCanvas->horizontalScrollBar()->setValue(64);
+  const auto firstBlocks = sortedStorageBlocks(firstView->document());
+  const auto firstComposite = firstView->document().composite();
+  firstCanvas->setFocus();
+  QTest::keyClick(firstCanvas, Qt::Key_Right);
+  QCOMPARE(firstCanvas->horizontalScrollBar()->value(),
+           64 + chromarchy::CanvasWidget::keyboardPanStep);
+  QVERIFY(firstCanvas->hasFocus());
+  QVERIFY(firstCanvas->accessibleDescription().contains(
+      QStringLiteral("Pan 96 of")));
+  QCOMPARE(sortedStorageBlocks(firstView->document()), firstBlocks);
+  QCOMPARE(firstView->document().composite(), firstComposite);
+  QVERIFY(!firstView->isModified());
+  QVERIFY(!firstView->history().canUndo());
+
+  QVERIFY(window.openFile(secondPath));
+  QCOMPARE(tabs->count(), 2);
+  auto* secondView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(secondView);
+  auto* secondCanvas = secondView->canvas();
+  secondCanvas->setZoom(8.0);
+  QTest::qWait(1);
+  secondCanvas->verticalScrollBar()->setValue(64);
+  QTest::keyClick(secondCanvas, Qt::Key_Down, Qt::ShiftModifier);
+  const auto secondPan = secondCanvas->verticalScrollBar()->value();
+  QCOMPARE(secondPan,
+           64 + chromarchy::CanvasWidget::keyboardPanStep *
+                    chromarchy::CanvasWidget::keyboardPanFastMultiplier);
+  QVERIFY(!secondView->isModified());
+  QVERIFY(!secondView->history().canUndo());
+
+  tabs->setCurrentWidget(firstView);
+  QTRY_COMPARE(firstCanvas->horizontalScrollBar()->value(),
+               64 + chromarchy::CanvasWidget::keyboardPanStep);
+  tabs->setCurrentWidget(secondView);
+  QTRY_COMPARE(secondCanvas->verticalScrollBar()->value(), secondPan);
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

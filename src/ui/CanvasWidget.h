@@ -4,6 +4,8 @@
 #include <QPoint>
 #include <QTransform>
 
+class QKeyEvent;
+
 namespace chromarchy {
 
 class Document;
@@ -16,6 +18,8 @@ public:
   static constexpr double maximumZoom = 32.0;
   static constexpr double pixelGridMinimumZoom = 8.0;
   static constexpr int pixelGridOpacity = 112;
+  static constexpr int keyboardPanStep = 32;
+  static constexpr int keyboardPanFastMultiplier = 4;
 
   explicit CanvasWidget(const Document* document, QWidget* parent = nullptr);
 
@@ -41,6 +45,7 @@ signals:
 protected:
   void paintEvent(QPaintEvent* event) override;
   void resizeEvent(QResizeEvent* event) override;
+  void keyPressEvent(QKeyEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
   void mousePressEvent(QMouseEvent* event) override;
   void mouseMoveEvent(QMouseEvent* event) override;

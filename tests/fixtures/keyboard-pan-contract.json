@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "documentSize": [2000, 1200],
+  "widgetSize": [320, 240],
+  "zoom": 1.0,
+  "stepPixels": 32,
+  "fastMultiplier": 4,
+  "hugeSparseSize": [300000, 300000],
+  "hugeSparseZoom": 0.01,
+  "repetitions": 1025,
+  "boundaryResult": "scrollbar-clamped"
+}

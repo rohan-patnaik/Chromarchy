@@ -107,6 +107,14 @@ with rotation and pixel-grid state. Offscreen tests cover enabled/no-document
 action state, unrotated and quarter-turned fitting, and unchanged document
 history; live zoom-change announcements remain unverified.
 
+When the canvas has focus, Arrow keys pan by 32 viewport pixels and Shift+Arrow
+keys pan by 128 pixels without moving focus. The canvas description reports the
+current horizontal and vertical scrollbar positions and maxima after keyboard,
+programmatic, resize, zoom, or rotation changes. Offscreen tests cover both
+axes, clamped boundaries, quarter-turn behavior, per-tab isolation, unchanged
+document/history state, and a 300k sparse canvas; live pan announcements remain
+unverified.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

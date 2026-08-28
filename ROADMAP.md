@@ -175,6 +175,12 @@ contract. Asymmetric width/height-limited fixtures, keyboard/accessibility,
 unchanged document state, 1,025-repeat 300k sparse clamping, and benchmark
 evidence are covered. Fit is not sticky across resize, and maximum-size canvases
 may remain partially visible when their required scale is below 1%.
+Arrow keys now pan the focused canvas by 32 viewport pixels, while Shift+Arrow
+uses a 128-pixel accelerated step. Both axes, scrollbar clamping, all
+quarter-turn orientations, per-tab state, accessible position descriptions,
+unchanged document state, and 1,025-pair 300k sparse behavior have fixture and
+benchmark evidence. Gestures, momentum, configurable steps, persisted view
+state, a navigator, and live Wayland latency remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 

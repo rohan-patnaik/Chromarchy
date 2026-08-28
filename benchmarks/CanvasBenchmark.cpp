@@ -2,6 +2,7 @@
 #include "ui/CanvasWidget.h"
 
 #include <QImage>
+#include <QScrollBar>
 #include <QTest>
 
 using chromarchy::CanvasWidget;
@@ -15,6 +16,7 @@ private slots:
   void paintRotatedSparseDocumentAtMinimumZoom();
   void paintPixelGridOnHugeSparseDocument();
   void fitHugeSparseDocumentWithinZoomBounds();
+  void panHugeSparseDocumentByKeyboard();
 };
 
 void CanvasBenchmark::paintSparseDocumentAtMinimumZoom() {
@@ -93,6 +95,29 @@ void CanvasBenchmark::fitHugeSparseDocumentWithinZoomBounds() {
     canvas.fitToViewport();
   }
   QCOMPARE(canvas.zoom(), CanvasWidget::minimumZoom);
+}
+
+void CanvasBenchmark::panHugeSparseDocumentByKeyboard() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(299'999, 299'999),
+                                               Qt::yellow));
+  const auto blocks = document->storageBlocks();
+  CanvasWidget canvas(&*document);
+  canvas.resize(640, 480);
+  canvas.show();
+  canvas.setZoom(CanvasWidget::minimumZoom);
+  QTest::qWait(1);
+  canvas.horizontalScrollBar()->setValue(
+      canvas.horizontalScrollBar()->maximum() / 2);
+  const auto start = canvas.horizontalScrollBar()->value();
+
+  QBENCHMARK {
+    QTest::keyClick(&canvas, Qt::Key_Right);
+    QTest::keyClick(&canvas, Qt::Key_Left);
+  }
+  QCOMPARE(canvas.horizontalScrollBar()->value(), start);
+  QCOMPARE(document->storageBlocks(), blocks);
 }
 
 QTEST_MAIN(CanvasBenchmark)

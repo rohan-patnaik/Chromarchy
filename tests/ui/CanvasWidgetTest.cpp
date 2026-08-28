@@ -25,6 +25,7 @@ private slots:
   void keepsRepeatedRotationAndHugeSparsePaintBounded();
   void rendersIndependentPixelGridContract();
   void keepsHugeSparsePixelGridViewportBounded();
+  void pansCanvasByKeyboardWithinBoundsAndRotation();
   void fitsCanvasWithinViewportAcrossRotationAndBounds();
 };
 
@@ -361,6 +362,113 @@ void CanvasWidgetTest::keepsHugeSparsePixelGridViewportBounded() {
   QCOMPARE(frame.size(), canvas.viewport()->size());
   QCOMPARE(document->storageBlocks(), originalBlocks);
   QCOMPARE(document->size(), QSize(300'000, 300'000));
+}
+
+void CanvasWidgetTest::pansCanvasByKeyboardWithinBoundsAndRotation() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/keyboard-pan-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  QCOMPARE(root.value(QStringLiteral("stepPixels")).toInt(),
+           CanvasWidget::keyboardPanStep);
+  QCOMPARE(root.value(QStringLiteral("fastMultiplier")).toInt(),
+           CanvasWidget::keyboardPanFastMultiplier);
+
+  const auto documentSize = root.value(QStringLiteral("documentSize")).toArray();
+  const auto widgetSize = root.value(QStringLiteral("widgetSize")).toArray();
+  auto document = Document::create(
+      QSize(documentSize.at(0).toInt(), documentSize.at(1).toInt()));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(0, 0), Qt::red));
+  QVERIFY(document->layerAt(0)->setPixelColor(
+      QPoint(document->size().width() - 1, document->size().height() - 1),
+      Qt::blue));
+  const auto originalBlocks = document->storageBlocks();
+  CanvasWidget canvas(&*document);
+  canvas.resize(widgetSize.at(0).toInt(), widgetSize.at(1).toInt());
+  canvas.show();
+  canvas.setZoom(root.value(QStringLiteral("zoom")).toDouble());
+  QTest::qWait(1);
+  QVERIFY(canvas.horizontalScrollBar()->maximum() > 0);
+  QVERIFY(canvas.verticalScrollBar()->maximum() > 0);
+  canvas.horizontalScrollBar()->setValue(256);
+  canvas.verticalScrollBar()->setValue(256);
+  canvas.activateWindow();
+  canvas.setFocus();
+  QTRY_VERIFY(canvas.hasFocus());
+
+  QTest::keyClick(&canvas, Qt::Key_Right);
+  QCOMPARE(canvas.horizontalScrollBar()->value(),
+           256 + CanvasWidget::keyboardPanStep);
+  QCOMPARE(canvas.verticalScrollBar()->value(), 256);
+  QVERIFY(canvas.hasFocus());
+  QVERIFY(canvas.accessibleDescription().contains(
+      QStringLiteral("Pan %1 of %2 horizontally")
+          .arg(canvas.horizontalScrollBar()->value())
+          .arg(canvas.horizontalScrollBar()->maximum())));
+
+  QTest::keyClick(&canvas, Qt::Key_Left);
+  QCOMPARE(canvas.horizontalScrollBar()->value(), 256);
+  for (const auto modifier : {Qt::ControlModifier, Qt::AltModifier,
+                              Qt::MetaModifier}) {
+    QTest::keyClick(&canvas, Qt::Key_Right, modifier);
+    QVERIFY(qAbs(canvas.horizontalScrollBar()->value() - 256) <=
+            canvas.horizontalScrollBar()->singleStep());
+    canvas.horizontalScrollBar()->setValue(256);
+  }
+  QTest::keyClick(&canvas, Qt::Key_Down, Qt::ShiftModifier);
+  QCOMPARE(canvas.verticalScrollBar()->value(),
+           256 + CanvasWidget::keyboardPanStep *
+                     CanvasWidget::keyboardPanFastMultiplier);
+  QTest::keyClick(&canvas, Qt::Key_Up, Qt::ShiftModifier);
+  QCOMPARE(canvas.verticalScrollBar()->value(), 256);
+
+  canvas.horizontalScrollBar()->setValue(
+      canvas.horizontalScrollBar()->maximum());
+  QTest::keyClick(&canvas, Qt::Key_Right);
+  QCOMPARE(canvas.horizontalScrollBar()->value(),
+           canvas.horizontalScrollBar()->maximum());
+  canvas.horizontalScrollBar()->setValue(0);
+  QTest::keyClick(&canvas, Qt::Key_Left, Qt::ShiftModifier);
+  QCOMPARE(canvas.horizontalScrollBar()->value(), 0);
+  QCOMPARE(root.value(QStringLiteral("boundaryResult")).toString(),
+           QStringLiteral("scrollbar-clamped"));
+
+  canvas.rotateClockwise();
+  canvas.horizontalScrollBar()->setValue(
+      canvas.horizontalScrollBar()->maximum() / 2);
+  const auto rotatedStart = canvas.horizontalScrollBar()->value();
+  QTest::keyClick(&canvas, Qt::Key_Right);
+  QCOMPARE(canvas.horizontalScrollBar()->value(),
+           rotatedStart + CanvasWidget::keyboardPanStep);
+  QCOMPARE(document->storageBlocks(), originalBlocks);
+
+  const auto hugeSize = root.value(QStringLiteral("hugeSparseSize")).toArray();
+  auto huge = Document::create(
+      QSize(hugeSize.at(0).toInt(), hugeSize.at(1).toInt()));
+  QVERIFY(huge);
+  QVERIFY(huge->layerAt(0)->setPixelColor(QPoint(299'999, 299'999), Qt::green));
+  const auto hugeBlocks = huge->storageBlocks();
+  CanvasWidget hugeCanvas(&*huge);
+  hugeCanvas.resize(640, 480);
+  hugeCanvas.show();
+  hugeCanvas.setZoom(root.value(QStringLiteral("hugeSparseZoom")).toDouble());
+  QTest::qWait(1);
+  hugeCanvas.horizontalScrollBar()->setValue(
+      hugeCanvas.horizontalScrollBar()->maximum() / 2);
+  const auto hugeStart = hugeCanvas.horizontalScrollBar()->value();
+  const auto repetitions = root.value(QStringLiteral("repetitions")).toInt();
+  QCOMPARE(repetitions, 1025);
+  for (int iteration = 0; iteration < repetitions; ++iteration) {
+    QTest::keyClick(&hugeCanvas, Qt::Key_Right);
+    QTest::keyClick(&hugeCanvas, Qt::Key_Left);
+  }
+  QCOMPARE(hugeCanvas.horizontalScrollBar()->value(), hugeStart);
+  QCOMPARE(huge->storageBlocks(), hugeBlocks);
 }
 
 void CanvasWidgetTest::fitsCanvasWithinViewportAcrossRotationAndBounds() {

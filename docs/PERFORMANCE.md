@@ -23,7 +23,9 @@ degrees of non-destructive view rotation. It also measures the display-only
 pixel grid at 3200% zoom on the same sparse extent; the 640×480 fixture submits
 at most 40 visible horizontal-plus-vertical boundary lines. A constant-space
 fit benchmark repeatedly moves the same 300k-square sparse canvas from maximum
-zoom to the existing 1% minimum clamp without scanning document pixels.
+zoom to the existing 1% minimum clamp without scanning document pixels. A
+keyboard-pan benchmark submits paired 32-pixel right/left viewport moves at the
+middle of the same 300k-square sparse canvas and verifies unchanged storage.
 
 The large canvas and selection workloads intentionally verify that cost follows
 allocated or visible tiles rather than total canvas area.

@@ -36,6 +36,8 @@ The non-destructive viewport-bounded pixel grid is documented in
 [docs/PIXEL_GRID.md](docs/PIXEL_GRID.md).
 Rotation-aware one-shot canvas fitting within the supported zoom range is
 documented in [docs/FIT_VIEW.md](docs/FIT_VIEW.md).
+Bounded per-tab arrow-key canvas navigation is documented in
+[docs/KEYBOARD_PAN.md](docs/KEYBOARD_PAN.md).
 Bidirectional keyboard reorder for flat pixel layers and its metadata-only
 resource boundary are documented in
 [docs/LAYER_REORDER.md](docs/LAYER_REORDER.md).
