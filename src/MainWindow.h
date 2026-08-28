@@ -39,6 +39,8 @@ private:
   void openRecentDocument(const QString& filePath);
   void clearRecentDocuments();
   void recordRecentDocument(const QString& filePath);
+  void showOfflineHelp();
+  void showAbout();
   bool saveDocument(chromarchy::DocumentView* view, bool choosePath);
   void exportDocument();
   void addDocumentTab(chromarchy::DocumentView* view);

@@ -72,4 +72,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/RECENT_DOCUMENTS.md"
   install -Dm644 Chromarchy/docs/VIEW_ROTATION.md \
     "$pkgdir/usr/share/doc/$pkgname/VIEW_ROTATION.md"
+  install -Dm644 Chromarchy/docs/OFFLINE_HELP.md \
+    "$pkgdir/usr/share/doc/$pkgname/OFFLINE_HELP.md"
 }

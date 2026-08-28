@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "pageCount": 6,
+  "maximumPageTextCharacters": 8192,
+  "maximumCombinedTextCharacters": 49152,
+  "pages": [
+    {
+      "objectName": "helpOverviewPage",
+      "requiredPhrases": ["Chromarchy Offline Help", "offline-first", "No help page loads remote content"]
+    },
+    {
+      "objectName": "helpShortcutsPage",
+      "requiredPhrases": ["Keyboard Shortcuts", "Ctrl+Alt+Right", "F1"]
+    },
+    {
+      "objectName": "helpFormatsLimitsPage",
+      "requiredPhrases": ["Formats and Resource Limits", ".chromarchy", "Maximum canvas dimension"]
+    },
+    {
+      "objectName": "helpDiagnosticsPage",
+      "requiredPhrases": ["Bounded Runtime Diagnostics", "Qt runtime", "does not execute shell commands"]
+    },
+    {
+      "objectName": "helpLicensesPage",
+      "requiredPhrases": ["Chromarchy License", "MIT License", "Qt and optional system codecs"]
+    },
+    {
+      "objectName": "helpAboutPage",
+      "requiredPhrases": ["About Chromarchy", "Rohan Patnaik", "not an Adobe product"]
+    }
+  ]
+}

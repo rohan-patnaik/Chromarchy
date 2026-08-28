@@ -87,6 +87,13 @@ keyboard test verifies enabled/reset action state, announced degree text, and
 that rotation does not modify document pixels, dimensions, history, or dirty
 state. Live assistive-technology event announcements remain unverified.
 
+The Help menu and bundled Offline Help dialog expose stable accessible names,
+descriptions, and roles. F1 opens the Overview without a document; Ctrl+Tab
+navigates six read-only named topics; Escape closes the dialog. The About menu
+action opens the same bounded dialog directly on its named About topic. The
+offscreen test verifies all topic controls and content bounds, but does not
+replace live AT-SPI announcement or screen-reader traversal evidence.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

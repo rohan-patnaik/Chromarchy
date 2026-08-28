@@ -4,6 +4,7 @@
 #include "core/NativeDocumentCodec.h"
 #include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
+#include "ui/HelpDialog.h"
 
 #include <QAbstractButton>
 #include <QAccessible>
@@ -13,12 +14,18 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QListWidget>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QPlainTextEdit>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -107,6 +114,7 @@ private slots:
   void exposesCoreWorkspaceAccessibility();
   void supportsCoreKeyboardWorkflow();
   void rotatesAndResetsViewByKeyboardWithoutEditingDocument();
+  void opensBoundedOfflineHelpAndAboutByKeyboard();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -132,6 +140,149 @@ void MainWindowTest::initTestCase() {
   QSettings::setDefaultFormat(QSettings::IniFormat);
   QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
                      settingsDirectory_.path());
+  QApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+}
+
+void MainWindowTest::opensBoundedOfflineHelpAndAboutByKeyboard() {
+  QFile fixture(QStringLiteral(CHROMARCHY_SOURCE_DIR)
+                    + QStringLiteral("/tests/fixtures/offline-help-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto contract = QJsonDocument::fromJson(fixture.readAll(), &parseError);
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QVERIFY(contract.isObject());
+  const auto root = contract.object();
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  QCOMPARE(root.value(QStringLiteral("pageCount")).toInt(),
+           chromarchy::HelpDialog::pageCount);
+  QCOMPARE(root.value(QStringLiteral("maximumPageTextCharacters")).toInt(),
+           static_cast<int>(chromarchy::HelpDialog::maximumPageTextCharacters));
+  QCOMPARE(root.value(QStringLiteral("maximumCombinedTextCharacters")).toInt(),
+           static_cast<int>(
+               chromarchy::HelpDialog::maximumCombinedTextCharacters));
+  const auto pageContracts = root.value(QStringLiteral("pages")).toArray();
+  QCOMPARE(pageContracts.size(), chromarchy::HelpDialog::pageCount);
+
+  QFile license(QStringLiteral(CHROMARCHY_SOURCE_DIR)
+                    + QStringLiteral("/LICENSE"));
+  QVERIFY(license.open(QIODevice::ReadOnly));
+  const auto exactLicense = QString::fromUtf8(license.readAll()).trimmed();
+  QVERIFY(!exactLicense.isEmpty());
+
+  MainWindow window;
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* helpMenu = requiredChild<QMenu>(window, "helpMenu");
+  auto* helpAction = requiredChild<QAction>(window, "offlineHelpAction");
+  auto* aboutAction = requiredChild<QAction>(window, "aboutChromarchyAction");
+  verifyAccessibleWidget(helpMenu, QStringLiteral("Help"));
+  QVERIFY(helpAction);
+  QVERIFY(aboutAction);
+  QCOMPARE(helpAction->shortcut(), QKeySequence(Qt::Key_F1));
+  QVERIFY(helpAction->isEnabled());
+  QVERIFY(aboutAction->isEnabled());
+
+  QString dialogError;
+  QTimer::singleShot(0, &window, [&dialogError, &pageContracts, &exactLicense] {
+    auto* dialog = qobject_cast<chromarchy::HelpDialog*>(
+        QApplication::activeModalWidget());
+    if (!dialog || !hasAccessibleMetadata(dialog)) {
+      dialogError = QStringLiteral("Offline Help dialog metadata is incomplete");
+      if (dialog) dialog->reject();
+      return;
+    }
+    auto* tabs = requiredChild<QTabWidget>(*dialog, "offlineHelpTabs");
+    auto* buttons =
+        requiredChild<QDialogButtonBox>(*dialog, "offlineHelpButtons");
+    if (!tabs || !buttons || !hasAccessibleMetadata(tabs) ||
+        !hasAccessibleMetadata(buttons) ||
+        tabs->count() != chromarchy::HelpDialog::pageCount) {
+      dialogError = QStringLiteral("Offline Help controls are incomplete");
+      dialog->reject();
+      return;
+    }
+    qsizetype combinedCharacters = 0;
+    for (const auto& pageValue : pageContracts) {
+      const auto pageContract = pageValue.toObject();
+      const auto objectName = pageContract.value(QStringLiteral("objectName"))
+                                  .toString();
+      auto* page = dialog->findChild<QPlainTextEdit*>(objectName);
+      if (!page || !page->isReadOnly() || !hasAccessibleMetadata(page)) {
+        dialogError = QStringLiteral("Help page contract failed: %1")
+                          .arg(objectName);
+        dialog->reject();
+        return;
+      }
+      const auto text = page->toPlainText();
+      if (text.isEmpty() ||
+          text.size() > chromarchy::HelpDialog::maximumPageTextCharacters ||
+          text.contains(QStringLiteral("http://"), Qt::CaseInsensitive) ||
+          text.contains(QStringLiteral("https://"), Qt::CaseInsensitive)) {
+        dialogError = QStringLiteral("Help page is unbounded or remote: %1")
+                          .arg(objectName);
+        dialog->reject();
+        return;
+      }
+      for (const auto& phraseValue :
+           pageContract.value(QStringLiteral("requiredPhrases")).toArray()) {
+        if (!text.contains(phraseValue.toString())) {
+          dialogError = QStringLiteral("Help page phrase missing: %1")
+                            .arg(phraseValue.toString());
+          dialog->reject();
+          return;
+        }
+      }
+      combinedCharacters += text.size();
+    }
+    if (combinedCharacters >
+        chromarchy::HelpDialog::maximumCombinedTextCharacters) {
+      dialogError = QStringLiteral("Combined Help content exceeds its cap");
+      dialog->reject();
+      return;
+    }
+    auto* licenses =
+        requiredChild<QPlainTextEdit>(*dialog, "helpLicensesPage");
+    if (!licenses || !licenses->toPlainText().contains(exactLicense)) {
+      dialogError = QStringLiteral("Bundled project license is not exact");
+      dialog->reject();
+      return;
+    }
+    tabs->setFocus();
+    const auto initialIndex = tabs->currentIndex();
+    QTest::keyClick(tabs, Qt::Key_Tab, Qt::ControlModifier);
+    if (tabs->currentIndex() == initialIndex) {
+      dialogError = QStringLiteral("Ctrl+Tab did not navigate Help topics");
+      dialog->reject();
+      return;
+    }
+    QTest::keyClick(dialog, Qt::Key_Escape);
+  });
+
+  QElapsedTimer openTimer;
+  openTimer.start();
+  QTest::keyClick(&window, Qt::Key_F1);
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QVERIFY2(openTimer.elapsed() <= 500,
+           qPrintable(QStringLiteral("Offline Help blocked for %1 ms")
+                          .arg(openTimer.elapsed())));
+
+  QTimer::singleShot(0, &window, [&dialogError] {
+    auto* dialog = qobject_cast<chromarchy::HelpDialog*>(
+        QApplication::activeModalWidget());
+    auto* tabs = dialog ? requiredChild<QTabWidget>(*dialog, "offlineHelpTabs")
+                        : nullptr;
+    if (!dialog || !tabs ||
+        tabs->currentWidget()->objectName() !=
+            QStringLiteral("helpAboutPage") ||
+        !hasAccessibleMetadata(tabs->currentWidget())) {
+      dialogError = QStringLiteral("About did not open its local Help page");
+      if (dialog) dialog->reject();
+      return;
+    }
+    QTest::keyClick(dialog, Qt::Key_Escape);
+  });
+  aboutAction->trigger();
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
 }
 
 void MainWindowTest::exposesCoreWorkspaceAccessibility() {

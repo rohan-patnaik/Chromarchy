@@ -42,6 +42,8 @@ qt_add_executable(chromarchy
   src/ui/CanvasWidget.h
   src/ui/DocumentView.cpp
   src/ui/DocumentView.h
+  src/ui/HelpDialog.cpp
+  src/ui/HelpDialog.h
 )
 
 target_link_libraries(chromarchy PRIVATE chromarchy_core Qt6::Widgets)
@@ -154,9 +156,14 @@ if(BUILD_TESTING)
     src/ui/CanvasWidget.h
     src/ui/DocumentView.cpp
     src/ui/DocumentView.h
+    src/ui/HelpDialog.cpp
+    src/ui/HelpDialog.h
   )
   target_link_libraries(chromarchy_main_window_tests PRIVATE
     chromarchy_core Qt6::Test Qt6::Widgets
+  )
+  target_compile_definitions(chromarchy_main_window_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
   )
   add_test(NAME chromarchy_main_window COMMAND chromarchy_main_window_tests)
   set_tests_properties(chromarchy_main_window PROPERTIES

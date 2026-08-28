@@ -154,6 +154,13 @@ reset keyboard actions over a four-state quarter-turn transform. Independent
 orientation, rotated pointer mapping, accessible state, unchanged document
 bytes/history, hostile repetition, and viewport-bounded 300k-class sparse
 rendering are covered without entering image-rotation or persistence decisions.
+Bundled offline Help and About now expose a six-topic, fixed-text local
+reference through F1 and the Help menu. Offscreen tests cover keyboard topic
+navigation, stable accessible metadata, exact project-license text, required
+format/resource/diagnostic content, a 500-ms opening budget, and hard per-page
+and combined text caps without shell, filesystem-enumeration, or network work.
+Full third-party license inventory, localization, live AT-SPI behavior, and
+complete dialog traversal remain later release-quality work.
 
 ### Phase 2 — close M0/M1 local workflows
 

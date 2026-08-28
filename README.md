@@ -30,6 +30,8 @@ Recent-file privacy and resource bounds are documented in
 [docs/RECENT_DOCUMENTS.md](docs/RECENT_DOCUMENTS.md).
 Non-destructive quarter-turn canvas behavior is documented in
 [docs/VIEW_ROTATION.md](docs/VIEW_ROTATION.md).
+Bundled Help/About content, its offline boundary, and hard text budgets are
+documented in [docs/OFFLINE_HELP.md](docs/OFFLINE_HELP.md).
 The first Phase 1 typed-pixel and checked byte-layout contracts are documented
 in [docs/PIXEL_STORAGE.md](docs/PIXEL_STORAGE.md).
 

@@ -4,6 +4,7 @@
 #include "core/NativeDocumentCodec.h"
 #include "ui/CanvasWidget.h"
 #include "ui/DocumentView.h"
+#include "ui/HelpDialog.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -261,6 +262,22 @@ void MainWindow::createActions() {
       QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_0));
   resetViewRotationAction_->setStatusTip(
       QStringLiteral("Reset the canvas view to zero degrees"));
+
+  auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
+  helpMenu->setObjectName(QStringLiteral("helpMenu"));
+  helpMenu->setAccessibleName(QStringLiteral("Help"));
+  helpMenu->setAccessibleDescription(
+      QStringLiteral("Open bundled offline help and product information"));
+  auto* offlineHelp = helpMenu->addAction(
+      QStringLiteral("&Offline Help"), this, &MainWindow::showOfflineHelp);
+  offlineHelp->setObjectName(QStringLiteral("offlineHelpAction"));
+  offlineHelp->setShortcut(QKeySequence(Qt::Key_F1));
+  offlineHelp->setStatusTip(
+      QStringLiteral("Open bundled help without network access"));
+  auto* about = helpMenu->addAction(QStringLiteral("&About Chromarchy"), this,
+                                    &MainWindow::showAbout);
+  about->setObjectName(QStringLiteral("aboutChromarchyAction"));
+  about->setStatusTip(QStringLiteral("Show Chromarchy product information"));
 }
 
 void MainWindow::createLayersDock() {
@@ -483,6 +500,16 @@ void MainWindow::clearRecentDocuments() {
 void MainWindow::recordRecentDocument(const QString& filePath) {
   recentDocuments_.add(filePath);
   scheduleRecentDocumentsMenuRefresh();
+}
+
+void MainWindow::showOfflineHelp() {
+  chromarchy::HelpDialog dialog(chromarchy::HelpDialog::Page::Overview, this);
+  dialog.exec();
+}
+
+void MainWindow::showAbout() {
+  chromarchy::HelpDialog dialog(chromarchy::HelpDialog::Page::About, this);
+  dialog.exec();
 }
 
 bool MainWindow::saveDocument(DocumentView* view, bool choosePath) {
