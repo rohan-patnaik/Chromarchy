@@ -58,6 +58,10 @@ The merge-down path invokes Ctrl+E and verifies that the surviving active row
 keeps its accessible interface and name through merge/undo/redo count changes.
 The action exposes correct locked/single-layer enablement, while deterministic
 composite output, sparse storage, dirty identity, and native reopen are checked.
+The flatten path invokes the Layer menu mnemonic entirely by keyboard and keeps
+the surviving row interface valid as it becomes the active Flattened row.
+Lock-aware action state, composite output, sparse storage, undo/redo identity,
+and native reopen are checked across the three-to-one layer transition.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

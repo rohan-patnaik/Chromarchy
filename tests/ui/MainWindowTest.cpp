@@ -15,6 +15,7 @@
 #include <QImage>
 #include <QListWidget>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
@@ -115,6 +116,7 @@ private slots:
   void createsSparseLayerByKeyboardAndPersists();
   void duplicatesLayerByKeyboardWithCowAndPersists();
   void mergesLayerByKeyboardAndPersistsComposite();
+  void flattensByKeyboardAndPersistsComposite();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -1308,6 +1310,140 @@ void MainWindowTest::mergesLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(reopened.document->activeLayerIndex(), 0);
   QCOMPARE(reopened.document->layerAt(0)->name(),
            QStringLiteral("Upper blue"));
+  QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->composite(), expectedComposite);
+}
+
+void MainWindowTest::flattensByKeyboardAndPersistsComposite() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-flatten.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Lower red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(1, 1),
+                                            QColor(220, 10, 20, 255)));
+  const auto middleIndex = source->addLayer(QStringLiteral("Middle green"));
+  QVERIFY(source->layerAt(middleIndex)->setPixelColor(
+      QPoint(2, 2), QColor(10, 220, 30, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Upper blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(3, 3), QColor(20, 40, 220, 255)));
+  const auto expectedComposite = source->composite();
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* lock = requiredChild<QCheckBox>(window, "layerLock");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  auto* flattenAction = requiredChild<QAction>(window, "flattenAction");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(lock);
+  QVERIFY(document);
+  QVERIFY(flattenAction);
+  QVERIFY(flattenAction->isEnabled());
+  QCOMPARE(document->document().layerCount(), 3);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(originalBlocks.size(), 3);
+  QVERIFY(!document->isModified());
+
+  auto* retainedListInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedListInterface);
+  auto* retainedFirstRowInterface = retainedListInterface->child(0);
+  QVERIFY(retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Down);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  lock->setFocus();
+  QTest::keyClick(lock, Qt::Key_Space);
+  QVERIFY(document->document().layerAt(middleIndex)->isLocked());
+  QVERIFY(document->isModified());
+  QVERIFY(!flattenAction->isEnabled());
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QVERIFY(!document->document().layerAt(middleIndex)->isLocked());
+  QVERIFY(!document->isModified());
+  QVERIFY(flattenAction->isEnabled());
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_Up);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_L, Qt::AltModifier);
+  QTRY_VERIFY(QApplication::activePopupWidget());
+  auto* layerMenu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+  QVERIFY(layerMenu);
+  QCOMPARE(layerMenu->title(), QStringLiteral("&Layer"));
+  QTest::keyClick(layerMenu, Qt::Key_F);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Flattened"));
+  QCOMPARE(document->document().layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(sortedStorageBlocks(document->document()).size(), 1);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers),
+           retainedListInterface);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Flattened"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QVERIFY(!flattenAction->isEnabled());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 3);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 3);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(retainedListInterface->child(1)->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QCOMPARE(retainedListInterface->child(2)->text(QAccessible::Name),
+           QStringLiteral("Lower red"));
+  QVERIFY(!document->isModified());
+  QVERIFY(flattenAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(document->document().composite(), expectedComposite);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Flattened"));
+  QVERIFY(document->isModified());
+  QVERIFY(!flattenAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerCount(), 1);
+  QCOMPARE(reopened.document->activeLayerIndex(), 0);
+  QCOMPARE(reopened.document->layerAt(0)->name(),
+           QStringLiteral("Flattened"));
   QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
   QCOMPARE(reopened.document->composite(), expectedComposite);
 }

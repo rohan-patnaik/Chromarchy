@@ -181,6 +181,7 @@ void MainWindow::createActions() {
   mergeDownAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
   flattenAction_ = layerMenu->addAction(QStringLiteral("&Flatten Document"), this,
                                         &MainWindow::flattenDocument);
+  flattenAction_->setObjectName(QStringLiteral("flattenAction"));
 
   auto* viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
   auto zoomAction = [this, viewMenu](const QString& text,
@@ -799,7 +800,17 @@ void MainWindow::updateActions() {
   mergeDownAction_->setEnabled(mergeUpper && mergeLower &&
                                !mergeUpper->isLocked() &&
                                !mergeLower->isLocked());
-  flattenAction_->setEnabled(hasDocument && view->document().layerCount() > 1);
+  bool canFlatten = hasDocument && view->document().layerCount() > 1;
+  if (canFlatten) {
+    for (int index = 0;
+         index < static_cast<int>(view->document().layerCount()); ++index) {
+      if (view->document().layerAt(index)->isLocked()) {
+        canFlatten = false;
+        break;
+      }
+    }
+  }
+  flattenAction_->setEnabled(canFlatten);
   moveLayerUpAction_->setEnabled(
       hasDocument && view->document().activeLayerIndex() <
                          view->document().layerCount() - 1);
