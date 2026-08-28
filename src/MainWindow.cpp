@@ -319,6 +319,40 @@ void MainWindow::createActions() {
       QKeySequence(Qt::CTRL | Qt::Key_PageUp));
   previousDocumentAction_->setStatusTip(QStringLiteral(
       "Switch to the previous open document, wrapping at the beginning"));
+  windowMenu->addSeparator();
+  toggleLayersAction_ = windowMenu->addAction(QStringLiteral("Show &Layers"));
+  toggleLayersAction_->setObjectName(QStringLiteral("toggleLayersAction"));
+  toggleLayersAction_->setCheckable(true);
+  toggleLayersAction_->setChecked(true);
+  toggleLayersAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT | Qt::Key_L));
+  toggleLayersAction_->setStatusTip(
+      QStringLiteral("Show or hide the local Layers panel"));
+  connect(toggleLayersAction_, &QAction::triggered, this,
+          [this](bool visible) {
+            if (!layersDock_) {
+              return;
+            }
+            layersDock_->setVisible(visible);
+            statusBar()->showMessage(
+                visible ? QStringLiteral("Layers panel shown")
+                        : QStringLiteral("Layers panel hidden"),
+                3000);
+          });
+  focusCanvasAction_ = windowMenu->addAction(
+      QStringLiteral("Focus &Canvas"), this, &MainWindow::focusCanvas);
+  focusCanvasAction_->setObjectName(QStringLiteral("focusCanvasAction"));
+  focusCanvasAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+  focusCanvasAction_->setStatusTip(
+      QStringLiteral("Move keyboard focus to the current document canvas"));
+  focusLayersAction_ = windowMenu->addAction(
+      QStringLiteral("Focus La&yers"), this, &MainWindow::focusLayersPanel);
+  focusLayersAction_->setObjectName(QStringLiteral("focusLayersAction"));
+  focusLayersAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_L));
+  focusLayersAction_->setStatusTip(
+      QStringLiteral("Show the Layers panel and move keyboard focus to it"));
 
   auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
   helpMenu->setObjectName(QStringLiteral("helpMenu"));
@@ -338,12 +372,12 @@ void MainWindow::createActions() {
 }
 
 void MainWindow::createLayersDock() {
-  auto* dock = new QDockWidget(QStringLiteral("Layers"), this);
-  dock->setObjectName(QStringLiteral("layersDock"));
-  dock->setAccessibleName(QStringLiteral("Layers panel"));
-  dock->setAccessibleDescription(
+  layersDock_ = new QDockWidget(QStringLiteral("Layers"), this);
+  layersDock_->setObjectName(QStringLiteral("layersDock"));
+  layersDock_->setAccessibleName(QStringLiteral("Layers panel"));
+  layersDock_->setAccessibleDescription(
       QStringLiteral("Manage layers in the current document"));
-  auto* panel = new QWidget(dock);
+  auto* panel = new QWidget(layersDock_);
   panel->setObjectName(QStringLiteral("layersPanel"));
   auto* layout = new QVBoxLayout(panel);
   layout->setContentsMargins(4, 4, 4, 4);
@@ -394,8 +428,10 @@ void MainWindow::createLayersDock() {
   layout->addLayout(properties);
   QWidget::setTabOrder(layers_, opacity_);
   QWidget::setTabOrder(opacity_, layerLocked_);
-  dock->setWidget(panel);
-  addDockWidget(Qt::RightDockWidgetArea, dock);
+  layersDock_->setWidget(panel);
+  addDockWidget(Qt::RightDockWidgetArea, layersDock_);
+  connect(layersDock_, &QDockWidget::visibilityChanged, toggleLayersAction_,
+          &QAction::setChecked);
 }
 
 void MainWindow::newDocument() {
@@ -980,6 +1016,20 @@ void MainWindow::navigateDocument(int offset) {
   }
 }
 
+void MainWindow::focusCanvas() {
+  if (auto* view = currentDocument()) {
+    view->canvas()->setFocus(Qt::ShortcutFocusReason);
+    statusBar()->showMessage(QStringLiteral("Canvas focused"), 3000);
+  }
+}
+
+void MainWindow::focusLayersPanel() {
+  layersDock_->show();
+  layersDock_->raise();
+  layers_->setFocus(Qt::ShortcutFocusReason);
+  statusBar()->showMessage(QStringLiteral("Layers panel focused"), 3000);
+}
+
 void MainWindow::commitLayerOpacity() {
   if (updatingLayers_) {
     return;
@@ -1055,6 +1105,7 @@ void MainWindow::updateActions() {
   const bool hasMultipleDocuments = tabs_->count() > 1;
   nextDocumentAction_->setEnabled(hasMultipleDocuments);
   previousDocumentAction_->setEnabled(hasMultipleDocuments);
+  focusCanvasAction_->setEnabled(hasDocument);
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "shortcuts": {
+    "toggleLayers": "Ctrl+Alt+Shift+L",
+    "focusLayers": "Ctrl+Alt+L",
+    "focusCanvas": "Ctrl+Alt+C"
+  },
+  "focusLayersShowsPanel": true,
+  "sparseDimension": 300000,
+  "repetitions": 1025,
+  "maximumToggleMilliseconds": 100,
+  "documentMutation": "none"
+}

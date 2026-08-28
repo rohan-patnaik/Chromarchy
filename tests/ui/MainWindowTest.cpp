@@ -14,6 +14,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QDockWidget>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
@@ -121,6 +122,7 @@ private slots:
   void fitsCanvasByKeyboardWithoutEditingDocument();
   void pansCanvasByKeyboardWithoutEditingDocument();
   void navigatesReorderedDocumentsByKeyboardWithinBounds();
+  void togglesAndFocusesLayersPanelByKeyboardWithinBounds();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -778,6 +780,126 @@ void MainWindowTest::navigatesReorderedDocumentsByKeyboardWithinBounds() {
   QCOMPARE(tabs->count(), 1);
   QVERIFY(!next->isEnabled());
   QVERIFY(!previous->isEnabled());
+}
+
+void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
+  QFile fixture(QStringLiteral(CHROMARCHY_SOURCE_DIR)
+                    + QStringLiteral("/tests/fixtures/layers-panel-focus-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto contract = QJsonDocument::fromJson(fixture.readAll(), &parseError);
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QVERIFY(contract.isObject());
+  const auto root = contract.object();
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  const auto dimension = root.value(QStringLiteral("sparseDimension")).toInt();
+  QCOMPARE(dimension, chromarchy::Document::maximumDimension);
+  const auto repetitions = root.value(QStringLiteral("repetitions")).toInt();
+  QVERIFY(repetitions > 0);
+  const auto maximumToggleMilliseconds =
+      root.value(QStringLiteral("maximumToggleMilliseconds")).toInt();
+  QVERIFY(maximumToggleMilliseconds > 0);
+  QCOMPARE(root.value(QStringLiteral("focusLayersShowsPanel")).toBool(), true);
+  QCOMPARE(root.value(QStringLiteral("documentMutation")).toString(),
+           QStringLiteral("none"));
+  const auto shortcuts = root.value(QStringLiteral("shortcuts")).toObject();
+  QCOMPARE(shortcuts.value(QStringLiteral("toggleLayers")).toString(),
+           QStringLiteral("Ctrl+Alt+Shift+L"));
+  QCOMPARE(shortcuts.value(QStringLiteral("focusLayers")).toString(),
+           QStringLiteral("Ctrl+Alt+L"));
+  QCOMPARE(shortcuts.value(QStringLiteral("focusCanvas")).toString(),
+           QStringLiteral("Ctrl+Alt+C"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("panel-focus.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(dimension, dimension));
+  QVERIFY(source);
+  QCOMPARE(source->layerAt(0)->pixels().allocatedTileCount(), 0);
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+  QFile sourceFile(documentPath);
+  QVERIFY(sourceFile.open(QIODevice::ReadOnly));
+  const auto originalSourceBytes = sourceFile.readAll();
+  sourceFile.close();
+
+  MainWindow window;
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* windowMenu = requiredChild<QMenu>(window, "windowMenu");
+  auto* dock = requiredChild<QDockWidget>(window, "layersDock");
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* toggle = requiredChild<QAction>(window, "toggleLayersAction");
+  auto* focusLayers = requiredChild<QAction>(window, "focusLayersAction");
+  auto* focusCanvas = requiredChild<QAction>(window, "focusCanvasAction");
+  QVERIFY(tabs);
+  verifyAccessibleWidget(windowMenu, QStringLiteral("Window"));
+  const auto* dockInterface = QAccessible::queryAccessibleInterface(dock);
+  QVERIFY(dockInterface);
+  QCOMPARE(dockInterface->text(QAccessible::Name), QStringLiteral("Layers"));
+  QVERIFY(dockInterface->role() != QAccessible::NoRole);
+  QVERIFY(layers);
+  verifyAccessibleWidget(layers, QStringLiteral("Document layers"));
+  QVERIFY(toggle);
+  QVERIFY(focusLayers);
+  QVERIFY(focusCanvas);
+  QCOMPARE(toggle->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT | Qt::Key_L));
+  QCOMPARE(focusLayers->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_L));
+  QCOMPARE(focusCanvas->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+  QVERIFY(!focusCanvas->isEnabled());
+  QVERIFY(focusLayers->isEnabled());
+  QVERIFY(toggle->isEnabled());
+
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  QTRY_VERIFY(dock->isVisible());
+  focusLayers->trigger();
+  QTRY_VERIFY(layers->hasFocus());
+  QVERIFY(window.openFile(documentPath));
+  QVERIFY(toggle->isChecked());
+  QVERIFY(focusCanvas->isEnabled());
+  auto* view =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(view);
+  auto* canvas = view->canvas();
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_L,
+                  Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier);
+  QTRY_VERIFY(!dock->isVisible());
+  QVERIFY(!toggle->isChecked());
+  QTest::keyClick(canvas, Qt::Key_L,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_VERIFY(dock->isVisible());
+  QTRY_VERIFY(layers->hasFocus());
+  QVERIFY(toggle->isChecked());
+  QTest::keyClick(layers, Qt::Key_C,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_VERIFY(canvas->hasFocus());
+
+  QElapsedTimer timer;
+  timer.start();
+  for (int iteration = 0; iteration < repetitions; ++iteration) {
+    toggle->trigger();
+  }
+  QVERIFY2(timer.elapsed() < qint64{repetitions} * maximumToggleMilliseconds,
+           qPrintable(QStringLiteral("Bounded panel toggles took %1 ms")
+                          .arg(timer.elapsed())));
+  QCOMPARE(dock->isVisible(), repetitions % 2 == 0);
+  QCOMPARE(toggle->isChecked(), dock->isVisible());
+  focusLayers->trigger();
+  QTRY_VERIFY(dock->isVisible());
+  QTRY_VERIFY(layers->hasFocus());
+  focusCanvas->trigger();
+  QTRY_VERIFY(canvas->hasFocus());
+
+  QCOMPARE(view->document().layerAt(0)->pixels().allocatedTileCount(), 0);
+  QVERIFY(!view->isModified());
+  QVERIFY(!view->history().canUndo());
+  QVERIFY(sourceFile.open(QIODevice::ReadOnly));
+  QCOMPARE(sourceFile.readAll(), originalSourceBytes);
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

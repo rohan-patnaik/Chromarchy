@@ -84,6 +84,8 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/MULTI_TAB_QUIT.md"
   install -Dm644 Chromarchy/docs/DOCUMENT_TAB_NAVIGATION.md \
     "$pkgdir/usr/share/doc/$pkgname/DOCUMENT_TAB_NAVIGATION.md"
+  install -Dm644 Chromarchy/docs/LAYERS_PANEL_FOCUS.md \
+    "$pkgdir/usr/share/doc/$pkgname/LAYERS_PANEL_FOCUS.md"
   install -Dm644 Chromarchy/docs/LAYER_REORDER.md \
     "$pkgdir/usr/share/doc/$pkgname/LAYER_REORDER.md"
 }

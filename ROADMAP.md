@@ -195,6 +195,15 @@ three empty 300k sparse documents are covered without pixel allocation,
 history, or dirty-state changes. Panel visibility/focus, workspace reset and
 persistence, pointer navigation, and live Wayland/assistive-technology evidence
 remain open.
+The same menu now toggles the Layers panel and provides direct keyboard focus
+commands for the layer list and current canvas. Checked visibility state,
+hidden-panel recovery, zero-document canvas-action disablement, source-file
+preservation, and 1,025 changes over a maximum-dimension empty sparse document
+are covered. Layout persistence/reset, additional panels, focus cycling,
+floating-dock behavior, and live Wayland/assistive-technology evidence remain
+open. Existing opaque Qt close-time window-state storage may retain dock
+visibility, but this slice adds no settings schema, migration, reset behavior,
+or persistence claim.
 
 ### Phase 2 — close M0/M1 local workflows
 

@@ -8,6 +8,7 @@ class QAction;
 class QCloseEvent;
 class QCheckBox;
 class QDoubleSpinBox;
+class QDockWidget;
 class QListWidget;
 class QListWidgetItem;
 class QMenu;
@@ -59,12 +60,15 @@ private:
   void moveLayerUp();
   void moveLayerDown();
   void navigateDocument(int offset);
+  void focusCanvas();
+  void focusLayersPanel();
   void commitLayerOpacity();
   void setLayerLocked(bool locked);
   void updateActions();
   void showError(const QString& title, const QString& detail);
 
   QTabWidget* tabs_ = nullptr;       // Owned by QObject parent.
+  QDockWidget* layersDock_ = nullptr;  // Owned by QObject parent.
   QListWidget* layers_ = nullptr;    // Owned by QObject parent.
   QMenu* recentDocumentsMenu_ = nullptr;  // Owned by QObject parent.
   QAction* saveAction_ = nullptr;    // Owned by QObject parent.
@@ -83,6 +87,9 @@ private:
   QAction* pixelGridAction_ = nullptr;
   QAction* nextDocumentAction_ = nullptr;
   QAction* previousDocumentAction_ = nullptr;
+  QAction* toggleLayersAction_ = nullptr;
+  QAction* focusCanvasAction_ = nullptr;
+  QAction* focusLayersAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;

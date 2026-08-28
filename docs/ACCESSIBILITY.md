@@ -40,6 +40,11 @@ order, wrap at both ends, and focus the destination canvas. Offscreen tests
 cover zero/one-tab disabled state, reordered tabs, both wrap directions, and
 retained focus over repeated maximum-dimension sparse-document navigation;
 live tab-change announcements remain unverified.
+Ctrl+Alt+Shift+L toggles the named Layers panel with synchronized checked state.
+Ctrl+Alt+L reveals it when hidden and focuses the document layer list, while
+Ctrl+Alt+C returns focus to the current canvas and is disabled without a
+document. Offscreen coverage verifies both focus destinations and repeated
+visibility changes; live focus/visibility announcements remain unverified.
 The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
 an over-budget UTF-8 name without dirtying the document, Unicode rename,
 undo/redo dirty-state identity, and save/reopen persistence.

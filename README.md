@@ -43,6 +43,8 @@ is documented in [docs/MULTI_TAB_QUIT.md](docs/MULTI_TAB_QUIT.md).
 Bounded next/previous keyboard navigation in current visual document-tab order
 is documented in
 [docs/DOCUMENT_TAB_NAVIGATION.md](docs/DOCUMENT_TAB_NAVIGATION.md).
+Keyboard Layers-panel visibility and direct panel/canvas focus are documented
+in [docs/LAYERS_PANEL_FOCUS.md](docs/LAYERS_PANEL_FOCUS.md).
 Bidirectional keyboard reorder for flat pixel layers and its metadata-only
 resource boundary are documented in
 [docs/LAYER_REORDER.md](docs/LAYER_REORDER.md).
