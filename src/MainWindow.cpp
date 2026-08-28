@@ -297,6 +297,29 @@ void MainWindow::createActions() {
     }
   });
 
+  auto* windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
+  windowMenu->setObjectName(QStringLiteral("windowMenu"));
+  windowMenu->setAccessibleName(QStringLiteral("Window"));
+  windowMenu->setAccessibleDescription(
+      QStringLiteral("Navigate open local documents"));
+  nextDocumentAction_ = windowMenu->addAction(
+      QStringLiteral("&Next Document"), this,
+      [this] { navigateDocument(1); });
+  nextDocumentAction_->setObjectName(QStringLiteral("nextDocumentAction"));
+  nextDocumentAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::Key_PageDown));
+  nextDocumentAction_->setStatusTip(
+      QStringLiteral("Switch to the next open document, wrapping at the end"));
+  previousDocumentAction_ = windowMenu->addAction(
+      QStringLiteral("&Previous Document"), this,
+      [this] { navigateDocument(-1); });
+  previousDocumentAction_->setObjectName(
+      QStringLiteral("previousDocumentAction"));
+  previousDocumentAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::Key_PageUp));
+  previousDocumentAction_->setStatusTip(QStringLiteral(
+      "Switch to the previous open document, wrapping at the beginning"));
+
   auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
   helpMenu->setObjectName(QStringLiteral("helpMenu"));
   helpMenu->setAccessibleName(QStringLiteral("Help"));
@@ -647,6 +670,7 @@ void MainWindow::closeDocumentTab(int index) {
   }
   tabs_->removeTab(index);
   view->deleteLater();
+  updateActions();
 }
 
 bool MainWindow::canClose(DocumentView* view) {
@@ -937,6 +961,25 @@ void MainWindow::moveLayerDown() {
   }
 }
 
+void MainWindow::navigateDocument(int offset) {
+  const auto count = tabs_->count();
+  if (count < 2 || (offset != -1 && offset != 1)) {
+    return;
+  }
+  const auto current = tabs_->currentIndex();
+  const auto destination = (current + offset + count) % count;
+  tabs_->setCurrentIndex(destination);
+  if (auto* view = currentDocument()) {
+    view->canvas()->setFocus(Qt::ShortcutFocusReason);
+    statusBar()->showMessage(
+        QStringLiteral("Document %1 of %2: %3")
+            .arg(destination + 1)
+            .arg(count)
+            .arg(view->displayName()),
+        3000);
+  }
+}
+
 void MainWindow::commitLayerOpacity() {
   if (updatingLayers_) {
     return;
@@ -1009,6 +1052,9 @@ void MainWindow::updateActions() {
   pixelGridAction_->setEnabled(hasDocument);
   pixelGridAction_->setChecked(hasDocument &&
                                view->canvas()->pixelGridEnabled());
+  const bool hasMultipleDocuments = tabs_->count() > 1;
+  nextDocumentAction_->setEnabled(hasMultipleDocuments);
+  previousDocumentAction_->setEnabled(hasMultipleDocuments);
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);

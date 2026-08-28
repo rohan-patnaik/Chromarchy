@@ -188,6 +188,13 @@ and canceled-tab context, then a retry that skips the clean document, Discards
 the second source-preservingly, Saves the third, and closes. Background jobs,
 save-failure sequencing, pointer tab-close behavior, and a shutdown deadline
 remain open.
+The Window menu now navigates next and previous documents by keyboard in the
+current visual tab order, wraps in both directions, and focuses the destination
+canvas. Zero/one-tab action state, reordered tabs, and 1,025 switches across
+three empty 300k sparse documents are covered without pixel allocation,
+history, or dirty-state changes. Panel visibility/focus, workspace reset and
+persistence, pointer navigation, and live Wayland/assistive-technology evidence
+remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 

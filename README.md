@@ -40,6 +40,9 @@ Bounded per-tab arrow-key canvas navigation is documented in
 [docs/KEYBOARD_PAN.md](docs/KEYBOARD_PAN.md).
 Deterministic keyboard resolution of modified documents during multi-tab quit
 is documented in [docs/MULTI_TAB_QUIT.md](docs/MULTI_TAB_QUIT.md).
+Bounded next/previous keyboard navigation in current visual document-tab order
+is documented in
+[docs/DOCUMENT_TAB_NAVIGATION.md](docs/DOCUMENT_TAB_NAVIGATION.md).
 Bidirectional keyboard reorder for flat pixel layers and its metadata-only
 resource boundary are documented in
 [docs/LAYER_REORDER.md](docs/LAYER_REORDER.md).

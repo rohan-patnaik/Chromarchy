@@ -30,6 +30,7 @@
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -119,6 +120,7 @@ private slots:
   void togglesPixelGridByKeyboardWithoutEditingDocument();
   void fitsCanvasByKeyboardWithoutEditingDocument();
   void pansCanvasByKeyboardWithoutEditingDocument();
+  void navigatesReorderedDocumentsByKeyboardWithinBounds();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -643,6 +645,139 @@ void MainWindowTest::pansCanvasByKeyboardWithoutEditingDocument() {
                64 + chromarchy::CanvasWidget::keyboardPanStep);
   tabs->setCurrentWidget(secondView);
   QTRY_COMPARE(secondCanvas->verticalScrollBar()->value(), secondPan);
+}
+
+void MainWindowTest::navigatesReorderedDocumentsByKeyboardWithinBounds() {
+  QFile fixture(QStringLiteral(CHROMARCHY_SOURCE_DIR)
+                    + QStringLiteral("/tests/fixtures/document-tab-navigation-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto contract = QJsonDocument::fromJson(fixture.readAll(), &parseError);
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QVERIFY(contract.isObject());
+  const auto root = contract.object();
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  const auto dimension = root.value(QStringLiteral("sparseDimension")).toInt();
+  QCOMPARE(dimension, chromarchy::Document::maximumDimension);
+  const auto repetitions = root.value(QStringLiteral("repetitions")).toInt();
+  QVERIFY(repetitions > 0);
+  const auto maximumSwitchMilliseconds =
+      root.value(QStringLiteral("maximumSwitchMilliseconds")).toInt();
+  QVERIFY(maximumSwitchMilliseconds > 0);
+  QCOMPARE(root.value(QStringLiteral("minimumEnabledTabCount")).toInt(), 2);
+  QCOMPARE(root.value(QStringLiteral("wrapPolicy")).toString(),
+           QStringLiteral("cyclic-visual-tab-order"));
+  QCOMPARE(root.value(QStringLiteral("focusAfterSwitch")).toString(),
+           QStringLiteral("destination-canvas"));
+  QCOMPARE(root.value(QStringLiteral("documentMutation")).toString(),
+           QStringLiteral("none"));
+  const auto shortcuts = root.value(QStringLiteral("shortcuts")).toObject();
+  QCOMPARE(shortcuts.value(QStringLiteral("next")).toString(),
+           QStringLiteral("Ctrl+PageDown"));
+  QCOMPARE(shortcuts.value(QStringLiteral("previous")).toString(),
+           QStringLiteral("Ctrl+PageUp"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QStringList names{QStringLiteral("first.chromarchy"),
+                          QStringLiteral("second.chromarchy"),
+                          QStringLiteral("third.chromarchy")};
+  QStringList paths;
+  for (const auto& name : names) {
+    auto document = chromarchy::Document::create(QSize(dimension, dimension));
+    QVERIFY(document);
+    QCOMPARE(document->layerAt(0)->pixels().allocatedTileCount(), 0);
+    const auto path = directory.filePath(name);
+    QVERIFY(chromarchy::NativeDocumentCodec::save(*document, path));
+    paths.push_back(path);
+  }
+
+  MainWindow window;
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* windowMenu = requiredChild<QMenu>(window, "windowMenu");
+  auto* next = requiredChild<QAction>(window, "nextDocumentAction");
+  auto* previous = requiredChild<QAction>(window, "previousDocumentAction");
+  auto* close = requiredChild<QAction>(window, "closeDocumentAction");
+  QVERIFY(tabs);
+  verifyAccessibleWidget(windowMenu, QStringLiteral("Window"));
+  QVERIFY(next);
+  QVERIFY(previous);
+  QVERIFY(close);
+  QCOMPARE(next->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_PageDown));
+  QCOMPARE(previous->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_PageUp));
+  QVERIFY(!next->isEnabled());
+  QVERIFY(!previous->isEnabled());
+
+  QVERIFY(window.openFile(paths.at(0)));
+  QVERIFY(!next->isEnabled());
+  QVERIFY(!previous->isEnabled());
+  QVERIFY(window.openFile(paths.at(1)));
+  QVERIFY(window.openFile(paths.at(2)));
+  QVERIFY(next->isEnabled());
+  QVERIFY(previous->isEnabled());
+  QCOMPARE(tabs->count(), 3);
+
+  auto* first = qobject_cast<chromarchy::DocumentView*>(tabs->widget(0));
+  auto* second = qobject_cast<chromarchy::DocumentView*>(tabs->widget(1));
+  auto* third = qobject_cast<chromarchy::DocumentView*>(tabs->widget(2));
+  QVERIFY(first);
+  QVERIFY(second);
+  QVERIFY(third);
+  const QVector<chromarchy::DocumentView*> views{first, second, third};
+  tabs->tabBar()->moveTab(0, 2);
+  const auto expectedOrder =
+      root.value(QStringLiteral("visualOrderAfterReorder")).toArray();
+  QCOMPARE(expectedOrder.size(), 3);
+  QCOMPARE(expectedOrder.at(0).toString(), QStringLiteral("second"));
+  QCOMPARE(expectedOrder.at(1).toString(), QStringLiteral("third"));
+  QCOMPARE(expectedOrder.at(2).toString(), QStringLiteral("first"));
+  QCOMPARE(tabs->widget(0), second);
+  QCOMPARE(tabs->widget(1), third);
+  QCOMPARE(tabs->widget(2), first);
+
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  tabs->setCurrentIndex(0);
+  second->canvas()->setFocus();
+  QTest::keyClick(second->canvas(), Qt::Key_PageDown, Qt::ControlModifier);
+  QTRY_COMPARE(tabs->currentWidget(), static_cast<QWidget*>(third));
+  QVERIFY(third->canvas()->hasFocus());
+  QTest::keyClick(third->canvas(), Qt::Key_PageDown, Qt::ControlModifier);
+  QTRY_COMPARE(tabs->currentWidget(), static_cast<QWidget*>(first));
+  QVERIFY(first->canvas()->hasFocus());
+  QTest::keyClick(first->canvas(), Qt::Key_PageDown, Qt::ControlModifier);
+  QTRY_COMPARE(tabs->currentWidget(), static_cast<QWidget*>(second));
+  QTest::keyClick(second->canvas(), Qt::Key_PageUp, Qt::ControlModifier);
+  QTRY_COMPARE(tabs->currentWidget(), static_cast<QWidget*>(first));
+  QVERIFY(first->canvas()->hasFocus());
+
+  const auto startIndex = tabs->currentIndex();
+  QElapsedTimer timer;
+  timer.start();
+  for (int iteration = 0; iteration < repetitions; ++iteration) {
+    next->trigger();
+  }
+  QVERIFY2(timer.elapsed() < qint64{repetitions} * maximumSwitchMilliseconds,
+           qPrintable(QStringLiteral("Bounded tab navigation took %1 ms")
+                          .arg(timer.elapsed())));
+  QCOMPARE(tabs->currentIndex(), (startIndex + repetitions) % tabs->count());
+  auto* currentView =
+      qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+  QVERIFY(currentView);
+  QVERIFY(currentView->canvas()->hasFocus());
+  for (auto* view : views) {
+    QCOMPARE(view->document().layerAt(0)->pixels().allocatedTileCount(), 0);
+    QVERIFY(!view->isModified());
+    QVERIFY(!view->history().canUndo());
+  }
+  close->trigger();
+  QCOMPARE(tabs->count(), 2);
+  QVERIFY(next->isEnabled());
+  QVERIFY(previous->isEnabled());
+  close->trigger();
+  QCOMPARE(tabs->count(), 1);
+  QVERIFY(!next->isEnabled());
+  QVERIFY(!previous->isEnabled());
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

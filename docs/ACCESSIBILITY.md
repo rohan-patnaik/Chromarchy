@@ -34,6 +34,12 @@ accessible metadata. Cancel retains every tab with the canceled document
 active; retry skips the already saved clean tab and resolves the remaining
 documents in order through keyboard Discard and Save. Live announcement and
 screen-reader behavior remain unverified.
+The Window menu has a stable accessible name and description. Ctrl+PageDown
+and Ctrl+PageUp navigate next and previous documents in current visual tab
+order, wrap at both ends, and focus the destination canvas. Offscreen tests
+cover zero/one-tab disabled state, reordered tabs, both wrap directions, and
+retained focus over repeated maximum-dimension sparse-document navigation;
+live tab-change announcements remain unverified.
 The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
 an over-budget UTF-8 name without dirtying the document, Unicode rename,
 undo/redo dirty-state identity, and save/reopen persistence.

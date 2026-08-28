@@ -58,6 +58,7 @@ private:
   void flattenDocument();
   void moveLayerUp();
   void moveLayerDown();
+  void navigateDocument(int offset);
   void commitLayerOpacity();
   void setLayerLocked(bool locked);
   void updateActions();
@@ -80,6 +81,8 @@ private:
   QAction* rotateViewCounterclockwiseAction_ = nullptr;
   QAction* resetViewRotationAction_ = nullptr;
   QAction* pixelGridAction_ = nullptr;
+  QAction* nextDocumentAction_ = nullptr;
+  QAction* previousDocumentAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;

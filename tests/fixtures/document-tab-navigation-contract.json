@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "shortcuts": {
+    "next": "Ctrl+PageDown",
+    "previous": "Ctrl+PageUp"
+  },
+  "visualOrderAfterReorder": ["second", "third", "first"],
+  "wrapPolicy": "cyclic-visual-tab-order",
+  "focusAfterSwitch": "destination-canvas",
+  "minimumEnabledTabCount": 2,
+  "sparseDimension": 300000,
+  "repetitions": 1025,
+  "maximumSwitchMilliseconds": 50,
+  "documentMutation": "none"
+}
