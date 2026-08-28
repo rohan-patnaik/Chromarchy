@@ -482,16 +482,29 @@ DocumentView* MainWindow::currentDocument() const {
 
 void MainWindow::refreshLayers() {
   updatingLayers_ = true;
-  layers_->clear();
   auto* view = currentDocument();
   if (view) {
     const auto& document = view->document();
-    for (int index = static_cast<int>(document.layerCount()) - 1; index >= 0;
-         --index) {
+    const auto layerCount = static_cast<int>(document.layerCount());
+    if (layers_->count() != layerCount) {
+      layers_->clear();
+    }
+    for (int row = 0; row < layerCount; ++row) {
+      const auto index = layerCount - row - 1;
       const auto* layer = document.layerAt(index);
-      auto* item = new QListWidgetItem(layer->name(), layers_);
+      auto* item = layers_->item(row);
+      if (!item) {
+        item = new QListWidgetItem(layers_);
+      }
+      item->setText(layer->name());
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
       item->setCheckState(layer->isVisible() ? Qt::Checked : Qt::Unchecked);
+      item->setData(Qt::AccessibleTextRole, layer->name());
+      item->setData(
+          Qt::AccessibleDescriptionRole,
+          layer->isVisible()
+              ? QStringLiteral("Visible pixel layer; press Space to hide")
+              : QStringLiteral("Hidden pixel layer; press Space to show"));
       item->setData(Qt::UserRole, index);
       if (index == document.activeLayerIndex()) {
         layers_->setCurrentItem(item);
@@ -500,6 +513,8 @@ void MainWindow::refreshLayers() {
     const auto* active = document.layerAt(document.activeLayerIndex());
     opacity_->setValue(active->opacity() * 100.0);
     layerLocked_->setChecked(active->isLocked());
+  } else {
+    layers_->clear();
   }
   opacity_->setEnabled(view != nullptr);
   layerLocked_->setEnabled(view != nullptr);

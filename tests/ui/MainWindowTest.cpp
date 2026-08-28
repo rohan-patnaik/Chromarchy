@@ -58,6 +58,21 @@ bool hasStandardShortcut(const QAction* action,
   return false;
 }
 
+void verifyAccessibleLayerItem(QListWidget* layers, int row,
+                               const QString& name, bool checked) {
+  QApplication::processEvents();
+  const auto* listInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(listInterface);
+  QVERIFY(row >= 0 && row < listInterface->childCount());
+  const auto* itemInterface = listInterface->child(row);
+  QVERIFY(itemInterface);
+  QCOMPARE(itemInterface->text(QAccessible::Name), name);
+  QVERIFY(!itemInterface->text(QAccessible::Description).isEmpty());
+  const auto state = itemInterface->state();
+  QVERIFY(state.checkable);
+  QCOMPARE(state.checked, checked);
+}
+
 void cancelPrompt(QMessageBox* prompt) {
   if (auto* cancel = prompt->button(QMessageBox::Cancel)) {
     cancel->click();
@@ -79,6 +94,7 @@ private slots:
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
   void renamesLayerByKeyboardAndPersistsUnicode();
+  void togglesLayerVisibilityByKeyboardAndPersistsComposite();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -582,6 +598,70 @@ void MainWindowTest::renamesLayerByKeyboardAndPersistsUnicode() {
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
   QCOMPARE(reopened.document->layerAt(0)->name(), renamed);
+}
+
+void MainWindowTest::togglesLayerVisibilityByKeyboardAndPersistsComposite() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-visibility.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Base red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Top blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(2, 3), QColor(10, 20, 230, 255)));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(layers);
+  QVERIFY(document);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QVERIFY(!document->isModified());
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), true);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  layers->setFocus();
+  QCOMPARE(QApplication::focusWidget(), layers);
+  QTest::keyClick(layers, Qt::Key_Space);
+  QVERIFY(!document->document().layerAt(topIndex)->isVisible());
+  QVERIFY(document->isModified());
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), false);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+
+  QTest::keyClick(layers, Qt::Key_Z, Qt::ControlModifier);
+  QVERIFY(document->document().layerAt(topIndex)->isVisible());
+  QVERIFY(!document->isModified());
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), true);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  QTest::keyClick(layers, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QVERIFY(!document->document().layerAt(topIndex)->isVisible());
+  QVERIFY(document->isModified());
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Top blue"), false);
+  QTest::keyClick(layers, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QVERIFY(!reopened.document->layerAt(topIndex)->isVisible());
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
 }
 
 QTEST_MAIN(MainWindowTest)

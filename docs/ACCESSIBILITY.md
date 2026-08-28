@@ -12,6 +12,10 @@ as the Escape action.
 The Rename Layer dialog exposes a named, described text editor and action
 group, bounds editor input, and is reachable with F2 without moving focus to
 the layers panel.
+Flat layer rows expose their names, visibility descriptions, and checked state.
+Metadata-only refreshes retain row identity when the layer count is unchanged,
+so assistive interfaces do not become stale across visibility, rename, opacity,
+lock, undo, or redo updates.
 
 `MainWindowTest` queries Qt's accessibility interfaces offscreen and verifies
 that the core workspace objects have non-empty roles, stable names, and
@@ -27,6 +31,9 @@ the edit persisted before the tab closed.
 The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
 an over-budget UTF-8 name without dirtying the document, Unicode rename,
 undo/redo dirty-state identity, and save/reopen persistence.
+The visibility path focuses the layer list, toggles the selected row with
+Space, verifies the accessible checked state and deterministic composite before
+and after undo/redo, then saves and reopens the hidden-layer result.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
