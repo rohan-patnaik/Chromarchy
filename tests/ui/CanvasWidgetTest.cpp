@@ -387,10 +387,14 @@ void CanvasWidgetTest::fitsCanvasWithinViewportAcrossRotationAndBounds() {
   canvas.resize(widgetSize.at(0).toInt(), widgetSize.at(1).toInt());
   canvas.show();
   canvas.setZoom(4.0);
+  QTest::qWait(1);
+  QVERIFY(canvas.horizontalScrollBar()->isVisible());
+  QVERIFY(canvas.verticalScrollBar()->isVisible());
   QSignalSpy zooms(&canvas, &CanvasWidget::zoomChanged);
   const double expectedUnrotated = qMin(
-      static_cast<double>(canvas.viewport()->width()) / document->size().width(),
-      static_cast<double>(canvas.viewport()->height()) /
+      static_cast<double>(canvas.maximumViewportSize().width()) /
+          document->size().width(),
+      static_cast<double>(canvas.maximumViewportSize().height()) /
           document->size().height());
   QCOMPARE(root.value(QStringLiteral("unrotatedLimitingAxis")).toString(),
            QStringLiteral("width"));
@@ -399,15 +403,22 @@ void CanvasWidgetTest::fitsCanvasWithinViewportAcrossRotationAndBounds() {
           static_cast<double>(canvas.viewport()->height()) /
               document->size().height());
   canvas.fitToViewport();
+  QTest::qWait(1);
   QCOMPARE(canvas.zoom(), expectedUnrotated);
   QCOMPARE(canvas.visibleDocumentRect(), QRect(QPoint(), document->size()));
+  QVERIFY(!canvas.horizontalScrollBar()->isVisible());
+  QVERIFY(!canvas.verticalScrollBar()->isVisible());
+  canvas.fitToViewport();
+  QCOMPARE(canvas.zoom(), expectedUnrotated);
   QVERIFY(canvas.accessibleDescription().contains(QStringLiteral("View zoom")));
 
   canvas.rotateClockwise();
   canvas.setZoom(4.0);
   const double expectedRotated = qMin(
-      static_cast<double>(canvas.viewport()->width()) / document->size().height(),
-      static_cast<double>(canvas.viewport()->height()) / document->size().width());
+      static_cast<double>(canvas.maximumViewportSize().width()) /
+          document->size().height(),
+      static_cast<double>(canvas.maximumViewportSize().height()) /
+          document->size().width());
   QCOMPARE(root.value(QStringLiteral("rotatedLimitingAxis")).toString(),
            QStringLiteral("height"));
   QVERIFY(static_cast<double>(canvas.viewport()->height()) /
@@ -417,6 +428,8 @@ void CanvasWidgetTest::fitsCanvasWithinViewportAcrossRotationAndBounds() {
   canvas.fitToViewport();
   QCOMPARE(canvas.zoom(), expectedRotated);
   QCOMPARE(canvas.visibleDocumentRect(), QRect(QPoint(), document->size()));
+  canvas.fitToViewport();
+  QCOMPARE(canvas.zoom(), expectedRotated);
   QVERIFY(zooms.size() >= 3);
   QCOMPARE(document->storageBlocks(), originalBlocks);
 

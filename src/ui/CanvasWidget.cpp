@@ -67,13 +67,13 @@ void CanvasWidget::setZoom(double zoom) {
 
 void CanvasWidget::fitToViewport() {
   const auto rotatedSize = rotatedDocumentSize();
-  if (rotatedSize.isEmpty() || viewport()->width() <= 0 ||
-      viewport()->height() <= 0) {
+  const auto available = maximumViewportSize();
+  if (rotatedSize.isEmpty() || available.isEmpty()) {
     return;
   }
-  const double horizontal = static_cast<double>(viewport()->width()) /
+  const double horizontal = static_cast<double>(available.width()) /
                             rotatedSize.width();
-  const double vertical = static_cast<double>(viewport()->height()) /
+  const double vertical = static_cast<double>(available.height()) /
                           rotatedSize.height();
   setZoom(qMin(horizontal, vertical));
 }
