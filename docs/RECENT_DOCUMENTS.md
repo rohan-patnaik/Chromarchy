@@ -9,10 +9,15 @@ does not perform network synchronization or telemetry.
 The list is ordered most-recent first, deduplicated, and hard-limited to 20
 entries. Each stored path is limited to 4096 UTF-8 bytes. Empty, relative,
 over-limit, duplicate, and missing-file entries are discarded when settings are
-read. At most the first 20 stored candidates are inspected, and overlong text is
-rejected before path normalization or UTF-8 conversion. A file that disappears
-after its menu action was built is removed again at activation time without
-attempting a decode.
+read. At most the first 20 stored candidates are inspected. Text longer than
+4096 UTF-16 code units is rejected before path normalization; shorter multibyte
+text is normalized and then rejected if its UTF-8 encoding exceeds 4096 bytes.
+Qt deserializes the settings value before Chromarchy can apply its candidate
+cap, so a manually corrupted or oversized settings backend is not claimed to
+have a bounded parse/allocation cost. System and organization fallback scopes
+are ignored, ensuring that the user-scope privacy clear cannot reveal a fallback
+recent-file list. A file that disappears after its menu action was built is
+removed again at activation time without attempting a decode.
 
 The first nine entries expose Ctrl+Alt+1 through Ctrl+Alt+9 in addition to menu
 mnemonics. Ctrl+Alt+Shift+Delete clears the entire private path list without

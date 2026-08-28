@@ -17,6 +17,7 @@ private slots:
   void init();
   void boundsDeduplicatesAndPersistsPathsOnly();
   void normalizesHostileSettingsAndPrunesMissing();
+  void ignoresFallbackScopesAndRejectsMultibyteOverlongPaths();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -29,12 +30,19 @@ void RecentDocumentsTest::initTestCase() {
   QSettings::setDefaultFormat(QSettings::IniFormat);
   QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
                      settingsDirectory_.path());
+  QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope,
+                     settingsDirectory_.filePath(QStringLiteral("system")));
 }
 
 void RecentDocumentsTest::init() {
   QSettings settings;
   settings.clear();
   settings.sync();
+  QSettings systemSettings(QSettings::IniFormat, QSettings::SystemScope,
+                           QCoreApplication::organizationName(),
+                           QCoreApplication::applicationName());
+  systemSettings.clear();
+  systemSettings.sync();
 }
 
 void RecentDocumentsTest::boundsDeduplicatesAndPersistsPathsOnly() {
@@ -130,6 +138,35 @@ void RecentDocumentsTest::normalizesHostileSettingsAndPrunesMissing() {
   recents.add(QStringLiteral("relative.chromarchy"));
   recents.add(missingPath);
   recents.add(overlongPath);
+  QVERIFY(recents.paths().isEmpty());
+}
+
+void RecentDocumentsTest::ignoresFallbackScopesAndRejectsMultibyteOverlongPaths() {
+  QTemporaryDir files;
+  QVERIFY(files.isValid());
+  const auto fallbackPath = files.filePath(QStringLiteral("fallback.chromarchy"));
+  QFile fallbackFile(fallbackPath);
+  QVERIFY(fallbackFile.open(QIODevice::WriteOnly));
+  fallbackFile.close();
+
+  QSettings systemSettings(QSettings::IniFormat, QSettings::SystemScope,
+                           QCoreApplication::organizationName(),
+                           QCoreApplication::applicationName());
+  systemSettings.setValue(RecentDocuments::settingsKey(),
+                          QStringList{fallbackPath});
+  systemSettings.sync();
+
+  RecentDocuments recents;
+  QVERIFY(recents.paths().isEmpty());
+  recents.clear();
+  QVERIFY(recents.paths().isEmpty());
+
+  const auto multibyteOverlong =
+      QStringLiteral("/") + QString(2000, QChar(0x0800));
+  QVERIFY(multibyteOverlong.size() < RecentDocuments::maximumPathUtf8Bytes);
+  QVERIFY(multibyteOverlong.toUtf8().size() >
+          RecentDocuments::maximumPathUtf8Bytes);
+  recents.add(multibyteOverlong);
   QVERIFY(recents.paths().isEmpty());
 }
 

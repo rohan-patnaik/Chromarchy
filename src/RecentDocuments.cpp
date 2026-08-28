@@ -7,6 +7,7 @@
 
 QStringList RecentDocuments::paths() {
   QSettings settings;
+  settings.setFallbacksEnabled(false);
   const auto stored = settings.value(settingsKey()).toStringList();
   QStringList sanitized;
   sanitized.reserve(
@@ -60,6 +61,7 @@ void RecentDocuments::remove(const QString &filePath) {
 
 void RecentDocuments::clear() {
   QSettings settings;
+  settings.setFallbacksEnabled(false);
   settings.remove(settingsKey());
   settings.sync();
 }
@@ -84,6 +86,7 @@ QString RecentDocuments::normalizedPath(const QString &filePath) {
 
 void RecentDocuments::store(const QStringList &paths) {
   QSettings settings;
+  settings.setFallbacksEnabled(false);
   if (paths.isEmpty()) {
     settings.remove(settingsKey());
   } else {

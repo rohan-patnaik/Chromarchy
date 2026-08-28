@@ -84,6 +84,7 @@ private:
   QDoubleSpinBox* opacity_ = nullptr;  // Owned by QObject parent.
   QCheckBox* layerLocked_ = nullptr;   // Owned by QObject parent.
   bool updatingLayers_ = false;
+  bool recentDocumentsMenuRefreshPending_ = false;
   int untitledCounter_ = 1;
   RecentDocuments recentDocuments_;
 };

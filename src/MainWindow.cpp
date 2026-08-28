@@ -416,7 +416,14 @@ void MainWindow::refreshRecentDocumentsMenu() {
 }
 
 void MainWindow::scheduleRecentDocumentsMenuRefresh() {
-  QTimer::singleShot(0, this, &MainWindow::refreshRecentDocumentsMenu);
+  if (recentDocumentsMenuRefreshPending_) {
+    return;
+  }
+  recentDocumentsMenuRefreshPending_ = true;
+  QTimer::singleShot(0, this, [this] {
+    recentDocumentsMenuRefreshPending_ = false;
+    refreshRecentDocumentsMenu();
+  });
 }
 
 void MainWindow::openRecentDocument(const QString& filePath) {
