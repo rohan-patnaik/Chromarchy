@@ -28,7 +28,7 @@ Enter, and verifies that Escape cancels without adding another document.
 Close-prompt tests drive Escape/Cancel, tab-and-Space/Discard, and
 Return/Save from the focused controls; the save path is reopened to verify that
 the edit persisted before the tab closed.
-Document tab close buttons have document-specific names and descriptions.
+Document tab close buttons have document-specific names and state-aware descriptions.
 Offscreen pointer coverage closes a non-current dirty tab, verifies that the
 target becomes the active accessible prompt context, then checks Cancel focus
 restoration and source-preserving Discard with deterministic successor-canvas
