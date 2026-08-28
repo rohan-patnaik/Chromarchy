@@ -486,16 +486,16 @@ void MainWindow::refreshLayers() {
   if (view) {
     const auto& document = view->document();
     const auto layerCount = static_cast<int>(document.layerCount());
-    if (layers_->count() != layerCount) {
-      layers_->clear();
+    while (layers_->count() > layerCount) {
+      delete layers_->takeItem(layers_->count() - 1);
+    }
+    while (layers_->count() < layerCount) {
+      new QListWidgetItem(layers_);
     }
     for (int row = 0; row < layerCount; ++row) {
       const auto index = layerCount - row - 1;
       const auto* layer = document.layerAt(index);
       auto* item = layers_->item(row);
-      if (!item) {
-        item = new QListWidgetItem(layers_);
-      }
       item->setText(layer->name());
       item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
       item->setCheckState(layer->isVisible() ? Qt::Checked : Qt::Unchecked);

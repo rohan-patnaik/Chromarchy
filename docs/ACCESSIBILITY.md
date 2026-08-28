@@ -13,9 +13,9 @@ The Rename Layer dialog exposes a named, described text editor and action
 group, bounds editor input, and is reachable with F2 without moving focus to
 the layers panel.
 Flat layer rows expose their names, visibility descriptions, and checked state.
-Metadata-only refreshes retain row identity when the layer count is unchanged,
-so assistive interfaces do not become stale across visibility, rename, opacity,
-lock, undo, or redo updates.
+Metadata-only refreshes update surviving rows in place and grow or shrink only
+at the trailing edge, so held interfaces do not become stale across visibility,
+rename, opacity, lock, reorder, create, undo, or redo updates.
 
 `MainWindowTest` queries Qt's accessibility interfaces offscreen and verifies
 that the core workspace objects have non-empty roles, stable names, and
@@ -46,6 +46,10 @@ The flat reorder path invokes the documented keyboard shortcut from the layer
 list and verifies that the active selection follows the moved layer. Held row
 interfaces remain valid and expose the new row names through reorder and undo,
 with composite order, shared pixel storage, and native persistence checked.
+The create path invokes the documented keyboard shortcut, keeps the surviving
+row interface valid across create/undo/redo count changes, and verifies the new
+active row metadata. The empty layer allocates no tiles, preserves existing
+pixel payload sharing and composite output, and survives native save/reopen.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

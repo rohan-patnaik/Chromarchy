@@ -121,6 +121,10 @@ native save/reopen enforcement.
 Flat layer reorder now has keyboard shortcut and accessible selection-continuity
 evidence through deterministic composite order, unchanged shared pixel blocks,
 undo/redo clean-state identity, and native save/reopen persistence.
+Sparse pixel-layer creation now has keyboard and accessible active-row evidence
+through zero-tile allocation, unchanged existing payload blocks/composite,
+undo/redo clean-state identity, and native save/reopen persistence. Layer-count
+refreshes preserve surviving row interfaces instead of clearing the list.
 
 ### Phase 2 — close M0/M1 local workflows
 

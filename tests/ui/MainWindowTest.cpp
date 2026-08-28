@@ -112,6 +112,7 @@ private slots:
   void editsLayerOpacityByKeyboardAndPersistsComposite();
   void togglesLayerLockByKeyboardAndPersistsEnforcement();
   void reordersLayerByKeyboardAndPersistsComposite();
+  void createsSparseLayerByKeyboardAndPersists();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -956,6 +957,107 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
            QStringLiteral("Top blue"));
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
            QColor(10, 220, 20, 255));
+}
+
+void MainWindowTest::createsSparseLayerByKeyboardAndPersists() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-create.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Existing pixels"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(layers->count(), 1);
+  QVERIFY(!document->isModified());
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  auto* retainedListInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedListInterface);
+  auto* retainedFirstRowInterface = retainedListInterface->child(0);
+  QVERIFY(retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Existing pixels"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_N,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QCOMPARE(document->document().layerAt(1)->name(),
+           QStringLiteral("Layer 2"));
+  QCOMPARE(document->document().layerAt(1)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Layer 2"), true);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers),
+           retainedListInterface);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Layer 2"));
+  QCOMPARE(retainedListInterface->child(1)->text(QAccessible::Name),
+           QStringLiteral("Existing pixels"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(layers->count(), 1);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Existing pixels"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(!document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QCOMPARE(document->document().layerAt(1)->name(),
+           QStringLiteral("Layer 2"));
+  QCOMPARE(document->document().layerAt(1)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  verifyAccessibleLayerItem(layers, 0, QStringLiteral("Layer 2"), true);
+  QCOMPARE(retainedListInterface->child(0), retainedFirstRowInterface);
+  QCOMPARE(retainedFirstRowInterface->text(QAccessible::Name),
+           QStringLiteral("Layer 2"));
+  QVERIFY(retainedFirstRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerCount(), 2);
+  QCOMPARE(reopened.document->activeLayerIndex(), 1);
+  QCOMPARE(reopened.document->layerAt(1)->name(), QStringLiteral("Layer 2"));
+  QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 0);
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
 }
 
 QTEST_MAIN(MainWindowTest)
