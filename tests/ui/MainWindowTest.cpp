@@ -1284,6 +1284,20 @@ void MainWindowTest::togglesLayerLockByKeyboardAndPersistsEnforcement() {
 }
 
 void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
+  QFile fixture(QStringLiteral(CHROMARCHY_SOURCE_DIR)
+                    + QStringLiteral("/tests/fixtures/layer-reorder-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  const auto shortcuts = root.value(QStringLiteral("shortcuts")).toObject();
+  QCOMPARE(shortcuts.value(QStringLiteral("up")).toString(),
+           QStringLiteral("Ctrl+Shift+]"));
+  QCOMPARE(shortcuts.value(QStringLiteral("down")).toString(),
+           QStringLiteral("Ctrl+Shift+["));
+
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
   const auto documentPath =
@@ -1303,6 +1317,12 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
 
   MainWindow window;
+  auto* moveUpAction = requiredChild<QAction>(window, "moveLayerUpAction");
+  auto* moveDownAction = requiredChild<QAction>(window, "moveLayerDownAction");
+  QVERIFY(moveUpAction);
+  QVERIFY(moveDownAction);
+  QVERIFY(!moveUpAction->isEnabled());
+  QVERIFY(!moveDownAction->isEnabled());
   QVERIFY(window.openFile(documentPath));
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1313,6 +1333,10 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(layers);
   QVERIFY(canvas);
   QVERIFY(document);
+  QCOMPARE(moveUpAction->shortcut().toString(QKeySequence::PortableText),
+           shortcuts.value(QStringLiteral("up")).toString());
+  QCOMPARE(moveDownAction->shortcut().toString(QKeySequence::PortableText),
+           shortcuts.value(QStringLiteral("down")).toString());
   QCOMPARE(layers->count(), 3);
   QCOMPARE(layers->currentRow(), 1);
   QCOMPARE(document->document().activeLayerIndex(), middleIndex);
@@ -1335,6 +1359,37 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   window.activateWindow();
   QVERIFY(QTest::qWaitForWindowActive(&window));
   layers->setFocus();
+  QVERIFY(moveUpAction->isEnabled());
+  QVERIFY(moveDownAction->isEnabled());
+  QTest::keyClick(layers, Qt::Key_BracketLeft,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Middle green"));
+  QCOMPARE(layers->currentRow(), 2);
+  QVERIFY(document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QVERIFY(moveUpAction->isEnabled());
+  QVERIFY(!moveDownAction->isEnabled());
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Top blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Base red"));
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QCOMPARE(layers->currentRow(), 1);
+  QVERIFY(!document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QVERIFY(moveUpAction->isEnabled());
+  QVERIFY(moveDownAction->isEnabled());
+
+  layers->setFocus();
   QTest::keyClick(layers, Qt::Key_BracketRight,
                   Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(document->document().activeLayerIndex(), topIndex);
@@ -1351,6 +1406,8 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
            QStringLiteral("Top blue"));
   QVERIFY(retainedTopRowInterface->state().selected);
+  QVERIFY(!moveUpAction->isEnabled());
+  QVERIFY(moveDownAction->isEnabled());
   QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
            QColor(10, 220, 20, 255));
 
@@ -1365,6 +1422,8 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
            QStringLiteral("Middle green"));
   QVERIFY(retainedMiddleRowInterface->state().selected);
+  QVERIFY(moveUpAction->isEnabled());
+  QVERIFY(moveDownAction->isEnabled());
   QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
            QColor(10, 20, 230, 255));
 
@@ -1376,18 +1435,55 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
            QStringLiteral("Middle green"));
+
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_BracketLeft,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QCOMPARE(layers->currentRow(), 1);
+  QCOMPARE(document->document().layerAt(0)->name(), QStringLiteral("Base red"));
+  QCOMPARE(document->document().layerAt(1)->name(),
+           QStringLiteral("Middle green"));
+  QCOMPARE(document->document().layerAt(2)->name(), QStringLiteral("Top blue"));
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
   QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
   QVERIFY(!document->isModified());
 
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
-  QCOMPARE(reopened.document->activeLayerIndex(), topIndex);
-  QCOMPARE(reopened.document->layerAt(topIndex)->name(),
-           QStringLiteral("Middle green"));
+  QCOMPARE(reopened.document->activeLayerIndex(), middleIndex);
+  QCOMPARE(reopened.document->layerAt(0)->name(), QStringLiteral("Base red"));
   QCOMPARE(reopened.document->layerAt(middleIndex)->name(),
+           QStringLiteral("Middle green"));
+  QCOMPARE(reopened.document->layerAt(topIndex)->name(),
            QStringLiteral("Top blue"));
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 220, 20, 255));
+           QColor(10, 20, 230, 255));
+
+  const auto hugeSize = root.value(QStringLiteral("hugeSparseSize")).toArray();
+  auto huge = chromarchy::Document::create(
+      QSize(hugeSize.at(0).toInt(), hugeSize.at(1).toInt()));
+  QVERIFY(huge);
+  const auto hugeMiddle = huge->addLayer(QStringLiteral("Sparse middle"));
+  const auto hugeTop = huge->addLayer(QStringLiteral("Sparse top"));
+  QVERIFY(huge->layerAt(0)->setPixelColor(QPoint(0, 0), Qt::red));
+  QVERIFY(huge->layerAt(hugeMiddle)->setPixelColor(
+      QPoint(150'000, 150'000), Qt::green));
+  QVERIFY(huge->layerAt(hugeTop)->setPixelColor(
+      QPoint(299'999, 299'999), Qt::blue));
+  const auto hugeBlocks = sortedStorageBlocks(*huge);
+  const auto repetitions = root.value(QStringLiteral("repetitions")).toInt();
+  QCOMPARE(repetitions, 1025);
+  QCOMPARE(root.value(QStringLiteral("resourceResult")).toString(),
+           QStringLiteral("unchanged-storage-blocks"));
+  for (int iteration = 0; iteration < repetitions; ++iteration) {
+    QVERIFY(huge->moveLayer(1, 0));
+    QVERIFY(huge->moveLayer(0, 1));
+  }
+  QCOMPARE(huge->activeLayerIndex(), hugeTop);
+  QCOMPARE(sortedStorageBlocks(*huge), hugeBlocks);
 }
 
 void MainWindowTest::createsSparseLayerByKeyboardAndPersists() {

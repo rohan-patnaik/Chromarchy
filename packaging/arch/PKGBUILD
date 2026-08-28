@@ -78,4 +78,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/PIXEL_GRID.md"
   install -Dm644 Chromarchy/docs/FIT_VIEW.md \
     "$pkgdir/usr/share/doc/$pkgname/FIT_VIEW.md"
+  install -Dm644 Chromarchy/docs/LAYER_REORDER.md \
+    "$pkgdir/usr/share/doc/$pkgname/LAYER_REORDER.md"
 }

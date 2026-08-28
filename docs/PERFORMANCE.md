@@ -11,7 +11,9 @@ Chromarchy performance work is measured with reproducible workloads before relea
 - copy-on-write mutation of one pixel in a shared 1024×1024 tiled layer;
 - inversion of a 512×512 sparse selection in a 300,000×300,000 mask; and
 - materialization of a 512×512 unsigned-16 straight-RGBA sparse region into
-  premultiplied RGBA8.
+  premultiplied RGBA8; and
+- a paired down/up metadata reorder of three one-tile layers on a sparse
+  300,000×300,000 document, with unchanged storage blocks.
 
 ## Canvas benchmark workload
 

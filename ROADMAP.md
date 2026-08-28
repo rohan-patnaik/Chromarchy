@@ -124,9 +124,10 @@ persistence.
 Flat pixel-layer lock now has keyboard Space and accessible checked-state
 evidence through rejected pixel mutation, undo/redo clean-state identity, and
 native save/reopen enforcement.
-Flat layer reorder now has keyboard shortcut and accessible selection-continuity
-evidence through deterministic composite order, unchanged shared pixel blocks,
-undo/redo clean-state identity, and native save/reopen persistence.
+Flat layer reorder now has inverse up/down keyboard shortcuts, correct boundary
+enablement, and accessible selection-continuity evidence through deterministic
+composite order, unchanged shared pixel blocks, undo/redo clean-state identity,
+native save/reopen persistence, and 1,025 paired moves on a sparse 300k canvas.
 Sparse pixel-layer creation now has keyboard and accessible active-row evidence
 through zero-tile allocation, unchanged existing payload blocks/composite,
 undo/redo clean-state identity, and native save/reopen persistence. Layer-count

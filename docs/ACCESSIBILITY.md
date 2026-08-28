@@ -42,10 +42,11 @@ The pixel-lock path reaches the named checkbox by keyboard, toggles it with
 Space, and verifies its retained accessible checked state. Locked pixel writes
 are rejected before and after native reopen, while undo/redo and save preserve
 the expected clean/dirty identity.
-The flat reorder path invokes the documented keyboard shortcut from the layer
-list and verifies that the active selection follows the moved layer. Held row
-interfaces remain valid and expose the new row names through reorder and undo,
-with composite order, shared pixel storage, and native persistence checked.
+The flat reorder path invokes both documented inverse keyboard shortcuts from
+the layer list and verifies that the active selection follows the moved layer.
+The actions expose correct top/bottom boundary enablement. Held row interfaces
+remain valid and expose the new row names through reorder and undo, with
+composite order, shared pixel storage, and native persistence checked.
 The create path invokes the documented keyboard shortcut, keeps the surviving
 row interface valid across create/undo/redo count changes, and verifies the new
 active row metadata. The empty layer allocates no tiles, preserves existing

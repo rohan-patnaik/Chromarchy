@@ -191,10 +191,12 @@ void MainWindow::createActions() {
   removeLayerAction_->setShortcut(QKeySequence::Delete);
   moveLayerUpAction_ = layerMenu->addAction(QStringLiteral("Move Layer &Up"), this,
                                             &MainWindow::moveLayerUp);
+  moveLayerUpAction_->setObjectName(QStringLiteral("moveLayerUpAction"));
   moveLayerUpAction_->setShortcut(
       QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketRight));
   moveLayerDownAction_ = layerMenu->addAction(
       QStringLiteral("Move Layer &Down"), this, &MainWindow::moveLayerDown);
+  moveLayerDownAction_->setObjectName(QStringLiteral("moveLayerDownAction"));
   moveLayerDownAction_->setShortcut(
       QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketLeft));
   layerMenu->addSeparator();

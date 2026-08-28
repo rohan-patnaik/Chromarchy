@@ -28,6 +28,7 @@ private slots:
   void copyOnWriteTileMutation();
   void invertSparseLargeSelection();
   void materializeTypedQuarterMegapixel();
+  void reorderSparseLargeLayers();
 
 private:
   std::optional<Document> document_;
@@ -105,6 +106,24 @@ void CoreBenchmark::materializeTypedQuarterMegapixel() {
         QRect(0, 0, 512, 512));
   }
   QVERIFY(converted);
+}
+
+void CoreBenchmark::reorderSparseLargeLayers() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  const auto middle = document->addLayer(QStringLiteral("Sparse middle"));
+  const auto top = document->addLayer(QStringLiteral("Sparse top"));
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(0, 0), Qt::red));
+  QVERIFY(document->layerAt(middle)->setPixelColor(
+      QPoint(150'000, 150'000), Qt::green));
+  QVERIFY(document->layerAt(top)->setPixelColor(
+      QPoint(299'999, 299'999), Qt::blue));
+  const auto blocks = document->storageBlocks();
+  QBENCHMARK {
+    QVERIFY(document->moveLayer(1, 0));
+    QVERIFY(document->moveLayer(0, 1));
+  }
+  QCOMPARE(document->storageBlocks(), blocks);
 }
 
 QTEST_APPLESS_MAIN(CoreBenchmark)

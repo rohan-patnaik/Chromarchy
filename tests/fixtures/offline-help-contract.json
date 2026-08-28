@@ -10,7 +10,7 @@
     },
     {
       "objectName": "helpShortcutsPage",
-      "requiredPhrases": ["Keyboard Shortcuts", "Ctrl+Alt+Right", "F1"]
+      "requiredPhrases": ["Keyboard Shortcuts", "Ctrl+Alt+Right", "Ctrl+Shift+]", "Ctrl+Shift+[", "F1"]
     },
     {
       "objectName": "helpFormatsLimitsPage",

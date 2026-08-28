@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "shortcuts": {
+    "up": "Ctrl+Shift+]",
+    "down": "Ctrl+Shift+["
+  },
+  "hugeSparseSize": [300000, 300000],
+  "repetitions": 1025,
+  "resourceResult": "unchanged-storage-blocks"
+}

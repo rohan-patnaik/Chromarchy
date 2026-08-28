@@ -60,6 +60,8 @@ QString shortcutsText() {
       "  Ctrl+J                 Duplicate layer\n"
       "  F2                     Rename layer\n"
       "  Delete                 Remove layer\n"
+      "  Ctrl+Shift+]           Move layer up\n"
+      "  Ctrl+Shift+[           Move layer down\n"
       "  Ctrl+E                 Merge down\n\n"
       "Help\n"
       "  F1                     Open this offline help\n"
