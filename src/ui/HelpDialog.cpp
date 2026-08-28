@@ -39,6 +39,7 @@ QString shortcutsText() {
       "  Ctrl+S                 Save native document\n"
       "  Ctrl+Shift+S           Save As\n"
       "  Ctrl+W                 Close document\n"
+      "  Ctrl+Q                 Resolve open documents and quit\n"
       "  Ctrl+Alt+1 … 9         Open recent entry 1 … 9\n"
       "  Ctrl+Alt+Shift+Delete  Clear recent paths\n\n"
       "Edit and selection\n"

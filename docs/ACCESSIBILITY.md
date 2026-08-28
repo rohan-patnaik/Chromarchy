@@ -28,6 +28,12 @@ Enter, and verifies that Escape cancels without adding another document.
 Close-prompt tests drive Escape/Cancel, tab-and-Space/Discard, and
 Return/Save from the focused controls; the save path is reopened to verify that
 the edit persisted before the tab closed.
+The multi-tab quit path invokes Ctrl+Q from the canvas, makes each modified
+document current before prompting, and verifies the prompt's document name and
+accessible metadata. Cancel retains every tab with the canceled document
+active; retry skips the already saved clean tab and resolves the remaining
+documents in order through keyboard Discard and Save. Live announcement and
+screen-reader behavior remain unverified.
 The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
 an over-budget UTF-8 name without dirtying the document, Unicode rename,
 undo/redo dirty-state identity, and save/reopen persistence.

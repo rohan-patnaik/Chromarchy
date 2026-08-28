@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "shortcut": "Ctrl+Q",
+  "documents": [
+    {"fileName": "alpha.chromarchy"},
+    {"fileName": "beta.chromarchy"},
+    {"fileName": "gamma.chromarchy"}
+  ],
+  "firstPass": [
+    {"tab": 0, "response": "Save"},
+    {"tab": 1, "response": "Cancel"}
+  ],
+  "secondPass": [
+    {"tab": 1, "response": "Discard"},
+    {"tab": 2, "response": "Save"}
+  ],
+  "cancelResult": "all-tabs-remain-open-canceled-tab-active",
+  "saveResult": "native-selection-persists",
+  "discardResult": "native-source-unchanged"
+}

@@ -113,8 +113,12 @@ void MainWindow::createActions() {
   closeAction_->setObjectName(QStringLiteral("closeDocumentAction"));
   closeAction_->setShortcut(QKeySequence::Close);
   fileMenu->addSeparator();
-  fileMenu->addAction(QStringLiteral("E&xit"), this, &QWidget::close,
-                      QKeySequence::Quit);
+  auto* exitAction = fileMenu->addAction(QStringLiteral("E&xit"), this,
+                                         [this] { close(); });
+  exitAction->setObjectName(QStringLiteral("exitApplicationAction"));
+  exitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+  exitAction->setStatusTip(
+      QStringLiteral("Resolve unsaved documents and close Chromarchy"));
 
   auto* editMenu = menuBar()->addMenu(QStringLiteral("&Edit"));
   undoAction_ = editMenu->addAction(QStringLiteral("&Undo"), this, [this] {
@@ -1044,6 +1048,9 @@ void MainWindow::showError(const QString& title, const QString& detail) {
 void MainWindow::closeEvent(QCloseEvent* event) {
   for (int index = 0; index < tabs_->count(); ++index) {
     auto* view = qobject_cast<DocumentView*>(tabs_->widget(index));
+    if (view && view->isModified()) {
+      tabs_->setCurrentIndex(index);
+    }
     if (view && !canClose(view)) {
       event->ignore();
       return;

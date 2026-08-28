@@ -80,6 +80,8 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/FIT_VIEW.md"
   install -Dm644 Chromarchy/docs/KEYBOARD_PAN.md \
     "$pkgdir/usr/share/doc/$pkgname/KEYBOARD_PAN.md"
+  install -Dm644 Chromarchy/docs/MULTI_TAB_QUIT.md \
+    "$pkgdir/usr/share/doc/$pkgname/MULTI_TAB_QUIT.md"
   install -Dm644 Chromarchy/docs/LAYER_REORDER.md \
     "$pkgdir/usr/share/doc/$pkgname/LAYER_REORDER.md"
 }

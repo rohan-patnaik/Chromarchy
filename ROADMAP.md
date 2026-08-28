@@ -181,6 +181,13 @@ quarter-turn orientations, per-tab state, accessible position descriptions,
 unchanged document state, and 1,025-pair 300k sparse behavior have fixture and
 benchmark evidence. Gestures, momentum, configurable steps, persisted view
 state, a navigator, and live Wayland latency remain open.
+Multi-tab quit now visits modified native documents in ascending tab order and
+makes each document current before its accessible Unsaved Changes prompt. A
+three-document keyboard fixture covers Save followed by Cancel, retained tabs
+and canceled-tab context, then a retry that skips the clean document, Discards
+the second source-preservingly, Saves the third, and closes. Background jobs,
+save-failure sequencing, pointer tab-close behavior, and a shutdown deadline
+remain open.
 
 ### Phase 2 — close M0/M1 local workflows
 

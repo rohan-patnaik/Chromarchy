@@ -122,6 +122,7 @@ private slots:
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
+  void resolvesMultipleDirtyTabsInOrderByKeyboard();
   void opensAndClearsRecentDocumentsByKeyboard();
   void renamesLayerByKeyboardAndPersistsUnicode();
   void togglesLayerVisibilityByKeyboardAndPersistsComposite();
@@ -897,6 +898,202 @@ void MainWindowTest::savesDirtyDocumentBeforeCloseByKeyboard() {
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
   QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
+}
+
+void MainWindowTest::resolvesMultipleDirtyTabsInOrderByKeyboard() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/multi-tab-quit-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  const auto documents = root.value(QStringLiteral("documents")).toArray();
+  QCOMPARE(documents.size(), 3);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QStringList paths;
+  for (const auto& value : documents) {
+    const auto fileName = value.toObject().value(QStringLiteral("fileName"))
+                              .toString();
+    QVERIFY(!fileName.isEmpty());
+    const auto path = directory.filePath(fileName);
+    auto document = chromarchy::Document::create(QSize(8, 6));
+    QVERIFY(document);
+    QVERIFY(chromarchy::NativeDocumentCodec::save(*document, path));
+    paths.push_back(path);
+  }
+
+  MainWindow window;
+  for (const auto& path : paths) {
+    QVERIFY(window.openFile(path));
+  }
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* tabs = requiredChild<QTabWidget>(window, "documentTabs");
+  auto* exitAction = requiredChild<QAction>(window, "exitApplicationAction");
+  QVERIFY(tabs);
+  QVERIFY(exitAction);
+  QCOMPARE(tabs->count(), documents.size());
+  QCOMPARE(exitAction->shortcut().toString(QKeySequence::PortableText),
+           root.value(QStringLiteral("shortcut")).toString());
+  QCOMPARE(exitAction->statusTip(),
+           QStringLiteral("Resolve unsaved documents and close Chromarchy"));
+
+  QVector<chromarchy::DocumentView*> views;
+  for (int index = 0; index < tabs->count(); ++index) {
+    tabs->setCurrentIndex(index);
+    auto* view = qobject_cast<chromarchy::DocumentView*>(tabs->currentWidget());
+    QVERIFY(view);
+    views.push_back(view);
+    view->canvas()->setFocus();
+    QTest::keyClick(view->canvas(), Qt::Key_A, Qt::ControlModifier);
+    QVERIFY(view->isModified());
+    QCOMPARE(view->document().selection().baseCoverage(), quint8{255});
+  }
+  QCOMPARE(tabs->currentIndex(), 2);
+
+  struct PromptResponse {
+    int tabIndex;
+    QMessageBox::StandardButton button;
+  };
+  QString dialogError;
+  QStringList promptOrder;
+  const QKeySequence quitBinding(root.value(QStringLiteral("shortcut")).toString());
+  QVERIFY(!quitBinding.isEmpty());
+  const auto runQuit = [&](const QVector<PromptResponse>& responses) {
+    int responseIndex = 0;
+    QTimer responseTimer;
+    responseTimer.setInterval(1);
+    QObject::connect(&responseTimer, &QTimer::timeout, &window, [&] {
+      auto* prompt =
+          qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+      if (!prompt || responseIndex >= responses.size()) {
+        return;
+      }
+      const auto response = responses.at(responseIndex++);
+      if (prompt->objectName() != QStringLiteral("unsavedChangesDialog") ||
+          !hasAccessibleMetadata(prompt) ||
+          tabs->currentIndex() != response.tabIndex ||
+          tabs->currentWidget() != views.at(response.tabIndex) ||
+          !prompt->text().contains(
+              documents.at(response.tabIndex)
+                  .toObject()
+                  .value(QStringLiteral("fileName"))
+                  .toString())) {
+        dialogError = QStringLiteral("Multi-tab prompt context is incorrect");
+        responseTimer.stop();
+        cancelPrompt(prompt);
+        return;
+      }
+      promptOrder.push_back(
+          documents.at(response.tabIndex)
+              .toObject()
+              .value(QStringLiteral("fileName"))
+              .toString());
+      auto* save = prompt->button(QMessageBox::Save);
+      auto* discard = prompt->button(QMessageBox::Discard);
+      auto* cancel = prompt->button(QMessageBox::Cancel);
+      if (!save || !discard || !cancel || prompt->focusWidget() != save) {
+        dialogError = QStringLiteral("Multi-tab prompt controls are incomplete");
+        responseTimer.stop();
+        cancelPrompt(prompt);
+        return;
+      }
+      switch (response.button) {
+        case QMessageBox::Save:
+          QTest::keyClick(save, Qt::Key_Return);
+          break;
+        case QMessageBox::Discard:
+          QTest::keyClick(save, Qt::Key_Tab);
+          if (prompt->focusWidget() != discard) {
+            dialogError = QStringLiteral("Discard is not second in focus order");
+            responseTimer.stop();
+            cancelPrompt(prompt);
+            return;
+          }
+          QTest::keyClick(discard, Qt::Key_Space);
+          break;
+        case QMessageBox::Cancel:
+          QTest::keyClick(save, Qt::Key_Escape);
+          break;
+        default:
+          dialogError = QStringLiteral("Unsupported prompt fixture response");
+          responseTimer.stop();
+          cancelPrompt(prompt);
+          break;
+      }
+    });
+    window.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&window));
+    views.at(tabs->currentIndex())->canvas()->setFocus();
+    QTRY_COMPARE(QApplication::focusWidget(),
+                 views.at(tabs->currentIndex())->canvas());
+    responseTimer.start();
+    QTest::keySequence(QApplication::focusWidget(), quitBinding);
+    responseTimer.stop();
+    QCOMPARE(responseIndex, responses.size());
+  };
+
+  const auto firstPass = root.value(QStringLiteral("firstPass")).toArray();
+  QCOMPARE(firstPass.size(), 2);
+  QCOMPARE(firstPass.at(0).toObject().value(QStringLiteral("response")).toString(),
+           QStringLiteral("Save"));
+  QCOMPARE(firstPass.at(1).toObject().value(QStringLiteral("response")).toString(),
+           QStringLiteral("Cancel"));
+  runQuit({{firstPass.at(0).toObject().value(QStringLiteral("tab")).toInt(),
+            QMessageBox::Save},
+           {firstPass.at(1).toObject().value(QStringLiteral("tab")).toInt(),
+            QMessageBox::Cancel}});
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QVERIFY(window.isVisible());
+  QCOMPARE(tabs->count(), 3);
+  QCOMPARE(tabs->currentIndex(), 1);
+  QCOMPARE(root.value(QStringLiteral("cancelResult")).toString(),
+           QStringLiteral("all-tabs-remain-open-canceled-tab-active"));
+  QVERIFY(!views.at(0)->isModified());
+  QVERIFY(views.at(1)->isModified());
+  QVERIFY(views.at(2)->isModified());
+
+  auto reopened = chromarchy::NativeDocumentCodec::load(paths.at(0));
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
+  for (int index : {1, 2}) {
+    reopened = chromarchy::NativeDocumentCodec::load(paths.at(index));
+    QVERIFY2(reopened, qPrintable(reopened.error));
+    QCOMPARE(reopened.document->selection().baseCoverage(), quint8{0});
+  }
+
+  const auto secondPass = root.value(QStringLiteral("secondPass")).toArray();
+  QCOMPARE(secondPass.size(), 2);
+  QCOMPARE(secondPass.at(0).toObject().value(QStringLiteral("response")).toString(),
+           QStringLiteral("Discard"));
+  QCOMPARE(secondPass.at(1).toObject().value(QStringLiteral("response")).toString(),
+           QStringLiteral("Save"));
+  runQuit({{secondPass.at(0).toObject().value(QStringLiteral("tab")).toInt(),
+            QMessageBox::Discard},
+           {secondPass.at(1).toObject().value(QStringLiteral("tab")).toInt(),
+            QMessageBox::Save}});
+  QVERIFY2(dialogError.isEmpty(), qPrintable(dialogError));
+  QTRY_VERIFY(!window.isVisible());
+  QCOMPARE(promptOrder,
+           QStringList({documents.at(0).toObject().value(QStringLiteral("fileName")).toString(),
+                        documents.at(1).toObject().value(QStringLiteral("fileName")).toString(),
+                        documents.at(1).toObject().value(QStringLiteral("fileName")).toString(),
+                        documents.at(2).toObject().value(QStringLiteral("fileName")).toString()}));
+
+  reopened = chromarchy::NativeDocumentCodec::load(paths.at(1));
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->selection().baseCoverage(), quint8{0});
+  QCOMPARE(root.value(QStringLiteral("discardResult")).toString(),
+           QStringLiteral("native-source-unchanged"));
+  reopened = chromarchy::NativeDocumentCodec::load(paths.at(2));
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->selection().baseCoverage(), quint8{255});
+  QCOMPARE(root.value(QStringLiteral("saveResult")).toString(),
+           QStringLiteral("native-selection-persists"));
 }
 
 void MainWindowTest::opensAndClearsRecentDocumentsByKeyboard() {
