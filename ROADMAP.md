@@ -118,6 +118,9 @@ persistence.
 Flat pixel-layer lock now has keyboard Space and accessible checked-state
 evidence through rejected pixel mutation, undo/redo clean-state identity, and
 native save/reopen enforcement.
+Flat layer reorder now has keyboard shortcut and accessible selection-continuity
+evidence through deterministic composite order, unchanged shared pixel blocks,
+undo/redo clean-state identity, and native save/reopen persistence.
 
 ### Phase 2 — close M0/M1 local workflows
 

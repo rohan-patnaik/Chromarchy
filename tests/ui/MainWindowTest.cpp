@@ -24,6 +24,8 @@
 #include <QTest>
 #include <QTimer>
 
+#include <algorithm>
+
 namespace {
 
 template <typename Widget>
@@ -75,6 +77,16 @@ void verifyAccessibleLayerItem(QListWidget* layers, int row,
   QCOMPARE(state.checked, checked);
 }
 
+QVector<chromarchy::StorageBlock> sortedStorageBlocks(
+    const chromarchy::Document& document) {
+  auto blocks = document.storageBlocks();
+  std::sort(blocks.begin(), blocks.end(), [](const auto& left, const auto& right) {
+    return left.key < right.key ||
+           (left.key == right.key && left.bytes < right.bytes);
+  });
+  return blocks;
+}
+
 void cancelPrompt(QMessageBox* prompt) {
   if (auto* cancel = prompt->button(QMessageBox::Cancel)) {
     cancel->click();
@@ -99,6 +111,7 @@ private slots:
   void togglesLayerVisibilityByKeyboardAndPersistsComposite();
   void editsLayerOpacityByKeyboardAndPersistsComposite();
   void togglesLayerLockByKeyboardAndPersistsEnforcement();
+  void reordersLayerByKeyboardAndPersistsComposite();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -836,6 +849,113 @@ void MainWindowTest::togglesLayerLockByKeyboardAndPersistsEnforcement() {
       QPoint(2, 3), QColor(1, 2, 3, 255)));
   QCOMPARE(reopenedDocument.composite().pixelColor(QPoint(2, 3)),
            QColor(220, 10, 20, 255));
+}
+
+void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-reorder.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Base red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  const auto middleIndex = source->addLayer(QStringLiteral("Middle green"));
+  QVERIFY(source->layerAt(middleIndex)->setPixelColor(
+      QPoint(2, 3), QColor(10, 220, 20, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Top blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(2, 3), QColor(10, 20, 230, 255)));
+  QVERIFY(source->setActiveLayerIndex(middleIndex));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QCOMPARE(layers->count(), 3);
+  QCOMPARE(layers->currentRow(), 1);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QVERIFY(!document->isModified());
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  auto* listInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(listInterface);
+  auto* retainedTopRowInterface = listInterface->child(0);
+  auto* retainedMiddleRowInterface = listInterface->child(1);
+  QVERIFY(retainedTopRowInterface);
+  QVERIFY(retainedMiddleRowInterface);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Top blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  layers->setFocus();
+  QTest::keyClick(layers, Qt::Key_BracketRight,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QCOMPARE(document->document().layerAt(topIndex)->name(),
+           QStringLiteral("Middle green"));
+  QCOMPARE(layers->currentRow(), 0);
+  QVERIFY(document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers), listInterface);
+  QCOMPARE(listInterface->child(0), retainedTopRowInterface);
+  QCOMPARE(listInterface->child(1), retainedMiddleRowInterface);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Top blue"));
+  QVERIFY(retainedTopRowInterface->state().selected);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 220, 20, 255));
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QCOMPARE(layers->currentRow(), 1);
+  QVERIFY(!document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Top blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QVERIFY(retainedMiddleRowInterface->state().selected);
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 20, 230, 255));
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().activeLayerIndex(), topIndex);
+  QCOMPARE(layers->currentRow(), 0);
+  QVERIFY(document->isModified());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->activeLayerIndex(), topIndex);
+  QCOMPARE(reopened.document->layerAt(topIndex)->name(),
+           QStringLiteral("Middle green"));
+  QCOMPARE(reopened.document->layerAt(middleIndex)->name(),
+           QStringLiteral("Top blue"));
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
+           QColor(10, 220, 20, 255));
 }
 
 QTEST_MAIN(MainWindowTest)
