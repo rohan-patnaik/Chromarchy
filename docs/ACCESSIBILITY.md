@@ -38,6 +38,10 @@ The opacity path reaches the bounded percentage spin box by keyboard, enters a
 fractional value, and verifies its standard accessible value range and current
 value. It also covers deterministic composite output, undo/redo saved-state
 identity, retained accessibility state, and native save/reopen equivalence.
+The pixel-lock path reaches the named checkbox by keyboard, toggles it with
+Space, and verifies its retained accessible checked state. Locked pixel writes
+are rejected before and after native reopen, while undo/redo and save preserve
+the expected clean/dirty identity.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

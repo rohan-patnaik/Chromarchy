@@ -98,6 +98,7 @@ private slots:
   void renamesLayerByKeyboardAndPersistsUnicode();
   void togglesLayerVisibilityByKeyboardAndPersistsComposite();
   void editsLayerOpacityByKeyboardAndPersistsComposite();
+  void togglesLayerLockByKeyboardAndPersistsEnforcement();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -761,6 +762,80 @@ void MainWindowTest::editsLayerOpacityByKeyboardAndPersistsComposite() {
   QCOMPARE(reopened.document->layerAt(topIndex)->opacity(), 0.375);
   QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
            QColor(142, 13, 99, 255));
+}
+
+void MainWindowTest::togglesLayerLockByKeyboardAndPersistsEnforcement() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-lock.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Protected pixels"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
+                                            QColor(220, 10, 20, 255)));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* lock = requiredChild<QCheckBox>(window, "layerLock");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(lock);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QVERIFY(!lock->isChecked());
+  QVERIFY(!document->isModified());
+
+  auto* retainedLockInterface = QAccessible::queryAccessibleInterface(lock);
+  QVERIFY(retainedLockInterface);
+  QCOMPARE(retainedLockInterface->text(QAccessible::Name),
+           QStringLiteral("Lock layer pixels"));
+  QCOMPARE(retainedLockInterface->text(QAccessible::Description),
+           QStringLiteral("Prevent pixel changes on the selected layer"));
+  QVERIFY(retainedLockInterface->state().checkable);
+  QVERIFY(!retainedLockInterface->state().checked);
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  lock->setFocus();
+  QCOMPARE(QApplication::focusWidget(), lock);
+  QTest::keyClick(lock, Qt::Key_Space);
+  QVERIFY(document->document().layerAt(0)->isLocked());
+  QVERIFY(document->isModified());
+  QCOMPARE(QAccessible::queryAccessibleInterface(lock),
+           retainedLockInterface);
+  QVERIFY(retainedLockInterface->state().checked);
+  QVERIFY(!document->document().layerAt(0)->setPixelColor(
+      QPoint(2, 3), QColor(1, 2, 3, 255)));
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QVERIFY(!document->document().layerAt(0)->isLocked());
+  QVERIFY(!document->isModified());
+  QVERIFY(!retainedLockInterface->state().checked);
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QVERIFY(document->document().layerAt(0)->isLocked());
+  QVERIFY(document->isModified());
+  QVERIFY(retainedLockInterface->state().checked);
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QVERIFY(reopened.document->layerAt(0)->isLocked());
+  auto reopenedDocument = *reopened.document;
+  QVERIFY(!reopenedDocument.layerAt(0)->setPixelColor(
+      QPoint(2, 3), QColor(1, 2, 3, 255)));
+  QCOMPARE(reopenedDocument.composite().pixelColor(QPoint(2, 3)),
+           QColor(220, 10, 20, 255));
 }
 
 QTEST_MAIN(MainWindowTest)

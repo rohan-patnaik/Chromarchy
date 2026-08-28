@@ -115,6 +115,9 @@ Flat layer opacity now has keyboard-entry evidence for a bounded fractional
 percentage, including the standard accessible value interface, deterministic
 composite output, undo/redo clean-state identity, and native save/reopen
 persistence.
+Flat pixel-layer lock now has keyboard Space and accessible checked-state
+evidence through rejected pixel mutation, undo/redo clean-state identity, and
+native save/reopen enforcement.
 
 ### Phase 2 — close M0/M1 local workflows
 
