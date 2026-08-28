@@ -1579,10 +1579,14 @@ void MainWindowTest::removesLayerByKeyboardAndPersists() {
   QCOMPARE(layers->count(), 2);
   QCOMPARE(layers->currentRow(), 0);
   QCOMPARE(retainedListInterface->child(0), retainedTopRowInterface);
+  QCOMPARE(retainedListInterface->child(1), retainedMiddleRowInterface);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
            QStringLiteral("Upper blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Lower red"));
   QVERIFY(document->isModified());
 
+  const auto savedComposite = document->document().composite();
   QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
   QVERIFY(!document->isModified());
   QTest::keyClick(canvas, Qt::Key_Delete);
@@ -1611,8 +1615,7 @@ void MainWindowTest::removesLayerByKeyboardAndPersists() {
            QStringLiteral("Upper blue"));
   QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
   QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 1);
-  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 2)),
-           QColor(Qt::transparent));
+  QCOMPARE(reopened.document->composite(), savedComposite);
 }
 
 QTEST_MAIN(MainWindowTest)
