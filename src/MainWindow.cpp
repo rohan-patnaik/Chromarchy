@@ -8,6 +8,7 @@
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QDialog>
@@ -301,7 +302,7 @@ void MainWindow::createActions() {
   windowMenu->setObjectName(QStringLiteral("windowMenu"));
   windowMenu->setAccessibleName(QStringLiteral("Window"));
   windowMenu->setAccessibleDescription(
-      QStringLiteral("Navigate open local documents"));
+      QStringLiteral("Navigate local documents and workspace areas"));
   nextDocumentAction_ = windowMenu->addAction(
       QStringLiteral("&Next Document"), this,
       [this] { navigateDocument(1); });
@@ -353,6 +354,23 @@ void MainWindow::createActions() {
       QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_L));
   focusLayersAction_->setStatusTip(
       QStringLiteral("Show the Layers panel and move keyboard focus to it"));
+  nextWorkspaceAreaAction_ = windowMenu->addAction(
+      QStringLiteral("&Next Workspace Area"), this,
+      &MainWindow::cycleWorkspaceFocus);
+  nextWorkspaceAreaAction_->setObjectName(
+      QStringLiteral("nextWorkspaceAreaAction"));
+  nextWorkspaceAreaAction_->setShortcut(QKeySequence(Qt::Key_F6));
+  nextWorkspaceAreaAction_->setStatusTip(QStringLiteral(
+      "Cycle keyboard focus between the current canvas and Layers panel"));
+  previousWorkspaceAreaAction_ = windowMenu->addAction(
+      QStringLiteral("Pre&vious Workspace Area"), this,
+      &MainWindow::cycleWorkspaceFocus);
+  previousWorkspaceAreaAction_->setObjectName(
+      QStringLiteral("previousWorkspaceAreaAction"));
+  previousWorkspaceAreaAction_->setShortcut(
+      QKeySequence(Qt::SHIFT | Qt::Key_F6));
+  previousWorkspaceAreaAction_->setStatusTip(QStringLiteral(
+      "Cycle keyboard focus in reverse between the Layers panel and canvas"));
 
   auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
   helpMenu->setObjectName(QStringLiteral("helpMenu"));
@@ -1028,6 +1046,18 @@ void MainWindow::focusLayersPanel() {
   layersDock_->raise();
   layers_->setFocus(Qt::ShortcutFocusReason);
   statusBar()->showMessage(QStringLiteral("Layers panel focused"), 3000);
+}
+
+void MainWindow::cycleWorkspaceFocus() {
+  auto* focused = QApplication::focusWidget();
+  const bool focusIsInLayers =
+      focused &&
+      (focused == layersDock_ || layersDock_->isAncestorOf(focused));
+  if (focusIsInLayers && currentDocument()) {
+    focusCanvas();
+    return;
+  }
+  focusLayersPanel();
 }
 
 void MainWindow::commitLayerOpacity() {

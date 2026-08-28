@@ -791,7 +791,7 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   QCOMPARE(parseError.error, QJsonParseError::NoError);
   QVERIFY(contract.isObject());
   const auto root = contract.object();
-  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 2);
   const auto dimension = root.value(QStringLiteral("sparseDimension")).toInt();
   QCOMPARE(dimension, chromarchy::Document::maximumDimension);
   const auto repetitions = root.value(QStringLiteral("repetitions")).toInt();
@@ -799,6 +799,9 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   const auto maximumToggleMilliseconds =
       root.value(QStringLiteral("maximumToggleMilliseconds")).toInt();
   QVERIFY(maximumToggleMilliseconds > 0);
+  const auto maximumCycleMilliseconds =
+      root.value(QStringLiteral("maximumCycleMilliseconds")).toInt();
+  QVERIFY(maximumCycleMilliseconds > 0);
   QCOMPARE(root.value(QStringLiteral("focusLayersShowsPanel")).toBool(), true);
   QCOMPARE(root.value(QStringLiteral("documentMutation")).toString(),
            QStringLiteral("none"));
@@ -809,6 +812,14 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
            QStringLiteral("Ctrl+Alt+L"));
   QCOMPARE(shortcuts.value(QStringLiteral("focusCanvas")).toString(),
            QStringLiteral("Ctrl+Alt+C"));
+  QCOMPARE(shortcuts.value(QStringLiteral("nextWorkspaceArea")).toString(),
+           QStringLiteral("F6"));
+  QCOMPARE(shortcuts.value(QStringLiteral("previousWorkspaceArea")).toString(),
+           QStringLiteral("Shift+F6"));
+  const auto focusCycle = root.value(QStringLiteral("focusCycle")).toArray();
+  QCOMPARE(focusCycle.size(), 2);
+  QCOMPARE(focusCycle.at(0).toString(), QStringLiteral("canvas"));
+  QCOMPARE(focusCycle.at(1).toString(), QStringLiteral("layers"));
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -831,6 +842,11 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   auto* toggle = requiredChild<QAction>(window, "toggleLayersAction");
   auto* focusLayers = requiredChild<QAction>(window, "focusLayersAction");
   auto* focusCanvas = requiredChild<QAction>(window, "focusCanvasAction");
+  auto* nextWorkspaceArea =
+      requiredChild<QAction>(window, "nextWorkspaceAreaAction");
+  auto* previousWorkspaceArea =
+      requiredChild<QAction>(window, "previousWorkspaceAreaAction");
+  auto* opacity = requiredChild<QDoubleSpinBox>(window, "layerOpacity");
   QVERIFY(tabs);
   verifyAccessibleWidget(windowMenu, QStringLiteral("Window"));
   const auto* dockInterface = QAccessible::queryAccessibleInterface(dock);
@@ -842,12 +858,18 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   QVERIFY(toggle);
   QVERIFY(focusLayers);
   QVERIFY(focusCanvas);
+  QVERIFY(nextWorkspaceArea);
+  QVERIFY(previousWorkspaceArea);
+  QVERIFY(opacity);
   QCOMPARE(toggle->shortcut(),
            QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT | Qt::Key_L));
   QCOMPARE(focusLayers->shortcut(),
            QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_L));
   QCOMPARE(focusCanvas->shortcut(),
            QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+  QCOMPARE(nextWorkspaceArea->shortcut(), QKeySequence(Qt::Key_F6));
+  QCOMPARE(previousWorkspaceArea->shortcut(),
+           QKeySequence(Qt::SHIFT | Qt::Key_F6));
   QVERIFY(!focusCanvas->isEnabled());
   QVERIFY(focusLayers->isEnabled());
   QVERIFY(toggle->isEnabled());
@@ -856,6 +878,8 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   QVERIFY(QTest::qWaitForWindowExposed(&window));
   QTRY_VERIFY(dock->isVisible());
   focusLayers->trigger();
+  QTRY_VERIFY(layers->hasFocus());
+  QTest::keyClick(layers, Qt::Key_F6);
   QTRY_VERIFY(layers->hasFocus());
   QVERIFY(window.openFile(documentPath));
   QVERIFY(toggle->isChecked());
@@ -877,6 +901,36 @@ void MainWindowTest::togglesAndFocusesLayersPanelByKeyboardWithinBounds() {
   QVERIFY(toggle->isChecked());
   QTest::keyClick(layers, Qt::Key_C,
                   Qt::ControlModifier | Qt::AltModifier);
+  QTRY_VERIFY(canvas->hasFocus());
+  QTest::keyClick(canvas, Qt::Key_F6);
+  QTRY_VERIFY(layers->hasFocus());
+  QTest::keyClick(layers, Qt::Key_F6, Qt::ShiftModifier);
+  QTRY_VERIFY(canvas->hasFocus());
+  opacity->setFocus();
+  QTRY_VERIFY(opacity->hasFocus());
+  nextWorkspaceArea->trigger();
+  QTRY_VERIFY(canvas->hasFocus());
+  toggle->trigger();
+  QTRY_VERIFY(!dock->isVisible());
+  QTest::keyClick(canvas, Qt::Key_F6, Qt::ShiftModifier);
+  QTRY_VERIFY(dock->isVisible());
+  QTRY_VERIFY(layers->hasFocus());
+  focusCanvas->trigger();
+  QTRY_VERIFY(canvas->hasFocus());
+
+  QElapsedTimer cycleTimer;
+  cycleTimer.start();
+  for (int iteration = 0; iteration < repetitions; ++iteration) {
+    nextWorkspaceArea->trigger();
+    QCOMPARE(layers->hasFocus(), iteration % 2 == 0);
+    QCOMPARE(canvas->hasFocus(), iteration % 2 != 0);
+  }
+  QVERIFY2(cycleTimer.elapsed() <
+               qint64{repetitions} * maximumCycleMilliseconds,
+           qPrintable(QStringLiteral("Bounded workspace focus cycling took %1 ms")
+                          .arg(cycleTimer.elapsed())));
+  QVERIFY(layers->hasFocus());
+  previousWorkspaceArea->trigger();
   QTRY_VERIFY(canvas->hasFocus());
 
   QElapsedTimer timer;

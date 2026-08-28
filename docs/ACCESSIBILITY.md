@@ -43,8 +43,11 @@ live tab-change announcements remain unverified.
 Ctrl+Alt+Shift+L toggles the named Layers panel with synchronized checked state.
 Ctrl+Alt+L reveals it when hidden and focuses the document layer list, while
 Ctrl+Alt+C returns focus to the current canvas and is disabled without a
-document. Offscreen coverage verifies both focus destinations and repeated
-visibility changes; live focus/visibility announcements remain unverified.
+document. F6 and Shift+F6 cycle between the canvas and panel, recognize focus
+within panel descendants, reveal a hidden panel, and fall back to the Layers
+list when no document exists. Offscreen coverage verifies both direct focus
+destinations, repeated visibility changes, and 1,025 focus cycles; live
+focus/visibility announcements remain unverified.
 The layer rename path verifies F2 dispatch, Escape cancellation, rejection of
 an over-budget UTF-8 name without dirtying the document, Unicode rename,
 undo/redo dirty-state identity, and save/reopen persistence.

@@ -1,13 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "shortcuts": {
     "toggleLayers": "Ctrl+Alt+Shift+L",
     "focusLayers": "Ctrl+Alt+L",
-    "focusCanvas": "Ctrl+Alt+C"
+    "focusCanvas": "Ctrl+Alt+C",
+    "nextWorkspaceArea": "F6",
+    "previousWorkspaceArea": "Shift+F6"
   },
+  "focusCycle": ["canvas", "layers"],
   "focusLayersShowsPanel": true,
   "sparseDimension": 300000,
   "repetitions": 1025,
   "maximumToggleMilliseconds": 100,
+  "maximumCycleMilliseconds": 100,
   "documentMutation": "none"
 }

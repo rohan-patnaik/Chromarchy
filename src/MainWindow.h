@@ -62,6 +62,7 @@ private:
   void navigateDocument(int offset);
   void focusCanvas();
   void focusLayersPanel();
+  void cycleWorkspaceFocus();
   void commitLayerOpacity();
   void setLayerLocked(bool locked);
   void updateActions();
@@ -90,6 +91,8 @@ private:
   QAction* toggleLayersAction_ = nullptr;
   QAction* focusCanvasAction_ = nullptr;
   QAction* focusLayersAction_ = nullptr;
+  QAction* nextWorkspaceAreaAction_ = nullptr;
+  QAction* previousWorkspaceAreaAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;
