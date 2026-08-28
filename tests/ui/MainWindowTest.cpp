@@ -1297,6 +1297,29 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
            QStringLiteral("Ctrl+Shift+]"));
   QCOMPARE(shortcuts.value(QStringLiteral("down")).toString(),
            QStringLiteral("Ctrl+Shift+["));
+  const auto sample = root.value(QStringLiteral("samplePoint")).toArray();
+  const QPoint samplePoint(sample.at(0).toInt(), sample.at(1).toInt());
+  const auto layerContracts = root.value(QStringLiteral("layers")).toArray();
+  QCOMPARE(layerContracts.size(), 3);
+  const auto contractColor = [](const QJsonValue& value) {
+    const auto rgba = value.toArray();
+    return QColor(rgba.at(0).toInt(), rgba.at(1).toInt(), rgba.at(2).toInt(),
+                  rgba.at(3).toInt());
+  };
+  const auto layerName = [&layerContracts](int index) {
+    return layerContracts.at(index).toObject().value(QStringLiteral("name"))
+        .toString();
+  };
+  const auto layerColor = [&layerContracts, &contractColor](int index) {
+    return contractColor(layerContracts.at(index).toObject().value(
+        QStringLiteral("rgba")));
+  };
+  const auto compositeContracts =
+      root.value(QStringLiteral("expectedComposite")).toObject();
+  const auto compositeColor = [&compositeContracts, &contractColor](
+                                  const QString& state) {
+    return contractColor(compositeContracts.value(state));
+  };
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -1304,15 +1327,14 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
       directory.filePath(QStringLiteral("layer-reorder.chromarchy"));
   auto source = chromarchy::Document::create(QSize(8, 6));
   QVERIFY(source);
-  source->layerAt(0)->setName(QStringLiteral("Base red"));
-  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 3),
-                                            QColor(220, 10, 20, 255)));
-  const auto middleIndex = source->addLayer(QStringLiteral("Middle green"));
-  QVERIFY(source->layerAt(middleIndex)->setPixelColor(
-      QPoint(2, 3), QColor(10, 220, 20, 255)));
-  const auto topIndex = source->addLayer(QStringLiteral("Top blue"));
-  QVERIFY(source->layerAt(topIndex)->setPixelColor(
-      QPoint(2, 3), QColor(10, 20, 230, 255)));
+  source->layerAt(0)->setName(layerName(0));
+  QVERIFY(source->layerAt(0)->setPixelColor(samplePoint, layerColor(0)));
+  const auto middleIndex = source->addLayer(layerName(1));
+  QVERIFY(source->layerAt(middleIndex)->setPixelColor(samplePoint,
+                                                       layerColor(1)));
+  const auto topIndex = source->addLayer(layerName(2));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(samplePoint,
+                                                    layerColor(2)));
   QVERIFY(source->setActiveLayerIndex(middleIndex));
   QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
 
@@ -1342,8 +1364,8 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(document->document().activeLayerIndex(), middleIndex);
   QVERIFY(!document->isModified());
   const auto originalBlocks = sortedStorageBlocks(document->document());
-  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 20, 230, 255));
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("initial")));
 
   auto* listInterface = QAccessible::queryAccessibleInterface(layers);
   QVERIFY(listInterface);
@@ -1352,9 +1374,9 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(retainedTopRowInterface);
   QVERIFY(retainedMiddleRowInterface);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
-           QStringLiteral("Top blue"));
+           layerName(2));
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
-           QStringLiteral("Middle green"));
+           layerName(1));
 
   window.activateWindow();
   QVERIFY(QTest::qWaitForWindowActive(&window));
@@ -1365,18 +1387,18 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
                   Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(document->document().activeLayerIndex(), 0);
   QCOMPARE(document->document().layerAt(0)->name(),
-           QStringLiteral("Middle green"));
+           layerName(1));
   QCOMPARE(layers->currentRow(), 2);
   QVERIFY(document->isModified());
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
   QVERIFY(moveUpAction->isEnabled());
   QVERIFY(!moveDownAction->isEnabled());
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
-           QStringLiteral("Top blue"));
+           layerName(2));
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
-           QStringLiteral("Base red"));
-  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 20, 230, 255));
+           layerName(0));
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("afterDown")));
 
   canvas->setFocus();
   QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
@@ -1385,7 +1407,7 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(!document->isModified());
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
-           QStringLiteral("Middle green"));
+           layerName(1));
   QVERIFY(moveUpAction->isEnabled());
   QVERIFY(moveDownAction->isEnabled());
 
@@ -1394,7 +1416,7 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
                   Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(document->document().activeLayerIndex(), topIndex);
   QCOMPARE(document->document().layerAt(topIndex)->name(),
-           QStringLiteral("Middle green"));
+           layerName(1));
   QCOMPARE(layers->currentRow(), 0);
   QVERIFY(document->isModified());
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
@@ -1402,14 +1424,14 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QCOMPARE(listInterface->child(0), retainedTopRowInterface);
   QCOMPARE(listInterface->child(1), retainedMiddleRowInterface);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
-           QStringLiteral("Middle green"));
+           layerName(1));
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
-           QStringLiteral("Top blue"));
+           layerName(2));
   QVERIFY(retainedTopRowInterface->state().selected);
   QVERIFY(!moveUpAction->isEnabled());
   QVERIFY(moveDownAction->isEnabled());
-  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 220, 20, 255));
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("afterUp")));
 
   canvas->setFocus();
   QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
@@ -1418,14 +1440,14 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(!document->isModified());
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
-           QStringLiteral("Top blue"));
+           layerName(2));
   QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
-           QStringLiteral("Middle green"));
+           layerName(1));
   QVERIFY(retainedMiddleRowInterface->state().selected);
   QVERIFY(moveUpAction->isEnabled());
   QVERIFY(moveDownAction->isEnabled());
-  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 20, 230, 255));
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("initial")));
 
   QTest::keyClick(canvas, Qt::Key_Z,
                   Qt::ControlModifier | Qt::ShiftModifier);
@@ -1434,33 +1456,67 @@ void MainWindowTest::reordersLayerByKeyboardAndPersistsComposite() {
   QVERIFY(document->isModified());
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
   QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
-           QStringLiteral("Middle green"));
+           layerName(1));
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  const auto reopenedUp =
+      chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopenedUp, qPrintable(reopenedUp.error));
+  QCOMPARE(reopenedUp.document->activeLayerIndex(), topIndex);
+  QCOMPARE(reopenedUp.document->layerAt(0)->name(), layerName(0));
+  QCOMPARE(reopenedUp.document->layerAt(1)->name(), layerName(2));
+  QCOMPARE(reopenedUp.document->layerAt(2)->name(), layerName(1));
+  QCOMPARE(reopenedUp.document->layerAt(0)->pixels().pixelColor(samplePoint),
+           layerColor(0));
+  QCOMPARE(reopenedUp.document->layerAt(1)->pixels().pixelColor(samplePoint),
+           layerColor(2));
+  QCOMPARE(reopenedUp.document->layerAt(2)->pixels().pixelColor(samplePoint),
+           layerColor(1));
+  QCOMPARE(reopenedUp.document->composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("afterUp")));
 
   layers->setFocus();
   QTest::keyClick(layers, Qt::Key_BracketLeft,
                   Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(document->document().activeLayerIndex(), middleIndex);
   QCOMPARE(layers->currentRow(), 1);
-  QCOMPARE(document->document().layerAt(0)->name(), QStringLiteral("Base red"));
-  QCOMPARE(document->document().layerAt(1)->name(),
-           QStringLiteral("Middle green"));
-  QCOMPARE(document->document().layerAt(2)->name(), QStringLiteral("Top blue"));
+  QCOMPARE(document->document().layerAt(0)->name(), layerName(0));
+  QCOMPARE(document->document().layerAt(1)->name(), layerName(1));
+  QCOMPARE(document->document().layerAt(2)->name(), layerName(2));
   QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
-  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 20, 230, 255));
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("initial")));
+
+  QTest::keyClick(layers, Qt::Key_BracketLeft,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().activeLayerIndex(), 0);
+  QCOMPARE(layers->currentRow(), 2);
+  QCOMPARE(document->document().layerAt(0)->name(), layerName(1));
+  QCOMPARE(document->document().layerAt(1)->name(), layerName(0));
+  QCOMPARE(document->document().layerAt(2)->name(), layerName(2));
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QVERIFY(!moveDownAction->isEnabled());
+  QCOMPARE(document->document().composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("afterDown")));
   QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
   QVERIFY(!document->isModified());
 
   const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
   QVERIFY2(reopened, qPrintable(reopened.error));
-  QCOMPARE(reopened.document->activeLayerIndex(), middleIndex);
-  QCOMPARE(reopened.document->layerAt(0)->name(), QStringLiteral("Base red"));
-  QCOMPARE(reopened.document->layerAt(middleIndex)->name(),
-           QStringLiteral("Middle green"));
-  QCOMPARE(reopened.document->layerAt(topIndex)->name(),
-           QStringLiteral("Top blue"));
-  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 3)),
-           QColor(10, 20, 230, 255));
+  QCOMPARE(reopened.document->activeLayerIndex(), 0);
+  QCOMPARE(reopened.document->layerAt(0)->name(), layerName(1));
+  QCOMPARE(reopened.document->layerAt(middleIndex)->name(), layerName(0));
+  QCOMPARE(reopened.document->layerAt(topIndex)->name(), layerName(2));
+  QCOMPARE(reopened.document->layerAt(0)->pixels().pixelColor(samplePoint),
+           layerColor(1));
+  QCOMPARE(reopened.document->layerAt(middleIndex)->pixels().pixelColor(
+               samplePoint),
+           layerColor(0));
+  QCOMPARE(reopened.document->layerAt(topIndex)->pixels().pixelColor(
+               samplePoint),
+           layerColor(2));
+  QCOMPARE(reopened.document->composite().pixelColor(samplePoint),
+           compositeColor(QStringLiteral("afterDown")));
 
   const auto hugeSize = root.value(QStringLiteral("hugeSparseSize")).toArray();
   auto huge = chromarchy::Document::create(

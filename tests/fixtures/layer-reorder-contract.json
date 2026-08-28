@@ -4,6 +4,17 @@
     "up": "Ctrl+Shift+]",
     "down": "Ctrl+Shift+["
   },
+  "samplePoint": [2, 3],
+  "layers": [
+    {"name": "Base red", "rgba": [220, 10, 20, 255]},
+    {"name": "Middle green", "rgba": [10, 220, 20, 255]},
+    {"name": "Top blue", "rgba": [10, 20, 230, 255]}
+  ],
+  "expectedComposite": {
+    "initial": [10, 20, 230, 255],
+    "afterUp": [10, 220, 20, 255],
+    "afterDown": [10, 20, 230, 255]
+  },
   "hugeSparseSize": [300000, 300000],
   "repetitions": 1025,
   "resourceResult": "unchanged-storage-blocks"
