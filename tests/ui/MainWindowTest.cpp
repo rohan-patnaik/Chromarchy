@@ -117,6 +117,7 @@ private slots:
   void duplicatesLayerByKeyboardWithCowAndPersists();
   void mergesLayerByKeyboardAndPersistsComposite();
   void flattensByKeyboardAndPersistsComposite();
+  void removesLayerByKeyboardAndPersists();
 
 private:
   QTemporaryDir settingsDirectory_;
@@ -1463,6 +1464,155 @@ void MainWindowTest::flattensByKeyboardAndPersistsComposite() {
            QStringLiteral("Flattened"));
   QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
   QCOMPARE(reopened.document->composite(), expectedComposite);
+}
+
+void MainWindowTest::removesLayerByKeyboardAndPersists() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("layer-remove.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(8, 6));
+  QVERIFY(source);
+  source->layerAt(0)->setName(QStringLiteral("Lower red"));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(1, 1),
+                                            QColor(220, 10, 20, 255)));
+  const auto middleIndex = source->addLayer(QStringLiteral("Middle green"));
+  QVERIFY(source->layerAt(middleIndex)->setPixelColor(
+      QPoint(2, 2), QColor(10, 220, 30, 255)));
+  const auto topIndex = source->addLayer(QStringLiteral("Upper blue"));
+  QVERIFY(source->layerAt(topIndex)->setPixelColor(
+      QPoint(3, 3), QColor(20, 40, 220, 255)));
+  QVERIFY(source->setActiveLayerIndex(middleIndex));
+  const auto originalComposite = source->composite();
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* layers = requiredChild<QListWidget>(window, "layersList");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  auto* removeAction = requiredChild<QAction>(window, "removeLayerAction");
+  QVERIFY(layers);
+  QVERIFY(canvas);
+  QVERIFY(document);
+  QVERIFY(removeAction);
+  QCOMPARE(removeAction->shortcut(), QKeySequence::Delete);
+  QVERIFY(removeAction->isEnabled());
+  QCOMPARE(document->document().layerCount(), 3);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QCOMPARE(layers->currentRow(), 1);
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(originalBlocks.size(), 3);
+  const auto removedBlocks =
+      document->document().layerAt(middleIndex)->pixels().storageBlocks();
+  QCOMPARE(removedBlocks.size(), 1);
+  QVERIFY(!document->isModified());
+
+  auto* retainedListInterface = QAccessible::queryAccessibleInterface(layers);
+  QVERIFY(retainedListInterface);
+  auto* retainedTopRowInterface = retainedListInterface->child(0);
+  auto* retainedMiddleRowInterface = retainedListInterface->child(1);
+  QVERIFY(retainedTopRowInterface);
+  QVERIFY(retainedMiddleRowInterface);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+
+  window.activateWindow();
+  QVERIFY(QTest::qWaitForWindowActive(&window));
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Delete);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Lower red"));
+  QCOMPARE(document->document().layerAt(1)->name(),
+           QStringLiteral("Upper blue"));
+  const auto remainingBlocks = sortedStorageBlocks(document->document());
+  QCOMPARE(remainingBlocks.size(), 2);
+  QVERIFY(!remainingBlocks.contains(removedBlocks[0]));
+  QVERIFY(originalBlocks.contains(remainingBlocks[0]));
+  QVERIFY(originalBlocks.contains(remainingBlocks[1]));
+  QCOMPARE(document->document().composite().pixelColor(QPoint(1, 1)),
+           QColor(220, 10, 20, 255));
+  QCOMPARE(document->document().composite().pixelColor(QPoint(2, 2)),
+           QColor(Qt::transparent));
+  QCOMPARE(document->document().composite().pixelColor(QPoint(3, 3)),
+           QColor(20, 40, 220, 255));
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(QAccessible::queryAccessibleInterface(layers),
+           retainedListInterface);
+  QCOMPARE(retainedListInterface->child(0), retainedTopRowInterface);
+  QCOMPARE(retainedListInterface->child(1), retainedMiddleRowInterface);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Lower red"));
+  QVERIFY(retainedTopRowInterface->state().selected);
+  QVERIFY(document->isModified());
+  QVERIFY(removeAction->isEnabled());
+
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 3);
+  QCOMPARE(document->document().activeLayerIndex(), middleIndex);
+  QCOMPARE(document->document().composite(), originalComposite);
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(layers->count(), 3);
+  QCOMPARE(layers->currentRow(), 1);
+  QCOMPARE(retainedListInterface->child(0), retainedTopRowInterface);
+  QCOMPARE(retainedListInterface->child(1), retainedMiddleRowInterface);
+  QCOMPARE(retainedMiddleRowInterface->text(QAccessible::Name),
+           QStringLiteral("Middle green"));
+  QVERIFY(retainedMiddleRowInterface->state().selected);
+  QVERIFY(!document->isModified());
+
+  QTest::keyClick(canvas, Qt::Key_Z,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QCOMPARE(sortedStorageBlocks(document->document()), remainingBlocks);
+  QCOMPARE(layers->count(), 2);
+  QCOMPARE(layers->currentRow(), 0);
+  QCOMPARE(retainedListInterface->child(0), retainedTopRowInterface);
+  QCOMPARE(retainedTopRowInterface->text(QAccessible::Name),
+           QStringLiteral("Upper blue"));
+  QVERIFY(document->isModified());
+
+  QTest::keyClick(canvas, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(!document->isModified());
+  QTest::keyClick(canvas, Qt::Key_Delete);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->document().layerAt(0)->name(),
+           QStringLiteral("Lower red"));
+  QVERIFY(document->isModified());
+  QVERIFY(!removeAction->isEnabled());
+  const auto singleLayerHistorySize = document->history().size();
+  QTest::keyClick(canvas, Qt::Key_Delete);
+  QCOMPARE(document->document().layerCount(), 1);
+  QCOMPARE(document->history().size(), singleLayerHistorySize);
+  QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier);
+  QCOMPARE(document->document().layerCount(), 2);
+  QCOMPARE(document->document().activeLayerIndex(), 1);
+  QVERIFY(!document->isModified());
+  QVERIFY(removeAction->isEnabled());
+
+  const auto reopened = chromarchy::NativeDocumentCodec::load(documentPath);
+  QVERIFY2(reopened, qPrintable(reopened.error));
+  QCOMPARE(reopened.document->layerCount(), 2);
+  QCOMPARE(reopened.document->activeLayerIndex(), 1);
+  QCOMPARE(reopened.document->layerAt(0)->name(),
+           QStringLiteral("Lower red"));
+  QCOMPARE(reopened.document->layerAt(1)->name(),
+           QStringLiteral("Upper blue"));
+  QCOMPARE(reopened.document->layerAt(0)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->layerAt(1)->pixels().allocatedTileCount(), 1);
+  QCOMPARE(reopened.document->composite().pixelColor(QPoint(2, 2)),
+           QColor(Qt::transparent));
 }
 
 QTEST_MAIN(MainWindowTest)

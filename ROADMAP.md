@@ -134,6 +134,9 @@ sparse storage, undo/redo clean-state identity, and native save/reopen.
 Flat document flattening now has keyboard menu-mnemonic and accessible
 surviving-row evidence through lock-aware action enablement, deterministic
 composite output, sparse storage, undo/redo identity, and native save/reopen.
+Flat pixel-layer removal now has Delete-key and accessible row-remapping
+evidence through sparse payload release/restoration, single-layer no-op action
+state, undo/redo clean identity, and native save/reopen.
 
 ### Phase 2 — close M0/M1 local workflows
 

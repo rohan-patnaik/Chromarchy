@@ -62,6 +62,10 @@ The flatten path invokes the Layer menu mnemonic entirely by keyboard and keeps
 the surviving row interface valid as it becomes the active Flattened row.
 Lock-aware action state, composite output, sparse storage, undo/redo identity,
 and native reopen are checked across the three-to-one layer transition.
+The remove path invokes Delete from the canvas and verifies active-row remapping
+when a middle layer is removed. Surviving row interfaces expose their rewritten
+names through remove/undo/redo, while released storage, single-layer action
+disablement, dirty identity, and native reopen are checked.
 
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu

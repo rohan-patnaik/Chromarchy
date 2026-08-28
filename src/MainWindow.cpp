@@ -165,6 +165,7 @@ void MainWindow::createActions() {
   renameLayerAction_->setShortcut(QKeySequence(Qt::Key_F2));
   removeLayerAction_ = layerMenu->addAction(QStringLiteral("&Remove Layer"), this,
                                             &MainWindow::removeLayer);
+  removeLayerAction_->setObjectName(QStringLiteral("removeLayerAction"));
   removeLayerAction_->setShortcut(QKeySequence::Delete);
   moveLayerUpAction_ = layerMenu->addAction(QStringLiteral("Move Layer &Up"), this,
                                             &MainWindow::moveLayerUp);
