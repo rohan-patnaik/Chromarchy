@@ -16,7 +16,8 @@ Chromarchy performance work is measured with reproducible workloads before relea
 ## Canvas benchmark workload
 
 `chromarchy_canvas_benchmarks` measures viewport-bounded painting of a sparse
-300,000×300,000 document at 1% zoom into a 640×480 widget.
+300,000×300,000 document at 1% zoom into a 640×480 widget at both zero and 90
+degrees of non-destructive view rotation.
 
 The large canvas and selection workloads intentionally verify that cost follows
 allocated or visible tiles rather than total canvas area.

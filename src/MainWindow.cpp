@@ -224,6 +224,43 @@ void MainWindow::createActions() {
     }
   });
   actualPixels->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+  viewMenu->addSeparator();
+  rotateViewCounterclockwiseAction_ = viewMenu->addAction(
+      QStringLiteral("Rotate View &Counterclockwise"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->canvas()->rotateCounterclockwise();
+        }
+      });
+  rotateViewCounterclockwiseAction_->setObjectName(
+      QStringLiteral("rotateViewCounterclockwiseAction"));
+  rotateViewCounterclockwiseAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Left));
+  rotateViewCounterclockwiseAction_->setStatusTip(
+      QStringLiteral("Rotate the canvas view 90 degrees counterclockwise"));
+  rotateViewClockwiseAction_ = viewMenu->addAction(
+      QStringLiteral("Rotate View C&lockwise"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->canvas()->rotateClockwise();
+        }
+      });
+  rotateViewClockwiseAction_->setObjectName(
+      QStringLiteral("rotateViewClockwiseAction"));
+  rotateViewClockwiseAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Right));
+  rotateViewClockwiseAction_->setStatusTip(
+      QStringLiteral("Rotate the canvas view 90 degrees clockwise"));
+  resetViewRotationAction_ = viewMenu->addAction(
+      QStringLiteral("&Reset View Rotation"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->canvas()->resetRotation();
+        }
+      });
+  resetViewRotationAction_->setObjectName(
+      QStringLiteral("resetViewRotationAction"));
+  resetViewRotationAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_0));
+  resetViewRotationAction_->setStatusTip(
+      QStringLiteral("Reset the canvas view to zero degrees"));
 }
 
 void MainWindow::createLayersDock() {
@@ -511,6 +548,13 @@ void MainWindow::addDocumentTab(DocumentView* view) {
           [this](double zoom) {
             statusBar()->showMessage(
                 QStringLiteral("Zoom %1%").arg(qRound(zoom * 100.0)));
+          });
+  connect(view->canvas(), &chromarchy::CanvasWidget::rotationChanged, this,
+          [this](int degreesClockwise) {
+            statusBar()->showMessage(
+                QStringLiteral("View rotation %1° clockwise")
+                    .arg(degreesClockwise));
+            updateActions();
           });
   connect(view, &DocumentView::historyChanged, this, [this] {
     refreshLayers();
@@ -888,6 +932,10 @@ void MainWindow::updateActions() {
   selectAllAction_->setEnabled(hasDocument);
   deselectAction_->setEnabled(hasDocument);
   invertSelectionAction_->setEnabled(hasDocument);
+  rotateViewClockwiseAction_->setEnabled(hasDocument);
+  rotateViewCounterclockwiseAction_->setEnabled(hasDocument);
+  resetViewRotationAction_->setEnabled(
+      hasDocument && view->canvas()->rotationDegreesClockwise() != 0);
   addLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasDocument);
   renameLayerAction_->setEnabled(hasDocument);

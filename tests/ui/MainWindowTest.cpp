@@ -106,6 +106,7 @@ private slots:
   void initTestCase();
   void exposesCoreWorkspaceAccessibility();
   void supportsCoreKeyboardWorkflow();
+  void rotatesAndResetsViewByKeyboardWithoutEditingDocument();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -217,6 +218,82 @@ void MainWindowTest::supportsCoreKeyboardWorkflow() {
   QCOMPARE(layers->count(), 2);
   QTest::keyClick(canvas, Qt::Key_Z, Qt::ControlModifier | Qt::ShiftModifier);
   QCOMPARE(layers->count(), 3);
+}
+
+void MainWindowTest::rotatesAndResetsViewByKeyboardWithoutEditingDocument() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("view-rotation.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(3, 2));
+  QVERIFY(source);
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(0, 0), Qt::red));
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(2, 1), Qt::blue));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  auto* clockwise =
+      requiredChild<QAction>(window, "rotateViewClockwiseAction");
+  auto* counterclockwise =
+      requiredChild<QAction>(window, "rotateViewCounterclockwiseAction");
+  auto* reset = requiredChild<QAction>(window, "resetViewRotationAction");
+  QVERIFY(clockwise);
+  QVERIFY(counterclockwise);
+  QVERIFY(reset);
+  QVERIFY(!clockwise->isEnabled());
+  QVERIFY(!counterclockwise->isEnabled());
+  QVERIFY(!reset->isEnabled());
+  QCOMPARE(clockwise->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Right));
+  QCOMPARE(counterclockwise->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Left));
+  QCOMPARE(reset->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_0));
+
+  QVERIFY(window.openFile(documentPath));
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* document =
+      requiredChild<chromarchy::DocumentView>(window, "documentView");
+  auto* canvas = requiredChild<chromarchy::CanvasWidget>(window, "canvas");
+  QVERIFY(document);
+  QVERIFY(canvas);
+  const auto originalBlocks = sortedStorageBlocks(document->document());
+  const auto originalComposite = document->document().composite();
+  QVERIFY(clockwise->isEnabled());
+  QVERIFY(counterclockwise->isEnabled());
+  QVERIFY(!reset->isEnabled());
+  QVERIFY(!document->isModified());
+  QVERIFY(!document->history().canUndo());
+
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_Right,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_COMPARE(canvas->rotationDegreesClockwise(), 90);
+  QVERIFY(canvas->accessibleDescription().contains(
+      QStringLiteral("90 degrees clockwise")));
+  QVERIFY(reset->isEnabled());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(document->document().composite(), originalComposite);
+  QVERIFY(!document->isModified());
+  QVERIFY(!document->history().canUndo());
+
+  QTest::keyClick(canvas, Qt::Key_Left,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_COMPARE(canvas->rotationDegreesClockwise(), 0);
+  QVERIFY(!reset->isEnabled());
+  QTest::keyClick(canvas, Qt::Key_Left,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_COMPARE(canvas->rotationDegreesClockwise(), 270);
+  QTest::keyClick(canvas, Qt::Key_0,
+                  Qt::ControlModifier | Qt::AltModifier);
+  QTRY_COMPARE(canvas->rotationDegreesClockwise(), 0);
+  QVERIFY(!reset->isEnabled());
+  QCOMPARE(sortedStorageBlocks(document->document()), originalBlocks);
+  QCOMPARE(document->document().composite(), originalComposite);
+  QCOMPARE(document->document().size(), QSize(3, 2));
+  QVERIFY(!document->isModified());
+  QVERIFY(!document->history().canUndo());
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

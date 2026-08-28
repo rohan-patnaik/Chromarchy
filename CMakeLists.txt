@@ -121,6 +121,9 @@ if(BUILD_TESTING)
   target_link_libraries(chromarchy_canvas_tests PRIVATE
     chromarchy_core Qt6::Test Qt6::Widgets
   )
+  target_compile_definitions(chromarchy_canvas_tests PRIVATE
+    CHROMARCHY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_test(NAME chromarchy_canvas COMMAND chromarchy_canvas_tests)
   set_tests_properties(chromarchy_canvas PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

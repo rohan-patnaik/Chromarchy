@@ -73,6 +73,9 @@ private:
   QAction* selectAllAction_ = nullptr;
   QAction* deselectAction_ = nullptr;
   QAction* invertSelectionAction_ = nullptr;
+  QAction* rotateViewClockwiseAction_ = nullptr;
+  QAction* rotateViewCounterclockwiseAction_ = nullptr;
+  QAction* resetViewRotationAction_ = nullptr;
   QAction* addLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;

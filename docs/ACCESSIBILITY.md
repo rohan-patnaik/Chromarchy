@@ -80,6 +80,13 @@ Ctrl+Alt+Shift+Delete clears stored paths without closing open documents. An
 offscreen keyboard test opens a native recent document, removes an entry that
 disappeared after menu construction without decoding it, and clears the list.
 
+The canvas accessible description reports its non-destructive clockwise view
+rotation as 0, 90, 180, or 270 degrees. Ctrl+Alt+Right and Ctrl+Alt+Left rotate
+the current view by a quarter turn, while Ctrl+Alt+0 resets it. An offscreen
+keyboard test verifies enabled/reset action state, announced degree text, and
+that rotation does not modify document pixels, dimensions, history, or dirty
+state. Live assistive-technology event announcements remain unverified.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

@@ -70,4 +70,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/PIXEL_STORAGE.md"
   install -Dm644 Chromarchy/docs/RECENT_DOCUMENTS.md \
     "$pkgdir/usr/share/doc/$pkgname/RECENT_DOCUMENTS.md"
+  install -Dm644 Chromarchy/docs/VIEW_ROTATION.md \
+    "$pkgdir/usr/share/doc/$pkgname/VIEW_ROTATION.md"
 }

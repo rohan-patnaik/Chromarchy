@@ -2,6 +2,7 @@
 
 #include <QAbstractScrollArea>
 #include <QPoint>
+#include <QTransform>
 
 namespace chromarchy {
 
@@ -15,11 +16,16 @@ public:
 
   [[nodiscard]] double zoom() const noexcept;
   void setZoom(double zoom);
+  [[nodiscard]] int rotationDegreesClockwise() const noexcept;
+  void rotateClockwise();
+  void rotateCounterclockwise();
+  void resetRotation();
   [[nodiscard]] QRect visibleDocumentRect() const;
   void documentChanged();
 
 signals:
   void zoomChanged(double zoom);
+  void rotationChanged(int degreesClockwise);
   void selectionRequested(QRect rectangle);
 
 protected:
@@ -32,11 +38,18 @@ protected:
 
 private:
   [[nodiscard]] QPointF canvasOrigin() const;
+  [[nodiscard]] QSize rotatedDocumentSize() const;
+  [[nodiscard]] QTransform documentToCanvasTransform() const;
+  [[nodiscard]] QPointF documentPositionF(QPointF viewportPosition) const;
   [[nodiscard]] QPoint documentPosition(QPoint viewportPosition) const;
+  void setRotationQuarterTurns(int quarterTurns);
+  void centerDocumentPosition(QPointF documentPosition);
+  void refreshAccessibleDescription();
   void updateScrollBars();
 
   const Document* document_ = nullptr;  // Non-owning; parent DocumentView owns it.
   double zoom_ = 1.0;
+  int rotationQuarterTurns_ = 0;
   bool panning_ = false;
   QPoint panStart_;
   QPoint scrollStart_;

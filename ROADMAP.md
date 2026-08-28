@@ -149,6 +149,11 @@ and hard 20-entry/4096-byte path bounds. Open Recent supplies keyboard shortcuts
 for the first nine entries and a keyboard clear action; hostile settings and a
 file disappearing after menu construction are handled without decoding or
 retaining document content.
+Non-destructive view rotation now supplies clockwise, counterclockwise, and
+reset keyboard actions over a four-state quarter-turn transform. Independent
+orientation, rotated pointer mapping, accessible state, unchanged document
+bytes/history, hostile repetition, and viewport-bounded 300k-class sparse
+rendering are covered without entering image-rotation or persistence decisions.
 
 ### Phase 2 — close M0/M1 local workflows
 

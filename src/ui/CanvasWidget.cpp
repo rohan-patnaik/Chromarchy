@@ -37,8 +37,7 @@ CanvasWidget::CanvasWidget(const Document* document, QWidget* parent)
     : QAbstractScrollArea(parent), document_(document) {
   setObjectName(QStringLiteral("canvas"));
   setAccessibleName(QStringLiteral("Image canvas"));
-  setAccessibleDescription(
-      QStringLiteral("Scrollable view of the current image document"));
+  refreshAccessibleDescription();
   setFrameShape(QFrame::NoFrame);
   setFocusPolicy(Qt::StrongFocus);
   viewport()->setCursor(Qt::ArrowCursor);
@@ -56,22 +55,29 @@ void CanvasWidget::setZoom(double zoom) {
     return;
   }
 
-  const auto oldOrigin = canvasOrigin();
   const QPointF center(viewport()->width() / 2.0, viewport()->height() / 2.0);
-  const QPointF documentCenter = (center - oldOrigin) / zoom_;
+  const QPointF documentCenter = documentPositionF(center);
   zoom_ = zoom;
   updateScrollBars();
-  const auto content = QSizeF(document_->size()) * zoom_;
-  if (content.width() > viewport()->width()) {
-    horizontalScrollBar()->setValue(
-        qRound(documentCenter.x() * zoom_ - viewport()->width() / 2.0));
-  }
-  if (content.height() > viewport()->height()) {
-    verticalScrollBar()->setValue(
-        qRound(documentCenter.y() * zoom_ - viewport()->height() / 2.0));
-  }
+  centerDocumentPosition(documentCenter);
   viewport()->update();
   emit zoomChanged(zoom_);
+}
+
+int CanvasWidget::rotationDegreesClockwise() const noexcept {
+  return rotationQuarterTurns_ * 90;
+}
+
+void CanvasWidget::rotateClockwise() {
+  setRotationQuarterTurns(rotationQuarterTurns_ + 1);
+}
+
+void CanvasWidget::rotateCounterclockwise() {
+  setRotationQuarterTurns(rotationQuarterTurns_ - 1);
+}
+
+void CanvasWidget::resetRotation() {
+  setRotationQuarterTurns(0);
 }
 
 QRect CanvasWidget::visibleDocumentRect() const {
@@ -80,18 +86,30 @@ QRect CanvasWidget::visibleDocumentRect() const {
   }
   const auto origin = canvasOrigin();
   const QRectF viewportRect(QPointF(), QSizeF(viewport()->size()));
-  const QRectF canvasRect(origin, QSizeF(document_->size()) * zoom_);
+  const QRectF canvasRect(origin, QSizeF(rotatedDocumentSize()) * zoom_);
   const auto visible = viewportRect.intersected(canvasRect);
   if (visible.isEmpty()) {
     return {};
   }
   const auto relative = visible.translated(-origin);
-  const int left = qMax(0, static_cast<int>(std::floor(relative.left() / zoom_)));
-  const int top = qMax(0, static_cast<int>(std::floor(relative.top() / zoom_)));
+  const QRectF visibleCanvas(relative.x() / zoom_, relative.y() / zoom_,
+                             relative.width() / zoom_,
+                             relative.height() / zoom_);
+  bool invertible = false;
+  const auto canvasToDocument =
+      documentToCanvasTransform().inverted(&invertible);
+  if (!invertible) {
+    return {};
+  }
+  const auto documentRect = canvasToDocument.mapRect(visibleCanvas).intersected(
+      QRectF(QPointF(), QSizeF(document_->size())));
+  const int left =
+      qMax(0, static_cast<int>(std::floor(documentRect.left())));
+  const int top = qMax(0, static_cast<int>(std::floor(documentRect.top())));
   const int right = qMin(document_->size().width(),
-                         static_cast<int>(std::ceil(relative.right() / zoom_)));
+                         static_cast<int>(std::ceil(documentRect.right())));
   const int bottom = qMin(document_->size().height(),
-                          static_cast<int>(std::ceil(relative.bottom() / zoom_)));
+                          static_cast<int>(std::ceil(documentRect.bottom())));
   return QRect(left, top, qMax(0, right - left), qMax(0, bottom - top));
 }
 
@@ -107,7 +125,7 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
   }
 
   const auto origin = canvasOrigin();
-  const QRectF canvasRect(origin, QSizeF(document_->size()) * zoom_);
+  const QRectF canvasRect(origin, QSizeF(rotatedDocumentSize()) * zoom_);
   QPixmap checker(16, 16);
   checker.fill(QColor(210, 212, 216));
   QPainter checkerPainter(&checker);
@@ -123,6 +141,7 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
   painter.save();
   painter.translate(origin);
   painter.scale(zoom_, zoom_);
+  painter.setTransform(documentToCanvasTransform(), true);
   painter.setClipRect(sourceRect);
   painter.setRenderHint(QPainter::SmoothPixmapTransform, zoom_ < 1.0);
   document_->paintComposite(painter, sourceRect);
@@ -147,9 +166,13 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
 
   if (selecting_) {
     const auto selection = QRect(selectionStart_, selectionEnd_).normalized();
-    const QRectF preview(origin.x() + selection.x() * zoom_,
-                         origin.y() + selection.y() * zoom_,
-                         selection.width() * zoom_, selection.height() * zoom_);
+    const auto canvasPreview = documentToCanvasTransform().mapRect(
+        QRectF(selection.x(), selection.y(), selection.width(),
+               selection.height()));
+    const QRectF preview(origin.x() + canvasPreview.x() * zoom_,
+                         origin.y() + canvasPreview.y() * zoom_,
+                         canvasPreview.width() * zoom_,
+                         canvasPreview.height() * zoom_);
     painter.setPen(QPen(QColor(80, 200, 240), 1.0, Qt::DashLine));
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(preview);
@@ -237,7 +260,7 @@ QPointF CanvasWidget::canvasOrigin() const {
   if (!document_) {
     return {};
   }
-  const auto content = QSizeF(document_->size()) * zoom_;
+  const auto content = QSizeF(rotatedDocumentSize()) * zoom_;
   const double x = content.width() < viewport()->width()
                        ? (viewport()->width() - content.width()) / 2.0
                        : -horizontalScrollBar()->value();
@@ -247,13 +270,84 @@ QPointF CanvasWidget::canvasOrigin() const {
   return {x, y};
 }
 
-QPoint CanvasWidget::documentPosition(QPoint viewportPosition) const {
+QSize CanvasWidget::rotatedDocumentSize() const {
   if (!document_) {
-    return {-1, -1};
+    return {};
   }
-  const auto relative = QPointF(viewportPosition) - canvasOrigin();
-  return {static_cast<int>(std::floor(relative.x() / zoom_)),
-          static_cast<int>(std::floor(relative.y() / zoom_))};
+  const auto size = document_->size();
+  return rotationQuarterTurns_ % 2 == 0 ? size
+                                        : QSize(size.height(), size.width());
+}
+
+QTransform CanvasWidget::documentToCanvasTransform() const {
+  if (!document_) {
+    return {};
+  }
+  const auto width = document_->size().width();
+  const auto height = document_->size().height();
+  switch (rotationQuarterTurns_) {
+    case 1:
+      return QTransform(0.0, 1.0, -1.0, 0.0, height, 0.0);
+    case 2:
+      return QTransform(-1.0, 0.0, 0.0, -1.0, width, height);
+    case 3:
+      return QTransform(0.0, -1.0, 1.0, 0.0, 0.0, width);
+    default:
+      return {};
+  }
+}
+
+QPointF CanvasWidget::documentPositionF(QPointF viewportPosition) const {
+  if (!document_) {
+    return {-1.0, -1.0};
+  }
+  const auto canvasPosition =
+      (viewportPosition - canvasOrigin()) / zoom_;
+  bool invertible = false;
+  const auto canvasToDocument =
+      documentToCanvasTransform().inverted(&invertible);
+  return invertible ? canvasToDocument.map(canvasPosition)
+                    : QPointF(-1.0, -1.0);
+}
+
+QPoint CanvasWidget::documentPosition(QPoint viewportPosition) const {
+  const auto position = documentPositionF(viewportPosition);
+  return {static_cast<int>(std::floor(position.x())),
+          static_cast<int>(std::floor(position.y()))};
+}
+
+void CanvasWidget::setRotationQuarterTurns(int quarterTurns) {
+  quarterTurns = ((quarterTurns % 4) + 4) % 4;
+  if (rotationQuarterTurns_ == quarterTurns) {
+    return;
+  }
+  const QPointF center(viewport()->width() / 2.0, viewport()->height() / 2.0);
+  const auto documentCenter = documentPositionF(center);
+  rotationQuarterTurns_ = quarterTurns;
+  updateScrollBars();
+  centerDocumentPosition(documentCenter);
+  refreshAccessibleDescription();
+  viewport()->update();
+  emit rotationChanged(rotationDegreesClockwise());
+}
+
+void CanvasWidget::centerDocumentPosition(QPointF documentPosition) {
+  if (!document_) {
+    return;
+  }
+  const auto canvasPosition =
+      documentToCanvasTransform().map(documentPosition) * zoom_;
+  horizontalScrollBar()->setValue(
+      qRound(canvasPosition.x() - viewport()->width() / 2.0));
+  verticalScrollBar()->setValue(
+      qRound(canvasPosition.y() - viewport()->height() / 2.0));
+}
+
+void CanvasWidget::refreshAccessibleDescription() {
+  setAccessibleDescription(
+      QStringLiteral("Scrollable view of the current image document. View "
+                     "rotation %1 degrees clockwise.")
+          .arg(rotationDegreesClockwise()));
 }
 
 void CanvasWidget::updateScrollBars() {
@@ -262,7 +356,7 @@ void CanvasWidget::updateScrollBars() {
     verticalScrollBar()->setRange(0, 0);
     return;
   }
-  const auto content = QSizeF(document_->size()) * zoom_;
+  const auto content = QSizeF(rotatedDocumentSize()) * zoom_;
   horizontalScrollBar()->setPageStep(viewport()->width());
   verticalScrollBar()->setPageStep(viewport()->height());
   horizontalScrollBar()->setRange(

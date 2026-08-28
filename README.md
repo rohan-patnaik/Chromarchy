@@ -28,6 +28,8 @@ Core performance workloads and their exact commands are documented in [docs/PERF
 Raster codec behavior and the default metadata policy are documented in [docs/FORMATS.md](docs/FORMATS.md).
 Recent-file privacy and resource bounds are documented in
 [docs/RECENT_DOCUMENTS.md](docs/RECENT_DOCUMENTS.md).
+Non-destructive quarter-turn canvas behavior is documented in
+[docs/VIEW_ROTATION.md](docs/VIEW_ROTATION.md).
 The first Phase 1 typed-pixel and checked byte-layout contracts are documented
 in [docs/PIXEL_STORAGE.md](docs/PIXEL_STORAGE.md).
 
