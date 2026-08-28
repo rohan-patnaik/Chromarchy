@@ -14,6 +14,7 @@ private slots:
   void paintSparseDocumentAtMinimumZoom();
   void paintRotatedSparseDocumentAtMinimumZoom();
   void paintPixelGridOnHugeSparseDocument();
+  void fitHugeSparseDocumentWithinZoomBounds();
 };
 
 void CanvasBenchmark::paintSparseDocumentAtMinimumZoom() {
@@ -77,6 +78,21 @@ void CanvasBenchmark::paintPixelGridOnHugeSparseDocument() {
     frame.fill(Qt::transparent);
     canvas.render(&frame);
   }
+}
+
+void CanvasBenchmark::fitHugeSparseDocumentWithinZoomBounds() {
+  auto document = Document::create(QSize(300'000, 300'000));
+  QVERIFY(document);
+  CanvasWidget canvas(&*document);
+  canvas.resize(640, 480);
+  canvas.show();
+  QTest::qWait(1);
+
+  QBENCHMARK {
+    canvas.setZoom(CanvasWidget::maximumZoom);
+    canvas.fitToViewport();
+  }
+  QCOMPARE(canvas.zoom(), CanvasWidget::minimumZoom);
 }
 
 QTEST_MAIN(CanvasBenchmark)

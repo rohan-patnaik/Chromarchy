@@ -116,6 +116,7 @@ private slots:
   void rotatesAndResetsViewByKeyboardWithoutEditingDocument();
   void opensBoundedOfflineHelpAndAboutByKeyboard();
   void togglesPixelGridByKeyboardWithoutEditingDocument();
+  void fitsCanvasByKeyboardWithoutEditingDocument();
   void createsAndCancelsNewDocumentByKeyboard();
   void cancelsAndDiscardsClosePromptByKeyboard();
   void savesDirtyDocumentBeforeCloseByKeyboard();
@@ -520,6 +521,55 @@ void MainWindowTest::togglesPixelGridByKeyboardWithoutEditingDocument() {
   QVERIFY(!firstView->canvas()->pixelGridEnabled());
   QVERIFY(!firstView->isModified());
   QVERIFY(!firstView->history().canUndo());
+}
+
+void MainWindowTest::fitsCanvasByKeyboardWithoutEditingDocument() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto documentPath =
+      directory.filePath(QStringLiteral("fit-view.chromarchy"));
+  auto source = chromarchy::Document::create(QSize(400, 200));
+  QVERIFY(source);
+  QVERIFY(source->layerAt(0)->setPixelColor(QPoint(399, 199), Qt::yellow));
+  QVERIFY(chromarchy::NativeDocumentCodec::save(*source, documentPath));
+
+  MainWindow window;
+  auto* action = requiredChild<QAction>(window, "fitViewAction");
+  QVERIFY(action);
+  QVERIFY(!action->isEnabled());
+  QCOMPARE(action->shortcut(),
+           QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_0));
+  QVERIFY(window.openFile(documentPath));
+  window.resize(640, 480);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  auto* view = requiredChild<chromarchy::DocumentView>(window, "documentView");
+  QVERIFY(view);
+  auto* canvas = view->canvas();
+  canvas->setZoom(4.0);
+  const auto originalBlocks = sortedStorageBlocks(view->document());
+  const auto originalComposite = view->document().composite();
+  QVERIFY(action->isEnabled());
+  canvas->setFocus();
+  QTest::keyClick(canvas, Qt::Key_0,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QTRY_COMPARE(canvas->visibleDocumentRect(),
+               QRect(QPoint(), view->document().size()));
+  QVERIFY(canvas->accessibleDescription().contains(QStringLiteral("View zoom")));
+  QCOMPARE(sortedStorageBlocks(view->document()), originalBlocks);
+  QCOMPARE(view->document().composite(), originalComposite);
+  QVERIFY(!view->isModified());
+  QVERIFY(!view->history().canUndo());
+
+  canvas->rotateClockwise();
+  canvas->setZoom(4.0);
+  QTest::keyClick(canvas, Qt::Key_0,
+                  Qt::ControlModifier | Qt::ShiftModifier);
+  QTRY_COMPARE(canvas->visibleDocumentRect(),
+               QRect(QPoint(), view->document().size()));
+  QCOMPARE(canvas->rotationDegreesClockwise(), 90);
+  QCOMPARE(sortedStorageBlocks(view->document()), originalBlocks);
+  QVERIFY(!view->isModified());
 }
 
 void MainWindowTest::createsAndCancelsNewDocumentByKeyboard() {

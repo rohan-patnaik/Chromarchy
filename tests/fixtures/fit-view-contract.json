@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "minimumZoom": 0.01,
+  "maximumZoom": 32.0,
+  "documentSize": [400, 200],
+  "widgetSize": [320, 240],
+  "unrotatedLimitingAxis": "width",
+  "rotatedLimitingAxis": "height",
+  "hugeSparseSize": [300000, 300000],
+  "hugeSparseResult": "minimum-zoom-clamped"
+}

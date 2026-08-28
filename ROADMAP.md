@@ -168,6 +168,12 @@ overlay color, keyboard/per-tab state, accessible description, 1,025-toggle,
 300k sparse-canvas, and benchmark evidence leaves document pixels, history,
 selection, native persistence, and storage untouched. Configurable grids,
 guides, snapping, persisted view state, and live Wayland latency remain open.
+Fit Canvas to View now supplies a Ctrl+Shift+0 one-shot workflow that accounts
+for the current quarter-turn orientation and uses the existing 1%–3200% zoom
+contract. Asymmetric width/height-limited fixtures, keyboard/accessibility,
+unchanged document state, 1,025-repeat 300k sparse clamping, and benchmark
+evidence are covered. Fit is not sticky across resize, and maximum-size canvases
+may remain partially visible when their required scale is below 1%.
 
 ### Phase 2 — close M0/M1 local workflows
 

@@ -19,7 +19,9 @@ Chromarchy performance work is measured with reproducible workloads before relea
 300,000×300,000 document at 1% zoom into a 640×480 widget at both zero and 90
 degrees of non-destructive view rotation. It also measures the display-only
 pixel grid at 3200% zoom on the same sparse extent; the 640×480 fixture submits
-at most 40 visible horizontal-plus-vertical boundary lines.
+at most 40 visible horizontal-plus-vertical boundary lines. A constant-space
+fit benchmark repeatedly moves the same 300k-square sparse canvas from maximum
+zoom to the existing 1% minimum clamp without scanning document pixels.
 
 The large canvas and selection workloads intentionally verify that cost follows
 allocated or visible tiles rather than total canvas area.

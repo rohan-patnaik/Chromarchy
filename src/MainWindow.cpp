@@ -229,6 +229,17 @@ void MainWindow::createActions() {
     }
   });
   actualPixels->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+  fitViewAction_ = viewMenu->addAction(
+      QStringLiteral("&Fit Canvas to View"), this, [this] {
+        if (auto* view = currentDocument()) {
+          view->canvas()->fitToViewport();
+        }
+      });
+  fitViewAction_->setObjectName(QStringLiteral("fitViewAction"));
+  fitViewAction_->setShortcut(
+      QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_0));
+  fitViewAction_->setStatusTip(QStringLiteral(
+      "Fit the rotated canvas within the existing 1% to 3200% zoom range"));
   viewMenu->addSeparator();
   rotateViewCounterclockwiseAction_ = viewMenu->addAction(
       QStringLiteral("Rotate View &Counterclockwise"), this, [this] {
@@ -984,6 +995,7 @@ void MainWindow::updateActions() {
   selectAllAction_->setEnabled(hasDocument);
   deselectAction_->setEnabled(hasDocument);
   invertSelectionAction_->setEnabled(hasDocument);
+  fitViewAction_->setEnabled(hasDocument);
   rotateViewClockwiseAction_->setEnabled(hasDocument);
   rotateViewCounterclockwiseAction_->setEnabled(hasDocument);
   resetViewRotationAction_->setEnabled(

@@ -25,6 +25,7 @@ private slots:
   void keepsRepeatedRotationAndHugeSparsePaintBounded();
   void rendersIndependentPixelGridContract();
   void keepsHugeSparsePixelGridViewportBounded();
+  void fitsCanvasWithinViewportAcrossRotationAndBounds();
 };
 
 void CanvasWidgetTest::clampsZoomAndTracksVisibleRegion() {
@@ -360,6 +361,83 @@ void CanvasWidgetTest::keepsHugeSparsePixelGridViewportBounded() {
   QCOMPARE(frame.size(), canvas.viewport()->size());
   QCOMPARE(document->storageBlocks(), originalBlocks);
   QCOMPARE(document->size(), QSize(300'000, 300'000));
+}
+
+void CanvasWidgetTest::fitsCanvasWithinViewportAcrossRotationAndBounds() {
+  QFile fixture(QStringLiteral(
+      CHROMARCHY_SOURCE_DIR "/tests/fixtures/fit-view-contract.json"));
+  QVERIFY(fixture.open(QIODevice::ReadOnly));
+  QJsonParseError parseError;
+  const auto root =
+      QJsonDocument::fromJson(fixture.readAll(), &parseError).object();
+  QCOMPARE(parseError.error, QJsonParseError::NoError);
+  QCOMPARE(root.value(QStringLiteral("schemaVersion")).toInt(), 1);
+  QCOMPARE(root.value(QStringLiteral("minimumZoom")).toDouble(),
+           CanvasWidget::minimumZoom);
+  QCOMPARE(root.value(QStringLiteral("maximumZoom")).toDouble(),
+           CanvasWidget::maximumZoom);
+  const auto documentSize = root.value(QStringLiteral("documentSize")).toArray();
+  const auto widgetSize = root.value(QStringLiteral("widgetSize")).toArray();
+  auto document = Document::create(
+      QSize(documentSize.at(0).toInt(), documentSize.at(1).toInt()));
+  QVERIFY(document);
+  QVERIFY(document->layerAt(0)->setPixelColor(QPoint(399, 199), Qt::blue));
+  const auto originalBlocks = document->storageBlocks();
+  CanvasWidget canvas(&*document);
+  canvas.resize(widgetSize.at(0).toInt(), widgetSize.at(1).toInt());
+  canvas.show();
+  canvas.setZoom(4.0);
+  QSignalSpy zooms(&canvas, &CanvasWidget::zoomChanged);
+  const double expectedUnrotated = qMin(
+      static_cast<double>(canvas.viewport()->width()) / document->size().width(),
+      static_cast<double>(canvas.viewport()->height()) /
+          document->size().height());
+  QCOMPARE(root.value(QStringLiteral("unrotatedLimitingAxis")).toString(),
+           QStringLiteral("width"));
+  QVERIFY(static_cast<double>(canvas.viewport()->width()) /
+              document->size().width() <=
+          static_cast<double>(canvas.viewport()->height()) /
+              document->size().height());
+  canvas.fitToViewport();
+  QCOMPARE(canvas.zoom(), expectedUnrotated);
+  QCOMPARE(canvas.visibleDocumentRect(), QRect(QPoint(), document->size()));
+  QVERIFY(canvas.accessibleDescription().contains(QStringLiteral("View zoom")));
+
+  canvas.rotateClockwise();
+  canvas.setZoom(4.0);
+  const double expectedRotated = qMin(
+      static_cast<double>(canvas.viewport()->width()) / document->size().height(),
+      static_cast<double>(canvas.viewport()->height()) / document->size().width());
+  QCOMPARE(root.value(QStringLiteral("rotatedLimitingAxis")).toString(),
+           QStringLiteral("height"));
+  QVERIFY(static_cast<double>(canvas.viewport()->height()) /
+              document->size().width() <=
+          static_cast<double>(canvas.viewport()->width()) /
+              document->size().height());
+  canvas.fitToViewport();
+  QCOMPARE(canvas.zoom(), expectedRotated);
+  QCOMPARE(canvas.visibleDocumentRect(), QRect(QPoint(), document->size()));
+  QVERIFY(zooms.size() >= 3);
+  QCOMPARE(document->storageBlocks(), originalBlocks);
+
+  const auto hugeSize = root.value(QStringLiteral("hugeSparseSize")).toArray();
+  auto huge = Document::create(
+      QSize(hugeSize.at(0).toInt(), hugeSize.at(1).toInt()));
+  QVERIFY(huge);
+  QVERIFY(huge->layerAt(0)->setPixelColor(QPoint(299'999, 299'999), Qt::red));
+  const auto hugeBlocks = huge->storageBlocks();
+  CanvasWidget hugeCanvas(&*huge);
+  hugeCanvas.resize(640, 480);
+  hugeCanvas.show();
+  for (int iteration = 0; iteration < 1025; ++iteration) {
+    hugeCanvas.fitToViewport();
+  }
+  QCOMPARE(root.value(QStringLiteral("hugeSparseResult")).toString(),
+           QStringLiteral("minimum-zoom-clamped"));
+  QCOMPARE(hugeCanvas.zoom(), CanvasWidget::minimumZoom);
+  QVERIFY(hugeCanvas.visibleDocumentRect().width() < huge->size().width());
+  QVERIFY(hugeCanvas.visibleDocumentRect().height() < huge->size().height());
+  QCOMPARE(huge->storageBlocks(), hugeBlocks);
 }
 
 QTEST_MAIN(CanvasWidgetTest)

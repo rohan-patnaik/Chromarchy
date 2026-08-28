@@ -75,6 +75,7 @@ private:
   QAction* selectAllAction_ = nullptr;
   QAction* deselectAction_ = nullptr;
   QAction* invertSelectionAction_ = nullptr;
+  QAction* fitViewAction_ = nullptr;
   QAction* rotateViewClockwiseAction_ = nullptr;
   QAction* rotateViewCounterclockwiseAction_ = nullptr;
   QAction* resetViewRotationAction_ = nullptr;

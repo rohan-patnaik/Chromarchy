@@ -76,4 +76,6 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/OFFLINE_HELP.md"
   install -Dm644 Chromarchy/docs/PIXEL_GRID.md \
     "$pkgdir/usr/share/doc/$pkgname/PIXEL_GRID.md"
+  install -Dm644 Chromarchy/docs/FIT_VIEW.md \
+    "$pkgdir/usr/share/doc/$pkgname/FIT_VIEW.md"
 }

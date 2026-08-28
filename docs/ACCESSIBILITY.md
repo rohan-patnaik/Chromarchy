@@ -100,6 +100,12 @@ description distinguishes disabled, enabled-below-threshold, and enabled-and-
 visible state. Offscreen keyboard tests cover action checked state and per-tab
 isolation; live assistive-technology state-change announcements remain open.
 
+Ctrl+Shift+0 invokes Fit Canvas to View without pointer interaction. The canvas
+accessible description reports the resulting rounded zoom percentage together
+with rotation and pixel-grid state. Offscreen tests cover enabled/no-document
+action state, unrotated and quarter-turned fitting, and unchanged document
+history; live zoom-change announcements remain unverified.
+
 This is a partial accessibility slice, not a completed audit. File chooser,
 save-as/export, and error dialogs; multi-document close/quit prompts; every menu
 and action state; nested or multi-selected layers; complete focus-trap

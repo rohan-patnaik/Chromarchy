@@ -50,7 +50,7 @@ double CanvasWidget::zoom() const noexcept {
 }
 
 void CanvasWidget::setZoom(double zoom) {
-  zoom = std::clamp(zoom, 0.01, 32.0);
+  zoom = std::clamp(zoom, minimumZoom, maximumZoom);
   if (qFuzzyCompare(zoom_, zoom)) {
     return;
   }
@@ -63,6 +63,19 @@ void CanvasWidget::setZoom(double zoom) {
   refreshAccessibleDescription();
   viewport()->update();
   emit zoomChanged(zoom_);
+}
+
+void CanvasWidget::fitToViewport() {
+  const auto rotatedSize = rotatedDocumentSize();
+  if (rotatedSize.isEmpty() || viewport()->width() <= 0 ||
+      viewport()->height() <= 0) {
+    return;
+  }
+  const double horizontal = static_cast<double>(viewport()->width()) /
+                            rotatedSize.width();
+  const double vertical = static_cast<double>(viewport()->height()) /
+                          rotatedSize.height();
+  setZoom(qMin(horizontal, vertical));
 }
 
 int CanvasWidget::rotationDegreesClockwise() const noexcept {
@@ -378,7 +391,9 @@ void CanvasWidget::centerDocumentPosition(QPointF documentPosition) {
 void CanvasWidget::refreshAccessibleDescription() {
   setAccessibleDescription(
       QStringLiteral("Scrollable view of the current image document. View "
-                     "rotation %1 degrees clockwise. Pixel grid %2.")
+                     "zoom %1 percent; rotation %2 degrees clockwise. Pixel "
+                     "grid %3.")
+          .arg(qRound(zoom_ * 100.0))
           .arg(rotationDegreesClockwise())
           .arg(pixelGridEnabled_
                    ? (pixelGridVisible()

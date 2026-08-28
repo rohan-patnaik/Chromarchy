@@ -50,6 +50,7 @@ QString shortcutsText() {
       "View\n"
       "  Ctrl++ / Ctrl+-        Zoom in / out\n"
       "  Ctrl+0                 Actual pixels\n"
+      "  Ctrl+Shift+0           Fit canvas within current view\n"
       "  Ctrl+Alt+Right         Rotate view clockwise\n"
       "  Ctrl+Alt+Left          Rotate view counterclockwise\n"
       "  Ctrl+Alt+0             Reset view rotation\n"

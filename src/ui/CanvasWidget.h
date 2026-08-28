@@ -12,6 +12,8 @@ class CanvasWidget final : public QAbstractScrollArea {
   Q_OBJECT
 
 public:
+  static constexpr double minimumZoom = 0.01;
+  static constexpr double maximumZoom = 32.0;
   static constexpr double pixelGridMinimumZoom = 8.0;
   static constexpr int pixelGridOpacity = 112;
 
@@ -19,6 +21,7 @@ public:
 
   [[nodiscard]] double zoom() const noexcept;
   void setZoom(double zoom);
+  void fitToViewport();
   [[nodiscard]] int rotationDegreesClockwise() const noexcept;
   void rotateClockwise();
   void rotateCounterclockwise();
